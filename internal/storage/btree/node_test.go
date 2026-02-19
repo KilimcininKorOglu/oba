@@ -298,15 +298,14 @@ func TestBPlusNodeGetChildForKey(t *testing.T) {
 	// - Children[0] contains keys < Keys[0]
 	// - Children[1] contains keys >= Keys[0] and < Keys[1]
 	// - Children[2] contains keys >= Keys[1]
-	// FindKeyIndex returns the insertion point, which is the child index to follow
 	tests := []struct {
 		key      string
 		wantPage storage.PageID
 	}{
 		{"a", 100},  // Before 'm' -> Children[0]
-		{"m", 100},  // At 'm', FindKeyIndex returns 0 (found), so Children[0]
+		{"m", 200},  // At 'm' (>= Keys[0], < Keys[1]) -> Children[1]
 		{"p", 200},  // Between 'm' and 't' -> Children[1]
-		{"t", 200},  // At 't', FindKeyIndex returns 1 (found), so Children[1]
+		{"t", 300},  // At 't' (>= Keys[1]) -> Children[2]
 		{"z", 300},  // After 't' -> Children[2]
 	}
 

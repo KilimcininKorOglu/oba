@@ -181,10 +181,11 @@ func (n *BPlusNode) RemoveKeyAt(index int) ([]byte, *EntryRef, storage.PageID) {
 }
 
 // FindKeyIndex returns the index where the key should be inserted
-// or the index of the key if it exists.
+// or the index of the first occurrence of the key if it exists.
 // Returns (index, found) where found is true if the exact key exists.
 func (n *BPlusNode) FindKeyIndex(key []byte) (int, bool) {
 	low, high := 0, len(n.Keys)
+	found := false
 
 	for low < high {
 		mid := (low + high) / 2
@@ -194,24 +195,33 @@ func (n *BPlusNode) FindKeyIndex(key []byte) (int, bool) {
 		} else if cmp > 0 {
 			high = mid
 		} else {
-			return mid, true
+			// Found a match, but continue searching left to find the first occurrence
+			found = true
+			high = mid
 		}
 	}
 
-	return low, false
+	return low, found
 }
 
 // GetChildForKey returns the child page ID that should contain the given key.
 // Only valid for internal nodes.
+// In a B+ tree, Keys[i] is the separator between Children[i] and Children[i+1].
+// Keys < Keys[i] go to Children[i], Keys >= Keys[i] go to Children[i+1].
 func (n *BPlusNode) GetChildForKey(key []byte) storage.PageID {
 	if n.IsLeaf || len(n.Children) == 0 {
 		return InvalidPageID
 	}
 
-	index, _ := n.FindKeyIndex(key)
-	if index < len(n.Children) {
-		return n.Children[index]
+	// Find the first key that is greater than the search key
+	// All keys in Children[i] are < Keys[i]
+	// All keys in Children[i+1] are >= Keys[i]
+	for i := 0; i < len(n.Keys); i++ {
+		if compareKeys(key, n.Keys[i]) < 0 {
+			return n.Children[i]
+		}
 	}
+	// Key is >= all keys, go to the rightmost child
 	return n.Children[len(n.Children)-1]
 }
 
