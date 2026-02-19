@@ -16,7 +16,12 @@ type Node struct {
 
 	// Children maps the first byte of child keys to child nodes for fast lookup.
 	// This provides O(1) access to the correct child branch.
+	// Note: For DN components with the same first byte, use ChildrenByKey.
 	Children map[byte]*Node
+
+	// ChildrenByKey maps full child keys to child nodes.
+	// This is used when multiple children have the same first byte.
+	ChildrenByKey map[string]*Node
 
 	// HasEntry indicates whether this node represents a complete DN with an entry.
 	HasEntry bool
@@ -38,13 +43,14 @@ type Node struct {
 // NewNode creates a new radix tree node with the given key.
 func NewNode(key string) *Node {
 	return &Node{
-		Key:          key,
-		Children:     make(map[byte]*Node),
-		HasEntry:     false,
-		PageID:       0,
-		SlotID:       0,
-		Parent:       nil,
-		SubtreeCount: 0,
+		Key:           key,
+		Children:      make(map[byte]*Node),
+		ChildrenByKey: make(map[string]*Node),
+		HasEntry:      false,
+		PageID:        0,
+		SlotID:        0,
+		Parent:        nil,
+		SubtreeCount:  0,
 	}
 }
 
@@ -52,26 +58,28 @@ func NewNode(key string) *Node {
 // The root node has an empty key and no parent.
 func NewRootNode() *Node {
 	return &Node{
-		Key:          "",
-		Children:     make(map[byte]*Node),
-		HasEntry:     false,
-		PageID:       0,
-		SlotID:       0,
-		Parent:       nil,
-		SubtreeCount: 0,
+		Key:           "",
+		Children:      make(map[byte]*Node),
+		ChildrenByKey: make(map[string]*Node),
+		HasEntry:      false,
+		PageID:        0,
+		SlotID:        0,
+		Parent:        nil,
+		SubtreeCount:  0,
 	}
 }
 
 // NewEntryNode creates a new node that represents an entry.
 func NewEntryNode(key string, pageID storage.PageID, slotID uint16) *Node {
 	return &Node{
-		Key:          key,
-		Children:     make(map[byte]*Node),
-		HasEntry:     true,
-		PageID:       pageID,
-		SlotID:       slotID,
-		Parent:       nil,
-		SubtreeCount: 1,
+		Key:           key,
+		Children:      make(map[byte]*Node),
+		ChildrenByKey: make(map[string]*Node),
+		HasEntry:      true,
+		PageID:        pageID,
+		SlotID:        slotID,
+		Parent:        nil,
+		SubtreeCount:  1,
 	}
 }
 
@@ -103,7 +111,27 @@ func (n *Node) AddChild(child *Node) {
 	}
 	firstByte := child.Key[0]
 	child.Parent = n
-	n.Children[firstByte] = child
+
+	// Check if there's already a child with the same first byte
+	existing, exists := n.Children[firstByte]
+	if exists && existing.Key != child.Key {
+		// Multiple children with same first byte - use ChildrenByKey
+		if n.ChildrenByKey == nil {
+			n.ChildrenByKey = make(map[string]*Node)
+		}
+		// Move existing to ChildrenByKey if not already there
+		if _, inByKey := n.ChildrenByKey[existing.Key]; !inByKey {
+			n.ChildrenByKey[existing.Key] = existing
+		}
+		n.ChildrenByKey[child.Key] = child
+	} else {
+		n.Children[firstByte] = child
+		// Also add to ChildrenByKey for consistency
+		if n.ChildrenByKey == nil {
+			n.ChildrenByKey = make(map[string]*Node)
+		}
+		n.ChildrenByKey[child.Key] = child
+	}
 	n.updateSubtreeCount()
 }
 
@@ -112,6 +140,32 @@ func (n *Node) RemoveChild(key string) *Node {
 	if len(key) == 0 {
 		return nil
 	}
+
+	// Try to find in ChildrenByKey first
+	if n.ChildrenByKey != nil {
+		if child, exists := n.ChildrenByKey[key]; exists {
+			delete(n.ChildrenByKey, key)
+			child.Parent = nil
+
+			// Update Children map if this was the entry there
+			firstByte := key[0]
+			if existing, ok := n.Children[firstByte]; ok && existing.Key == key {
+				delete(n.Children, firstByte)
+				// If there's another child with same first byte in ChildrenByKey, promote it
+				for k, c := range n.ChildrenByKey {
+					if len(k) > 0 && k[0] == firstByte {
+						n.Children[firstByte] = c
+						break
+					}
+				}
+			}
+
+			n.updateSubtreeCount()
+			return child
+		}
+	}
+
+	// Fallback to old behavior
 	firstByte := key[0]
 	child, exists := n.Children[firstByte]
 	if !exists || child.Key != key {
@@ -128,6 +182,15 @@ func (n *Node) GetChild(key string) *Node {
 	if len(key) == 0 {
 		return nil
 	}
+
+	// Try ChildrenByKey first (more reliable)
+	if n.ChildrenByKey != nil {
+		if child, exists := n.ChildrenByKey[key]; exists {
+			return child
+		}
+	}
+
+	// Fallback to Children map
 	firstByte := key[0]
 	child, exists := n.Children[firstByte]
 	if !exists || child.Key != key {
@@ -164,6 +227,9 @@ func (n *Node) FindChildByPrefix(prefix string) (*Node, string) {
 
 // IsLeaf returns true if this node has no children.
 func (n *Node) IsLeaf() bool {
+	if n.ChildrenByKey != nil && len(n.ChildrenByKey) > 0 {
+		return false
+	}
 	return len(n.Children) == 0
 }
 
@@ -174,6 +240,9 @@ func (n *Node) IsRoot() bool {
 
 // ChildCount returns the number of children.
 func (n *Node) ChildCount() int {
+	if n.ChildrenByKey != nil && len(n.ChildrenByKey) > 0 {
+		return len(n.ChildrenByKey)
+	}
 	return len(n.Children)
 }
 
@@ -183,8 +252,15 @@ func (n *Node) updateSubtreeCount() {
 	if n.HasEntry {
 		count = 1
 	}
-	for _, child := range n.Children {
-		count += child.SubtreeCount
+	// Use ChildrenByKey if available for accurate count
+	if n.ChildrenByKey != nil && len(n.ChildrenByKey) > 0 {
+		for _, child := range n.ChildrenByKey {
+			count += child.SubtreeCount
+		}
+	} else {
+		for _, child := range n.Children {
+			count += child.SubtreeCount
+		}
 	}
 	n.SubtreeCount = count
 }
@@ -195,8 +271,15 @@ func (n *Node) RecalculateSubtreeCount() uint32 {
 	if n.HasEntry {
 		count = 1
 	}
-	for _, child := range n.Children {
-		count += child.RecalculateSubtreeCount()
+	// Use ChildrenByKey if available
+	if n.ChildrenByKey != nil && len(n.ChildrenByKey) > 0 {
+		for _, child := range n.ChildrenByKey {
+			count += child.RecalculateSubtreeCount()
+		}
+	} else {
+		for _, child := range n.Children {
+			count += child.RecalculateSubtreeCount()
+		}
 	}
 	n.SubtreeCount = count
 	return count
@@ -217,6 +300,14 @@ func (n *Node) PropagateSubtreeCountChange(delta int32) {
 
 // GetChildren returns all child nodes as a slice.
 func (n *Node) GetChildren() []*Node {
+	// Use ChildrenByKey if available
+	if n.ChildrenByKey != nil && len(n.ChildrenByKey) > 0 {
+		children := make([]*Node, 0, len(n.ChildrenByKey))
+		for _, child := range n.ChildrenByKey {
+			children = append(children, child)
+		}
+		return children
+	}
 	children := make([]*Node, 0, len(n.Children))
 	for _, child := range n.Children {
 		children = append(children, child)
@@ -226,6 +317,14 @@ func (n *Node) GetChildren() []*Node {
 
 // GetChildKeys returns all child keys as a slice.
 func (n *Node) GetChildKeys() []string {
+	// Use ChildrenByKey if available
+	if n.ChildrenByKey != nil && len(n.ChildrenByKey) > 0 {
+		keys := make([]string, 0, len(n.ChildrenByKey))
+		for key := range n.ChildrenByKey {
+			keys = append(keys, key)
+		}
+		return keys
+	}
 	keys := make([]string, 0, len(n.Children))
 	for _, child := range n.Children {
 		keys = append(keys, child.Key)
@@ -258,7 +357,11 @@ func (n *Node) Path() []string {
 // CanCompress returns true if this node can be path-compressed with its only child.
 // A node can be compressed if it has exactly one child and doesn't have an entry.
 func (n *Node) CanCompress() bool {
-	return len(n.Children) == 1 && !n.HasEntry && n.Key != ""
+	childCount := len(n.Children)
+	if n.ChildrenByKey != nil && len(n.ChildrenByKey) > 0 {
+		childCount = len(n.ChildrenByKey)
+	}
+	return childCount == 1 && !n.HasEntry && n.Key != ""
 }
 
 // Compress performs path compression by merging this node with its only child.
@@ -270,25 +373,39 @@ func (n *Node) Compress() *Node {
 
 	// Get the only child
 	var child *Node
-	for _, c := range n.Children {
-		child = c
-		break
+	if n.ChildrenByKey != nil && len(n.ChildrenByKey) > 0 {
+		for _, c := range n.ChildrenByKey {
+			child = c
+			break
+		}
+	} else {
+		for _, c := range n.Children {
+			child = c
+			break
+		}
 	}
 
 	// Create a new merged node
 	merged := &Node{
-		Key:          n.Key + "/" + child.Key, // Combine keys with separator
-		Children:     child.Children,
-		HasEntry:     child.HasEntry,
-		PageID:       child.PageID,
-		SlotID:       child.SlotID,
-		Parent:       n.Parent,
-		SubtreeCount: child.SubtreeCount,
+		Key:           n.Key + "/" + child.Key, // Combine keys with separator
+		Children:      child.Children,
+		ChildrenByKey: child.ChildrenByKey,
+		HasEntry:      child.HasEntry,
+		PageID:        child.PageID,
+		SlotID:        child.SlotID,
+		Parent:        n.Parent,
+		SubtreeCount:  child.SubtreeCount,
 	}
 
 	// Update parent pointers of grandchildren
-	for _, grandchild := range merged.Children {
-		grandchild.Parent = merged
+	if merged.ChildrenByKey != nil {
+		for _, grandchild := range merged.ChildrenByKey {
+			grandchild.Parent = merged
+		}
+	} else {
+		for _, grandchild := range merged.Children {
+			grandchild.Parent = merged
+		}
 	}
 
 	return merged
@@ -302,33 +419,42 @@ func (n *Node) Split(pos int) (*Node, *Node) {
 	}
 
 	parent := &Node{
-		Key:          n.Key[:pos],
-		Children:     make(map[byte]*Node),
-		HasEntry:     false,
-		PageID:       0,
-		SlotID:       0,
-		Parent:       n.Parent,
-		SubtreeCount: n.SubtreeCount,
+		Key:           n.Key[:pos],
+		Children:      make(map[byte]*Node),
+		ChildrenByKey: make(map[string]*Node),
+		HasEntry:      false,
+		PageID:        0,
+		SlotID:        0,
+		Parent:        n.Parent,
+		SubtreeCount:  n.SubtreeCount,
 	}
 
 	child := &Node{
-		Key:          n.Key[pos:],
-		Children:     n.Children,
-		HasEntry:     n.HasEntry,
-		PageID:       n.PageID,
-		SlotID:       n.SlotID,
-		Parent:       parent,
-		SubtreeCount: n.SubtreeCount,
+		Key:           n.Key[pos:],
+		Children:      n.Children,
+		ChildrenByKey: n.ChildrenByKey,
+		HasEntry:      n.HasEntry,
+		PageID:        n.PageID,
+		SlotID:        n.SlotID,
+		Parent:        parent,
+		SubtreeCount:  n.SubtreeCount,
 	}
 
 	// Update parent pointers of grandchildren
-	for _, grandchild := range child.Children {
-		grandchild.Parent = child
+	if child.ChildrenByKey != nil {
+		for _, grandchild := range child.ChildrenByKey {
+			grandchild.Parent = child
+		}
+	} else {
+		for _, grandchild := range child.Children {
+			grandchild.Parent = child
+		}
 	}
 
 	// Add child to parent
 	if len(child.Key) > 0 {
 		parent.Children[child.Key[0]] = child
+		parent.ChildrenByKey[child.Key] = child
 	}
 
 	return parent, child
@@ -337,16 +463,20 @@ func (n *Node) Split(pos int) (*Node, *Node) {
 // Clone creates a shallow copy of the node (children are not cloned).
 func (n *Node) Clone() *Node {
 	clone := &Node{
-		Key:          n.Key,
-		Children:     make(map[byte]*Node, len(n.Children)),
-		HasEntry:     n.HasEntry,
-		PageID:       n.PageID,
-		SlotID:       n.SlotID,
-		Parent:       nil, // Parent is not cloned
-		SubtreeCount: n.SubtreeCount,
+		Key:           n.Key,
+		Children:      make(map[byte]*Node, len(n.Children)),
+		ChildrenByKey: make(map[string]*Node, len(n.ChildrenByKey)),
+		HasEntry:      n.HasEntry,
+		PageID:        n.PageID,
+		SlotID:        n.SlotID,
+		Parent:        nil, // Parent is not cloned
+		SubtreeCount:  n.SubtreeCount,
 	}
 	for k, v := range n.Children {
 		clone.Children[k] = v
+	}
+	for k, v := range n.ChildrenByKey {
+		clone.ChildrenByKey[k] = v
 	}
 	return clone
 }
@@ -354,18 +484,32 @@ func (n *Node) Clone() *Node {
 // DeepClone creates a deep copy of the node and all its descendants.
 func (n *Node) DeepClone() *Node {
 	clone := &Node{
-		Key:          n.Key,
-		Children:     make(map[byte]*Node, len(n.Children)),
-		HasEntry:     n.HasEntry,
-		PageID:       n.PageID,
-		SlotID:       n.SlotID,
-		Parent:       nil,
-		SubtreeCount: n.SubtreeCount,
+		Key:           n.Key,
+		Children:      make(map[byte]*Node, len(n.Children)),
+		ChildrenByKey: make(map[string]*Node, len(n.ChildrenByKey)),
+		HasEntry:      n.HasEntry,
+		PageID:        n.PageID,
+		SlotID:        n.SlotID,
+		Parent:        nil,
+		SubtreeCount:  n.SubtreeCount,
 	}
-	for k, child := range n.Children {
-		childClone := child.DeepClone()
-		childClone.Parent = clone
-		clone.Children[k] = childClone
+	// Use ChildrenByKey for deep clone if available
+	if n.ChildrenByKey != nil && len(n.ChildrenByKey) > 0 {
+		for key, child := range n.ChildrenByKey {
+			childClone := child.DeepClone()
+			childClone.Parent = clone
+			clone.ChildrenByKey[key] = childClone
+			if len(key) > 0 {
+				clone.Children[key[0]] = childClone
+			}
+		}
+	} else {
+		for k, child := range n.Children {
+			childClone := child.DeepClone()
+			childClone.Parent = clone
+			clone.Children[k] = childClone
+			clone.ChildrenByKey[child.Key] = childClone
+		}
 	}
 	return clone
 }

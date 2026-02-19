@@ -99,7 +99,13 @@ func (s *NodeSerializer) SerializeNode(node *Node, parentIndex uint16) ([]byte, 
 		return nil, nil, ErrKeyTooLong
 	}
 
-	if len(node.Children) > 255 {
+	// Get child count from ChildrenByKey if available
+	childCount := len(node.Children)
+	if node.ChildrenByKey != nil && len(node.ChildrenByKey) > 0 {
+		childCount = len(node.ChildrenByKey)
+	}
+
+	if childCount > 255 {
 		return nil, nil, ErrTooManyChildren
 	}
 
@@ -108,7 +114,7 @@ func (s *NodeSerializer) SerializeNode(node *Node, parentIndex uint16) ([]byte, 
 	// KeyOffset will be set by the caller
 	binary.LittleEndian.PutUint16(header[0:2], 0)                     // KeyOffset (placeholder)
 	binary.LittleEndian.PutUint16(header[2:4], uint16(len(node.Key))) // KeyLength
-	header[4] = uint8(len(node.Children))                             // ChildCount
+	header[4] = uint8(childCount)                                     // ChildCount
 	flags := uint8(0)
 	if node.HasEntry {
 		flags |= 0x01
@@ -120,22 +126,38 @@ func (s *NodeSerializer) SerializeNode(node *Node, parentIndex uint16) ([]byte, 
 	binary.LittleEndian.PutUint16(header[20:22], parentIndex)       // ParentIndex
 
 	// Serialize variable data (key + child entries)
-	varDataSize := len(node.Key) + len(node.Children)*ChildEntrySize
+	varDataSize := len(node.Key) + childCount*ChildEntrySize
 	varData := make([]byte, varDataSize)
 
 	// Copy key
 	copy(varData[0:len(node.Key)], node.Key)
 
-	// Serialize child entries
+	// Serialize child entries - use ChildrenByKey if available
 	offset := len(node.Key)
-	for firstByte, child := range node.Children {
-		childIndex, ok := s.nodeIndex[child]
-		if !ok {
-			childIndex = 0xFFFF // Will be updated later
+	if node.ChildrenByKey != nil && len(node.ChildrenByKey) > 0 {
+		for _, child := range node.ChildrenByKey {
+			childIndex, ok := s.nodeIndex[child]
+			if !ok {
+				childIndex = 0xFFFF // Will be updated later
+			}
+			firstByte := byte(0)
+			if len(child.Key) > 0 {
+				firstByte = child.Key[0]
+			}
+			varData[offset] = firstByte
+			binary.LittleEndian.PutUint16(varData[offset+1:offset+3], childIndex)
+			offset += ChildEntrySize
 		}
-		varData[offset] = firstByte
-		binary.LittleEndian.PutUint16(varData[offset+1:offset+3], childIndex)
-		offset += ChildEntrySize
+	} else {
+		for firstByte, child := range node.Children {
+			childIndex, ok := s.nodeIndex[child]
+			if !ok {
+				childIndex = 0xFFFF // Will be updated later
+			}
+			varData[offset] = firstByte
+			binary.LittleEndian.PutUint16(varData[offset+1:offset+3], childIndex)
+			offset += ChildEntrySize
+		}
 	}
 
 	return header, varData, nil
@@ -164,13 +186,14 @@ func (s *NodeSerializer) DeserializeNode(header []byte, varData []byte, keyOffse
 
 	// Create node
 	node := &Node{
-		Key:          key,
-		Children:     make(map[byte]*Node),
-		HasEntry:     flags&0x01 != 0,
-		PageID:       pageID,
-		SlotID:       slotID,
-		Parent:       nil,
-		SubtreeCount: subtreeCount,
+		Key:           key,
+		Children:      make(map[byte]*Node),
+		ChildrenByKey: make(map[string]*Node),
+		HasEntry:      flags&0x01 != 0,
+		PageID:        pageID,
+		SlotID:        slotID,
+		Parent:        nil,
+		SubtreeCount:  subtreeCount,
 	}
 
 	return node, nil
@@ -196,7 +219,12 @@ func (s *NodeSerializer) SerializeNodes(nodes []*Node, pageID storage.PageID) ([
 
 	for _, node := range nodes {
 		totalHeaderSize += SerializedNodeHeaderSize
-		totalVarDataSize += len(node.Key) + len(node.Children)*ChildEntrySize
+		// Use ChildrenByKey count if available
+		childCount := len(node.Children)
+		if node.ChildrenByKey != nil && len(node.ChildrenByKey) > 0 {
+			childCount = len(node.ChildrenByKey)
+		}
+		totalVarDataSize += len(node.Key) + childCount*ChildEntrySize
 	}
 
 	totalSize := totalHeaderSize + totalVarDataSize
@@ -341,6 +369,11 @@ func (s *NodeSerializer) DeserializeNodes(buf []byte) ([]*Node, error) {
 
 	// Second pass: restore relationships
 	for i := uint16(0); i < nodeCount; i++ {
+		// Initialize ChildrenByKey
+		if nodes[i].ChildrenByKey == nil {
+			nodes[i].ChildrenByKey = make(map[string]*Node)
+		}
+
 		// Set parent
 		if parentIndices[i] != NoParentIndex && parentIndices[i] < nodeCount {
 			nodes[i].Parent = nodes[parentIndices[i]]
@@ -349,7 +382,9 @@ func (s *NodeSerializer) DeserializeNodes(buf []byte) ([]*Node, error) {
 		// Set children
 		for _, entry := range childEntries[i] {
 			if entry.childIndex < nodeCount {
-				nodes[i].Children[entry.firstByte] = nodes[entry.childIndex]
+				child := nodes[entry.childIndex]
+				nodes[i].Children[entry.firstByte] = child
+				nodes[i].ChildrenByKey[child.Key] = child
 			}
 		}
 	}
@@ -359,7 +394,11 @@ func (s *NodeSerializer) DeserializeNodes(buf []byte) ([]*Node, error) {
 
 // CalculateSerializedSize calculates the size needed to serialize a node.
 func CalculateSerializedSize(node *Node) int {
-	return SerializedNodeHeaderSize + len(node.Key) + len(node.Children)*ChildEntrySize
+	childCount := len(node.Children)
+	if node.ChildrenByKey != nil && len(node.ChildrenByKey) > 0 {
+		childCount = len(node.ChildrenByKey)
+	}
+	return SerializedNodeHeaderSize + len(node.Key) + childCount*ChildEntrySize
 }
 
 // CalculateTotalSerializedSize calculates the total size needed to serialize multiple nodes.
@@ -390,8 +429,15 @@ func CollectSubtree(root *Node) []*Node {
 		queue = queue[1:]
 		nodes = append(nodes, node)
 
-		for _, child := range node.Children {
-			queue = append(queue, child)
+		// Use ChildrenByKey if available for complete traversal
+		if node.ChildrenByKey != nil && len(node.ChildrenByKey) > 0 {
+			for _, child := range node.ChildrenByKey {
+				queue = append(queue, child)
+			}
+		} else {
+			for _, child := range node.Children {
+				queue = append(queue, child)
+			}
 		}
 	}
 
