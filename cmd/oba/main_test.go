@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"strings"
 	"testing"
 )
@@ -323,7 +324,22 @@ func TestRun_ConfigValidate(t *testing.T) {
 }
 
 func TestRun_ConfigValidateWithConfig(t *testing.T) {
-	exitCode := run([]string{"oba", "config", "validate", "-config", "/etc/oba/config.yaml"})
+	// Create a temporary valid config file
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/config.yaml"
+
+	validConfig := `
+server:
+  address: ":389"
+
+storage:
+  dataDir: "/var/lib/oba"
+`
+	if err := os.WriteFile(configPath, []byte(validConfig), 0644); err != nil {
+		t.Fatalf("failed to write test config: %v", err)
+	}
+
+	exitCode := run([]string{"oba", "config", "validate", "-config", configPath})
 	if exitCode != 0 {
 		t.Errorf("expected exit code 0 for config validate with config, got %d", exitCode)
 	}
