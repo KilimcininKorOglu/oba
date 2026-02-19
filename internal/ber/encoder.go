@@ -279,3 +279,153 @@ func (e *BEREncoder) WriteTaggedValue(tagNumber int, constructed bool, value []b
 	e.buf = append(e.buf, value...)
 	return nil
 }
+
+// BeginSequence starts a SEQUENCE and returns the position for length fixup.
+// The caller must call EndSequence with the returned position after writing
+// all sequence contents.
+func (e *BEREncoder) BeginSequence() int {
+	// Write SEQUENCE tag (Universal, Constructed, 0x10)
+	e.buf = append(e.buf, byte(ClassUniversal|TypeConstructed|TagSequence))
+	// Reserve space for length - we'll use a placeholder
+	// Return the position where length should be written
+	pos := len(e.buf)
+	// Reserve 4 bytes for length (allows up to 16MB content)
+	// Format: 0x83 followed by 3 bytes of length
+	e.buf = append(e.buf, 0x00, 0x00, 0x00, 0x00)
+	return pos
+}
+
+// EndSequence fixes up the length at the position returned by BeginSequence.
+// It calculates the actual content length and writes it in the reserved space.
+func (e *BEREncoder) EndSequence(pos int) error {
+	return e.fixupLength(pos)
+}
+
+// BeginSet starts a SET and returns the position for length fixup.
+// The caller must call EndSet with the returned position after writing
+// all set contents.
+func (e *BEREncoder) BeginSet() int {
+	// Write SET tag (Universal, Constructed, 0x11)
+	e.buf = append(e.buf, byte(ClassUniversal|TypeConstructed|TagSet))
+	// Reserve space for length
+	pos := len(e.buf)
+	// Reserve 4 bytes for length
+	e.buf = append(e.buf, 0x00, 0x00, 0x00, 0x00)
+	return pos
+}
+
+// EndSet fixes up the length at the position returned by BeginSet.
+func (e *BEREncoder) EndSet(pos int) error {
+	return e.fixupLength(pos)
+}
+
+// WriteContextTag writes a context-specific tag and returns the position for length fixup.
+// This is used for LDAP protocol fields with implicit or explicit tagging.
+// The caller must call EndContextTag with the returned position after writing the content.
+func (e *BEREncoder) WriteContextTag(num int, constructed bool) int {
+	constructedFlag := TypePrimitive
+	if constructed {
+		constructedFlag = TypeConstructed
+	}
+
+	// Write context-specific tag
+	if num <= 30 {
+		e.buf = append(e.buf, byte(ClassContextSpecific|constructedFlag|num))
+	} else {
+		// Long form tag
+		e.buf = append(e.buf, byte(ClassContextSpecific|constructedFlag|0x1F))
+		e.writeBase128(num)
+	}
+
+	// Reserve space for length
+	pos := len(e.buf)
+	e.buf = append(e.buf, 0x00, 0x00, 0x00, 0x00)
+	return pos
+}
+
+// EndContextTag fixes up the length at the position returned by WriteContextTag.
+func (e *BEREncoder) EndContextTag(pos int) error {
+	return e.fixupLength(pos)
+}
+
+// WriteApplicationTag writes an application-specific tag and returns the position for length fixup.
+// This is used for LDAP message types (e.g., BindRequest, SearchRequest).
+func (e *BEREncoder) WriteApplicationTag(num int, constructed bool) int {
+	constructedFlag := TypePrimitive
+	if constructed {
+		constructedFlag = TypeConstructed
+	}
+
+	// Write application tag
+	if num <= 30 {
+		e.buf = append(e.buf, byte(ClassApplication|constructedFlag|num))
+	} else {
+		// Long form tag
+		e.buf = append(e.buf, byte(ClassApplication|constructedFlag|0x1F))
+		e.writeBase128(num)
+	}
+
+	// Reserve space for length
+	pos := len(e.buf)
+	e.buf = append(e.buf, 0x00, 0x00, 0x00, 0x00)
+	return pos
+}
+
+// EndApplicationTag fixes up the length at the position returned by WriteApplicationTag.
+func (e *BEREncoder) EndApplicationTag(pos int) error {
+	return e.fixupLength(pos)
+}
+
+// fixupLength calculates the actual content length and writes it at the reserved position.
+// It uses the most compact length encoding possible.
+func (e *BEREncoder) fixupLength(pos int) error {
+	// Calculate content length (everything after the 4 reserved bytes)
+	contentLength := len(e.buf) - pos - 4
+
+	if contentLength < 0 {
+		return ErrNegativeLength
+	}
+
+	// Determine the most compact encoding
+	if contentLength <= MaxShortFormLength {
+		// Short form: single byte
+		// We need to shift the content and reduce the reserved space
+		e.buf[pos] = byte(contentLength)
+		// Move content 3 bytes earlier (we reserved 4, only need 1)
+		copy(e.buf[pos+1:], e.buf[pos+4:])
+		e.buf = e.buf[:len(e.buf)-3]
+	} else if contentLength <= 0xFF {
+		// Long form: 1 length byte
+		e.buf[pos] = 0x81
+		e.buf[pos+1] = byte(contentLength)
+		// Move content 2 bytes earlier
+		copy(e.buf[pos+2:], e.buf[pos+4:])
+		e.buf = e.buf[:len(e.buf)-2]
+	} else if contentLength <= 0xFFFF {
+		// Long form: 2 length bytes
+		e.buf[pos] = 0x82
+		e.buf[pos+1] = byte(contentLength >> 8)
+		e.buf[pos+2] = byte(contentLength)
+		// Move content 1 byte earlier
+		copy(e.buf[pos+3:], e.buf[pos+4:])
+		e.buf = e.buf[:len(e.buf)-1]
+	} else if contentLength <= 0xFFFFFF {
+		// Long form: 3 length bytes (uses all 4 reserved bytes)
+		e.buf[pos] = 0x83
+		e.buf[pos+1] = byte(contentLength >> 16)
+		e.buf[pos+2] = byte(contentLength >> 8)
+		e.buf[pos+3] = byte(contentLength)
+	} else {
+		// Need 4 length bytes - expand buffer
+		e.buf[pos] = 0x84
+		// Insert one more byte
+		e.buf = append(e.buf, 0)
+		copy(e.buf[pos+5:], e.buf[pos+4:len(e.buf)-1])
+		e.buf[pos+1] = byte(contentLength >> 24)
+		e.buf[pos+2] = byte(contentLength >> 16)
+		e.buf[pos+3] = byte(contentLength >> 8)
+		e.buf[pos+4] = byte(contentLength)
+	}
+
+	return nil
+}

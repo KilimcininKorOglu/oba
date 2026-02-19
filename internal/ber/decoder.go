@@ -501,11 +501,11 @@ func (d *BERDecoder) ReadIntegerWithTag(expectedTag int) (int64, error) {
 
 	if class != ClassContextSpecific || constructed != TypePrimitive || number != expectedTag {
 		return 0, &TagMismatchError{
-			Offset:           startOffset,
-			ExpectedClass:    ClassContextSpecific,
-			ExpectedNumber:   expectedTag,
-			ActualClass:      class,
-			ActualNumber:     number,
+			Offset:            startOffset,
+			ExpectedClass:     ClassContextSpecific,
+			ExpectedNumber:    expectedTag,
+			ActualClass:       class,
+			ActualNumber:      number,
 			ActualConstructed: constructed,
 		}
 	}
@@ -532,4 +532,229 @@ func (d *BERDecoder) ReadIntegerWithTag(expectedTag int) (int64, error) {
 	}
 
 	return d.decodeInteger(length), nil
+}
+
+// ExpectSequence reads and validates a SEQUENCE tag, returning the content length.
+// The caller should read exactly 'length' bytes of content after this call.
+func (d *BERDecoder) ExpectSequence() (length int, err error) {
+	startOffset := d.offset
+
+	// Read tag
+	class, constructed, number, err := d.ReadTag()
+	if err != nil {
+		return 0, err
+	}
+
+	// Verify it's a SEQUENCE (Universal, Constructed, 0x10)
+	if class != ClassUniversal || constructed != TypeConstructed || number != TagSequence {
+		return 0, &TagMismatchError{
+			Offset:            startOffset,
+			ExpectedClass:     ClassUniversal,
+			ExpectedNumber:    TagSequence,
+			ActualClass:       class,
+			ActualNumber:      number,
+			ActualConstructed: constructed,
+		}
+	}
+
+	// Read length
+	length, err = d.ReadLength()
+	if err != nil {
+		return 0, err
+	}
+
+	// Verify we have enough data
+	if d.offset+length > len(d.data) {
+		return 0, NewDecodeError(startOffset, "truncated sequence content", ErrUnexpectedEOF)
+	}
+
+	return length, nil
+}
+
+// ExpectSet reads and validates a SET tag, returning the content length.
+// The caller should read exactly 'length' bytes of content after this call.
+func (d *BERDecoder) ExpectSet() (length int, err error) {
+	startOffset := d.offset
+
+	// Read tag
+	class, constructed, number, err := d.ReadTag()
+	if err != nil {
+		return 0, err
+	}
+
+	// Verify it's a SET (Universal, Constructed, 0x11)
+	if class != ClassUniversal || constructed != TypeConstructed || number != TagSet {
+		return 0, &TagMismatchError{
+			Offset:            startOffset,
+			ExpectedClass:     ClassUniversal,
+			ExpectedNumber:    TagSet,
+			ActualClass:       class,
+			ActualNumber:      number,
+			ActualConstructed: constructed,
+		}
+	}
+
+	// Read length
+	length, err = d.ReadLength()
+	if err != nil {
+		return 0, err
+	}
+
+	// Verify we have enough data
+	if d.offset+length > len(d.data) {
+		return 0, NewDecodeError(startOffset, "truncated set content", ErrUnexpectedEOF)
+	}
+
+	return length, nil
+}
+
+// ExpectContextTag reads and validates a context-specific tag with the given number.
+// Returns the content length. The caller should read exactly 'length' bytes after this call.
+func (d *BERDecoder) ExpectContextTag(num int) (length int, err error) {
+	startOffset := d.offset
+
+	// Read tag
+	class, constructed, number, err := d.ReadTag()
+	if err != nil {
+		return 0, err
+	}
+
+	// Verify it's context-specific with the expected number
+	if class != ClassContextSpecific || number != num {
+		return 0, &TagMismatchError{
+			Offset:            startOffset,
+			ExpectedClass:     ClassContextSpecific,
+			ExpectedNumber:    num,
+			ActualClass:       class,
+			ActualNumber:      number,
+			ActualConstructed: constructed,
+		}
+	}
+
+	// Read length
+	length, err = d.ReadLength()
+	if err != nil {
+		return 0, err
+	}
+
+	// Verify we have enough data
+	if d.offset+length > len(d.data) {
+		return 0, NewDecodeError(startOffset, "truncated context-tagged content", ErrUnexpectedEOF)
+	}
+
+	return length, nil
+}
+
+// ExpectApplicationTag reads and validates an application-specific tag with the given number.
+// Returns the content length. The caller should read exactly 'length' bytes after this call.
+func (d *BERDecoder) ExpectApplicationTag(num int) (length int, err error) {
+	startOffset := d.offset
+
+	// Read tag
+	class, constructed, number, err := d.ReadTag()
+	if err != nil {
+		return 0, err
+	}
+
+	// Verify it's application-specific with the expected number
+	if class != ClassApplication || number != num {
+		return 0, &TagMismatchError{
+			Offset:            startOffset,
+			ExpectedClass:     ClassApplication,
+			ExpectedNumber:    num,
+			ActualClass:       class,
+			ActualNumber:      number,
+			ActualConstructed: constructed,
+		}
+	}
+
+	// Read length
+	length, err = d.ReadLength()
+	if err != nil {
+		return 0, err
+	}
+
+	// Verify we have enough data
+	if d.offset+length > len(d.data) {
+		return 0, NewDecodeError(startOffset, "truncated application-tagged content", ErrUnexpectedEOF)
+	}
+
+	return length, nil
+}
+
+// IsContextTag checks if the next tag is a context-specific tag with the given number
+// without consuming it. Returns true if it matches, false otherwise.
+func (d *BERDecoder) IsContextTag(num int) bool {
+	class, _, number, err := d.PeekTag()
+	if err != nil {
+		return false
+	}
+	return class == ClassContextSpecific && number == num
+}
+
+// IsApplicationTag checks if the next tag is an application-specific tag with the given number
+// without consuming it. Returns true if it matches, false otherwise.
+func (d *BERDecoder) IsApplicationTag(num int) bool {
+	class, _, number, err := d.PeekTag()
+	if err != nil {
+		return false
+	}
+	return class == ClassApplication && number == num
+}
+
+// ReadSequenceContents reads the contents of a SEQUENCE into a sub-decoder.
+// This is useful for parsing nested structures.
+func (d *BERDecoder) ReadSequenceContents() (*BERDecoder, error) {
+	length, err := d.ExpectSequence()
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a sub-decoder for the sequence contents
+	contents := d.data[d.offset : d.offset+length]
+	d.offset += length
+
+	return NewBERDecoder(contents), nil
+}
+
+// ReadSetContents reads the contents of a SET into a sub-decoder.
+func (d *BERDecoder) ReadSetContents() (*BERDecoder, error) {
+	length, err := d.ExpectSet()
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a sub-decoder for the set contents
+	contents := d.data[d.offset : d.offset+length]
+	d.offset += length
+
+	return NewBERDecoder(contents), nil
+}
+
+// ReadContextTagContents reads the contents of a context-specific tag into a sub-decoder.
+func (d *BERDecoder) ReadContextTagContents(num int) (*BERDecoder, error) {
+	length, err := d.ExpectContextTag(num)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a sub-decoder for the contents
+	contents := d.data[d.offset : d.offset+length]
+	d.offset += length
+
+	return NewBERDecoder(contents), nil
+}
+
+// ReadApplicationTagContents reads the contents of an application-specific tag into a sub-decoder.
+func (d *BERDecoder) ReadApplicationTagContents(num int) (*BERDecoder, error) {
+	length, err := d.ExpectApplicationTag(num)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a sub-decoder for the contents
+	contents := d.data[d.offset : d.offset+length]
+	d.offset += length
+
+	return NewBERDecoder(contents), nil
 }
