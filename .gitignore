@@ -1,0 +1,66 @@
+# Hermes
+.hermes/
+
+# Dependencies
+node_modules/
+vendor/
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Build outputs
+dist/
+build/
+out/
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Testing
+coverage/
+.coverage
+.nyc_output/
+
+# Misc
+*.tmp
+*.temp
+.cache/
+
+# Hermes
+.hermes/
+
+# Hermes
+.hermes/
+
+# Hermes
+.hermes/
+
+# Hermes
+.hermes/
+
+# Hermes
+.hermes/
