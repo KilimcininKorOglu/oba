@@ -2,24 +2,64 @@
 
 This guide covers various methods to install and deploy Oba LDAP server.
 
+## Overview
+
+Oba is a zero-dependency LDAP server written in pure Go. It uses only the Go standard library, making it easy to build and deploy without external dependencies.
+
 ## System Requirements
 
 ### Hardware Requirements
 
-| Component | Minimum        | Recommended      |
-|-----------|----------------|------------------|
-| CPU       | 1 core         | 2+ cores         |
-| Memory    | 256 MB         | 1 GB+            |
-| Disk      | 100 MB         | 1 GB+ (for data) |
+| Component | Minimum    | Recommended    |
+|-----------|------------|----------------|
+| CPU       | 1 core     | 2+ cores       |
+| Memory    | 256 MB     | 1 GB+          |
+| Disk      | 100 MB     | 1 GB+ (for data)|
 
 ### Software Requirements
 
 - Go 1.22+ (for building from source)
-- Linux, macOS, or Windows operating system
+- Linux, macOS (including Apple Silicon), or Windows
+- Docker (optional, for containerized deployment)
+
+### Supported Platforms
+
+| Platform       | Architecture | Status     |
+|----------------|--------------|------------|
+| Linux          | amd64        | Supported  |
+| Linux          | arm64        | Supported  |
+| macOS          | amd64        | Supported  |
+| macOS          | arm64 (M1/M2)| Supported  |
+| Windows        | amd64        | Supported  |
 
 ## Installation Methods
 
-### Building from Source
+### Using Makefile (Recommended)
+
+The easiest way to build Oba:
+
+```bash
+git clone https://github.com/oba-ldap/oba.git
+cd oba
+
+# Build the binary
+make build
+
+# The binary will be at bin/oba
+./bin/oba version
+```
+
+Available Makefile targets:
+
+| Target        | Description                  |
+|---------------|------------------------------|
+| `make build`  | Build the binary to bin/     |
+| `make clean`  | Remove build artifacts       |
+| `make test`   | Run all tests                |
+| `make bench`  | Run benchmarks               |
+| `make run`    | Build and run the server     |
+
+### Building from Source (Manual)
 
 1. Clone the repository:
 
@@ -31,19 +71,19 @@ cd oba
 2. Build the binary:
 
 ```bash
-go build -o oba ./cmd/oba
+go build -o bin/oba ./cmd/oba
 ```
 
 3. (Optional) Build with version information:
 
 ```bash
-go build -ldflags "-X main.version=1.0.0 -X main.commit=$(git rev-parse HEAD) -X main.buildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o oba ./cmd/oba
+go build -ldflags "-X main.version=1.0.0 -X main.commit=$(git rev-parse HEAD) -X main.buildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o bin/oba ./cmd/oba
 ```
 
 4. Verify the installation:
 
 ```bash
-./oba version
+./bin/oba version
 ```
 
 ### Installing as a System Service

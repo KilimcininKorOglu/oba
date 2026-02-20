@@ -4,16 +4,32 @@ This guide covers security best practices for deploying and operating Oba LDAP s
 
 ## TLS Configuration
 
-### Enabling TLS
+### Enabling LDAPS (TLS)
 
 TLS is essential for protecting LDAP traffic. Configure TLS in your configuration file:
 
 ```yaml
 server:
-  tlsAddress: ":636"
+  address: ":389"      # Plain LDAP (consider disabling in production)
+  tlsAddress: ":636"   # LDAPS
   tlsCert: "/etc/oba/certs/server.crt"
   tlsKey: "/etc/oba/certs/server.key"
 ```
+
+### StartTLS
+
+StartTLS allows upgrading a plain LDAP connection to TLS. This is useful when you want to use a single port for both plain and encrypted connections.
+
+```bash
+# Connect using StartTLS
+ldapsearch -x -H ldap://localhost:389 -ZZ \
+  -D "cn=admin,dc=example,dc=com" -W \
+  -b "dc=example,dc=com" "(objectClass=*)"
+```
+
+The `-ZZ` flag requires StartTLS to succeed. Use `-Z` to attempt StartTLS but continue if it fails.
+
+**Note:** StartTLS is automatically supported when TLS certificates are configured. No additional configuration is required.
 
 ### Generating Self-Signed Certificates
 
@@ -56,8 +72,8 @@ sudo certbot certonly --standalone -d ldap.example.com
 
 Oba enforces TLS 1.2 as the minimum version by default. The supported cipher suites are:
 
-| Cipher Suite                                  | TLS Version |
-|-----------------------------------------------|-------------|
+| Cipher Suite                                | TLS Version |
+|---------------------------------------------|-------------|
 | TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384       | TLS 1.2     |
 | TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384         | TLS 1.2     |
 | TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256       | TLS 1.2     |
@@ -100,11 +116,22 @@ security:
 
 ### Password Storage
 
-Oba stores passwords using secure hashing:
+Oba stores passwords using secure hashing algorithms:
 
-- SHA256 for basic hashing
-- PBKDF2 for enhanced security
-- Salted hashes to prevent rainbow table attacks
+| Algorithm | Format                  | Description                              |
+|-----------|-------------------------|------------------------------------------|
+| SSHA      | `{SSHA}base64...`       | Salted SHA-1 (legacy compatibility)      |
+| SHA256    | `{SHA256}base64...`     | SHA-256 hash                             |
+| SHA512    | `{SHA512}base64...`     | SHA-512 hash                             |
+| PBKDF2    | `{PBKDF2}iterations$...`| PBKDF2-SHA256 with configurable iterations|
+
+**Security features:**
+- All hashes are salted to prevent rainbow table attacks
+- PBKDF2 uses 100,000 iterations by default
+- Passwords are never stored in plain text
+- Comparison is done in constant time to prevent timing attacks
+
+**Recommended:** Use PBKDF2 for new deployments. SHA256/SHA512 are supported for compatibility.
 
 ## Rate Limiting and Account Lockout
 

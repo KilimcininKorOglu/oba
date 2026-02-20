@@ -250,7 +250,9 @@ fi
 
 ### Point-in-Time Recovery
 
-If WAL archiving is enabled:
+Point-in-time recovery allows restoring the database to a specific moment using WAL archives.
+
+**Note:** This feature requires WAL archiving to be configured and running continuously.
 
 ```bash
 # Restore to a specific point in time
@@ -258,8 +260,13 @@ If WAL archiving is enabled:
 oba restore --input /backup/full/oba-full-20260215.bak
 
 # 2. Apply WAL records up to the target time
-# (This requires WAL replay functionality)
+oba restore --wal-dir /backup/wal-archive --target-time "2026-02-18T10:30:00Z"
 ```
+
+**Limitations:**
+- WAL replay is only available for changes after the last full backup
+- Target time must be after the backup timestamp
+- WAL files must be continuous (no gaps)
 
 ## Backup Verification
 

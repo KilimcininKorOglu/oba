@@ -67,13 +67,15 @@ directory:
 
 ## Storage Configuration
 
-| Parameter                    | Type     | Default        | Description                    |
-|------------------------------|----------|----------------|--------------------------------|
-| storage.dataDir              | string   | "/var/lib/oba" | Data directory path            |
-| storage.walDir               | string   | ""             | WAL directory (defaults to dataDir) |
-| storage.pageSize             | int      | 4096           | Page size in bytes             |
-| storage.bufferPoolSize       | string   | "256MB"        | Buffer pool size               |
-| storage.checkpointInterval   | duration | 5m             | Checkpoint interval            |
+| Parameter                  | Type     | Default        | Description                         |
+|----------------------------|----------|----------------|-------------------------------------|
+| storage.dataDir            | string   | "/var/lib/oba" | Data directory path (must be absolute) |
+| storage.walDir             | string   | ""             | WAL directory (defaults to dataDir) |
+| storage.pageSize           | int      | 4096           | Page size in bytes                  |
+| storage.bufferPoolSize     | string   | "256MB"        | Buffer pool size                    |
+| storage.checkpointInterval | duration | 5m             | Checkpoint interval                 |
+
+**Important:** The `dataDir` must be an absolute path (e.g., `/var/lib/oba`). Relative paths are not allowed and will cause a validation error.
 
 Example:
 
@@ -90,11 +92,25 @@ storage:
 
 Oba creates the following files in the data directory:
 
-| File        | Description                              |
-|-------------|------------------------------------------|
-| data.oba    | Main data file with entries              |
-| index.oba   | B+ tree indexes for attribute searches   |
-| wal.oba     | Write-ahead log for crash recovery       |
+| File      | Description                            |
+|-----------|----------------------------------------|
+| data.oba  | Main data file with entries            |
+| index.oba | B+ tree indexes for attribute searches |
+| wal.oba   | Write-ahead log for crash recovery     |
+
+### Index Configuration
+
+Oba automatically creates indexes for commonly searched attributes. The following indexes are created by default:
+
+| Attribute   | Index Type | Description                    |
+|-------------|------------|--------------------------------|
+| objectClass | Equality   | Fast objectClass filtering     |
+| uid         | Equality   | User identifier lookups        |
+| cn          | Equality   | Common name searches           |
+| mail        | Equality   | Email address lookups          |
+| member      | Equality   | Group membership queries       |
+
+Custom indexes can be created programmatically using the storage engine API.
 
 ## Logging Configuration
 

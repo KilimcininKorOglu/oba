@@ -96,6 +96,25 @@ ls -la /etc/oba/certs/server.key
 openssl x509 -in /etc/oba/certs/server.crt -text -noout
 ```
 
+5. Invalid data directory path
+
+```
+Configuration errors:
+  - storage.dataDir: must be an absolute path
+```
+
+**Solution:** The `dataDir` must be an absolute path (starting with `/`). Relative paths are not allowed.
+
+```yaml
+# Wrong
+storage:
+  dataDir: "./data"
+
+# Correct
+storage:
+  dataDir: "/var/lib/oba"
+```
+
 ### Connection Refused
 
 #### Symptom
@@ -335,3 +354,46 @@ logging:
 ```
 
 Remember to disable debug logging in production after troubleshooting.
+
+## Docker Troubleshooting
+
+### Container Won't Start
+
+```bash
+# Check container logs
+docker compose logs oba
+
+# Check container status
+docker compose ps -a
+
+# Inspect container
+docker inspect oba-oba-1
+```
+
+### Common Docker Issues
+
+| Issue                        | Cause                              | Solution                              |
+|------------------------------|-------------------------------------|---------------------------------------|
+| Container exits immediately  | Configuration error                 | Check logs with `docker compose logs` |
+| Port already in use          | Host port conflict                  | Change port mapping in docker-compose |
+| Permission denied on volume  | Volume ownership mismatch           | Check volume permissions              |
+| Cannot connect from host     | Wrong port or network config        | Verify port mapping and network mode  |
+
+### Volume Permissions
+
+```bash
+# Fix volume permissions
+docker compose down
+sudo chown -R 1000:1000 ./docker-data
+docker compose up -d
+```
+
+### Rebuilding the Container
+
+```bash
+# Rebuild without cache
+docker compose build --no-cache
+
+# Restart with fresh build
+docker compose up -d --build
+```

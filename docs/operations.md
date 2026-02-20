@@ -115,6 +115,77 @@ oba user lock --dn "uid=alice,ou=users,dc=example,dc=com"
 oba user unlock --dn "uid=alice,ou=users,dc=example,dc=com"
 ```
 
+## Advanced LDAP Operations
+
+### ModifyDN (Rename/Move Entry)
+
+Rename an entry or move it to a different location in the directory tree:
+
+```bash
+# Rename an entry (change RDN)
+ldapmodrdn -x -H ldap://localhost:389 \
+  -D "cn=admin,dc=example,dc=com" -W \
+  "uid=alice,ou=users,dc=example,dc=com" "uid=alice.smith"
+
+# Move an entry to a different parent
+ldapmodrdn -x -H ldap://localhost:389 \
+  -D "cn=admin,dc=example,dc=com" -W \
+  -s "ou=managers,dc=example,dc=com" \
+  "uid=alice,ou=users,dc=example,dc=com" "uid=alice"
+```
+
+### Compare Operation
+
+Compare an attribute value without retrieving the entry:
+
+```bash
+# Compare returns true (exit code 6) or false (exit code 5)
+ldapcompare -x -H ldap://localhost:389 \
+  -D "cn=admin,dc=example,dc=com" -W \
+  "uid=alice,ou=users,dc=example,dc=com" "mail:alice@example.com"
+```
+
+### Extended Operations
+
+#### Password Modify (RFC 3062)
+
+Change a user's password using the Password Modify extended operation:
+
+```bash
+# Change own password
+ldappasswd -x -H ldap://localhost:389 \
+  -D "uid=alice,ou=users,dc=example,dc=com" -W \
+  -S "uid=alice,ou=users,dc=example,dc=com"
+
+# Admin changes user password
+ldappasswd -x -H ldap://localhost:389 \
+  -D "cn=admin,dc=example,dc=com" -W \
+  -S "uid=alice,ou=users,dc=example,dc=com"
+```
+
+#### Who Am I (RFC 4532)
+
+Check the current authenticated identity:
+
+```bash
+ldapwhoami -x -H ldap://localhost:389 \
+  -D "uid=alice,ou=users,dc=example,dc=com" -W
+# Returns: dn:uid=alice,ou=users,dc=example,dc=com
+```
+
+### Paged Search Results
+
+For large result sets, use paged search to retrieve results in chunks:
+
+```bash
+# Search with page size of 100
+ldapsearch -x -H ldap://localhost:389 \
+  -D "cn=admin,dc=example,dc=com" -W \
+  -b "ou=users,dc=example,dc=com" \
+  -E pr=100/noprompt \
+  "(objectClass=person)" cn mail
+```
+
 ## Configuration Management
 
 ### Viewing Configuration
