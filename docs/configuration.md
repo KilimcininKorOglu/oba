@@ -69,19 +69,24 @@ directory:
 
 | Parameter                  | Type     | Default        | Description                         |
 |----------------------------|----------|----------------|-------------------------------------|
-| storage.dataDir            | string   | "/var/lib/oba" | Data directory path (must be absolute) |
+| storage.dataDir            | string   | "/var/lib/oba" | Data directory path                 |
 | storage.walDir             | string   | ""             | WAL directory (defaults to dataDir) |
 | storage.pageSize           | int      | 4096           | Page size in bytes                  |
 | storage.bufferPoolSize     | string   | "256MB"        | Buffer pool size                    |
 | storage.checkpointInterval | duration | 5m             | Checkpoint interval                 |
 
-**Important:** The `dataDir` must be an absolute path (e.g., `/var/lib/oba`). Relative paths are not allowed and will cause a validation error.
+Both absolute and relative paths are supported for `dataDir` and `walDir`. Relative paths are resolved from the current working directory.
 
 Example:
 
 ```yaml
 storage:
+  # Absolute path
   dataDir: "/var/lib/oba"
+  
+  # Or relative path (resolved from current directory)
+  # dataDir: "./data"
+  
   walDir: "/var/lib/oba/wal"
   pageSize: 4096
   bufferPoolSize: "256MB"

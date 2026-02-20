@@ -96,25 +96,6 @@ ls -la /etc/oba/certs/server.key
 openssl x509 -in /etc/oba/certs/server.crt -text -noout
 ```
 
-5. Invalid data directory path
-
-```
-Configuration errors:
-  - storage.dataDir: must be an absolute path
-```
-
-**Solution:** The `dataDir` must be an absolute path (starting with `/`). Relative paths are not allowed.
-
-```yaml
-# Wrong
-storage:
-  dataDir: "./data"
-
-# Correct
-storage:
-  dataDir: "/var/lib/oba"
-```
-
 ### Connection Refused
 
 #### Symptom

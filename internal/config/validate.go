@@ -149,19 +149,14 @@ func validateStorageConfig(config *StorageConfig) []error {
 			Field:   "storage.dataDir",
 			Message: "data directory is required",
 		})
-	} else if !filepath.IsAbs(config.DataDir) {
-		errs = append(errs, ValidationError{
-			Field:   "storage.dataDir",
-			Message: "must be an absolute path",
-		})
 	}
 
-	// Validate WAL directory if specified
-	if config.WALDir != "" && !filepath.IsAbs(config.WALDir) {
-		errs = append(errs, ValidationError{
-			Field:   "storage.walDir",
-			Message: "must be an absolute path",
-		})
+	// Validate WAL directory path syntax if specified
+	if config.WALDir != "" {
+		// WAL directory can be relative or absolute - will be resolved at runtime
+		if config.WALDir == "" {
+			// Empty is valid - defaults to dataDir
+		}
 	}
 
 	// Validate page size

@@ -1,7 +1,10 @@
 // Package config provides configuration parsing and management for the Oba LDAP server.
 package config
 
-import "time"
+import (
+	"path/filepath"
+	"time"
+)
 
 // Config holds the complete server configuration.
 type Config struct {
@@ -11,6 +14,45 @@ type Config struct {
 	Logging   LogConfig       `yaml:"logging"`
 	Security  SecurityConfig  `yaml:"security"`
 	ACL       ACLConfig       `yaml:"acl"`
+}
+
+// ResolvePaths resolves relative paths in the configuration to absolute paths.
+// This should be called after loading the configuration and before using it.
+func (c *Config) ResolvePaths() error {
+	var err error
+
+	// Resolve data directory
+	if c.Storage.DataDir != "" {
+		c.Storage.DataDir, err = filepath.Abs(c.Storage.DataDir)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Resolve WAL directory
+	if c.Storage.WALDir != "" {
+		c.Storage.WALDir, err = filepath.Abs(c.Storage.WALDir)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Resolve TLS certificate paths
+	if c.Server.TLSCert != "" {
+		c.Server.TLSCert, err = filepath.Abs(c.Server.TLSCert)
+		if err != nil {
+			return err
+		}
+	}
+
+	if c.Server.TLSKey != "" {
+		c.Server.TLSKey, err = filepath.Abs(c.Server.TLSKey)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // ServerConfig holds server-related configuration.

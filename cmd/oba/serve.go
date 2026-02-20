@@ -515,6 +515,12 @@ func serveCmd(args []string) int {
 	// Apply environment variable overrides (highest priority)
 	applyEnvOverrides(cfg)
 
+	// Resolve relative paths to absolute paths
+	if err := cfg.ResolvePaths(); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to resolve paths: %v\n", err)
+		return 1
+	}
+
 	// Validate configuration
 	errs := config.ValidateConfig(cfg)
 	if len(errs) > 0 {
