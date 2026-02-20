@@ -587,5 +587,56 @@ func (b *ObaBackend) Close() {
 	}
 }
 
+// SearchByDN searches for entries by DN with the given scope.
+// Returns an iterator over matching entries.
+func (b *ObaBackend) SearchByDN(baseDN string, scope storage.Scope) storage.Iterator {
+	txn, err := b.engine.Begin()
+	if err != nil {
+		return &errorIterator{err: wrapStorageError(err)}
+	}
+	// Note: Transaction will be rolled back when iterator is closed
+	return &backendIterator{
+		engine: b.engine,
+		txn:    txn,
+		iter:   b.engine.SearchByDN(txn, baseDN, scope),
+	}
+}
+
+// backendIterator wraps a storage iterator with transaction management.
+type backendIterator struct {
+	engine storage.StorageEngine
+	txn    interface{}
+	iter   storage.Iterator
+}
+
+func (it *backendIterator) Next() bool {
+	return it.iter.Next()
+}
+
+func (it *backendIterator) Entry() *storage.Entry {
+	return it.iter.Entry()
+}
+
+func (it *backendIterator) Error() error {
+	return it.iter.Error()
+}
+
+func (it *backendIterator) Close() {
+	it.iter.Close()
+	if it.engine != nil && it.txn != nil {
+		it.engine.Rollback(it.txn)
+	}
+}
+
+// errorIterator returns an error on first access.
+type errorIterator struct {
+	err error
+}
+
+func (it *errorIterator) Next() bool            { return false }
+func (it *errorIterator) Entry() *storage.Entry { return nil }
+func (it *errorIterator) Error() error          { return it.err }
+func (it *errorIterator) Close()                {}
+
 // Ensure ObaBackend implements Backend interface.
 var _ Backend = (*ObaBackend)(nil)

@@ -33,19 +33,20 @@ var (
 
 // LDAPServer represents the LDAP server instance.
 type LDAPServer struct {
-	config      *config.Config
-	logger      logging.Logger
-	handler     *server.Handler
-	backend     backend.Backend
-	engine      *engine.ObaDB
-	listener    net.Listener
-	tlsListener net.Listener
-	tlsConfig   *tls.Config
-	running     bool
-	mu          sync.Mutex
-	wg          sync.WaitGroup
-	ctx         context.Context
-	cancel      context.CancelFunc
+	config                  *config.Config
+	logger                  logging.Logger
+	handler                 *server.Handler
+	backend                 *backend.ObaBackend
+	engine                  *engine.ObaDB
+	listener                net.Listener
+	tlsListener             net.Listener
+	tlsConfig               *tls.Config
+	persistentSearchHandler *server.PersistentSearchHandler
+	running                 bool
+	mu                      sync.Mutex
+	wg                      sync.WaitGroup
+	ctx                     context.Context
+	cancel                  context.CancelFunc
 }
 
 // NewServer creates a new LDAP server with the given configuration.
@@ -88,15 +89,19 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// Create persistent search handler
+	psHandler := server.NewPersistentSearchHandler(be)
+
 	return &LDAPServer{
-		config:    cfg,
-		logger:    logger,
-		handler:   handler,
-		backend:   be,
-		engine:    db,
-		tlsConfig: tlsConfig,
-		ctx:       ctx,
-		cancel:    cancel,
+		config:                  cfg,
+		logger:                  logger,
+		handler:                 handler,
+		backend:                 be,
+		engine:                  db,
+		tlsConfig:               tlsConfig,
+		persistentSearchHandler: psHandler,
+		ctx:                     ctx,
+		cancel:                  cancel,
 	}, nil
 }
 
@@ -435,6 +440,7 @@ func (s *LDAPServer) handleConnection(conn net.Conn, isTLS bool) {
 	// Create and handle connection
 	c := server.NewConnection(conn, srv)
 	c.SetTLS(isTLS)
+	c.SetPersistentSearchHandler(s.persistentSearchHandler)
 	c.Handle()
 }
 
