@@ -1,0 +1,29 @@
+services:
+  oba:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "389:389"
+      - "636:636"
+    volumes:
+      - ./docker-data:/var/lib/oba
+    environment:
+      - OBA_LOG_LEVEL=debug
+    restart: unless-stopped
+
+  oba-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "1389:389"
+      - "1636:636"
+    volumes:
+      - .:/app
+      - ./docker-data:/var/lib/oba
+    environment:
+      - OBA_LOG_LEVEL=debug
+    command: ["go", "run", "./cmd/oba", "serve"]
+    profiles:
+      - dev
