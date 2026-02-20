@@ -56,37 +56,43 @@ Hangi degisiklik turlerini izlemek istediginizi belirtir:
 
 ### Kullanim Ornekleri
 
-#### ldapsearch ile (OpenLDAP)
+#### ldapsearch ile
 
 ```bash
-# Tum degisiklikleri izle (mevcut entry'ler dahil)
-ldapsearch -H ldap://localhost:389 \
-  -x -D "cn=admin,dc=example,dc=com" -w secret \
+# Tum degisiklikleri izle (changesOnly=false)
+# ps=<changeTypes>/<changesOnly>/<returnECs>
+ldapsearch -H ldap://localhost:1389 \
+  -x -D "cn=admin,dc=example,dc=com" -w admin \
   -b "dc=example,dc=com" \
-  -E 'ps:changeTypes=15/changesOnly=0/returnECs=1' \
+  -E 'ps=15/0/1' \
   "(objectClass=*)"
 
-# Sadece yeni degisiklikleri izle
-ldapsearch -H ldap://localhost:389 \
-  -x -D "cn=admin,dc=example,dc=com" -w secret \
+# Sadece yeni degisiklikleri izle (changesOnly=true)
+ldapsearch -H ldap://localhost:1389 \
+  -x -D "cn=admin,dc=example,dc=com" -w admin \
   -b "ou=users,dc=example,dc=com" \
-  -E 'ps:changeTypes=15/changesOnly=1/returnECs=1' \
+  -E 'ps=15/1/1' \
   "(objectClass=*)"
 
-# Sadece ekleme ve silmeleri izle
-ldapsearch -H ldap://localhost:389 \
-  -x -D "cn=admin,dc=example,dc=com" -w secret \
+# Sadece ekleme ve silmeleri izle (changeTypes=3 = add+delete)
+ldapsearch -H ldap://localhost:1389 \
+  -x -D "cn=admin,dc=example,dc=com" -w admin \
   -b "dc=example,dc=com" \
-  -E 'ps:changeTypes=3/changesOnly=1/returnECs=1' \
+  -E 'ps=3/1/1' \
   "(objectClass=*)"
 
-# Sadece kullanici degisikliklerini izle
-ldapsearch -H ldap://localhost:389 \
-  -x -D "cn=admin,dc=example,dc=com" -w secret \
-  -b "ou=users,dc=example,dc=com" \
-  -E 'ps:changeTypes=15/changesOnly=1/returnECs=1' \
-  "(objectClass=inetOrgPerson)"
+# Sadece modify islemlerini izle (changeTypes=4)
+ldapsearch -H ldap://localhost:1389 \
+  -x -D "cn=admin,dc=example,dc=com" -w admin \
+  -b "dc=example,dc=com" \
+  -E 'ps=4/1/1' \
+  "(objectClass=*)"
 ```
+
+**Parametre Aciklamasi:** `ps=<changeTypes>/<changesOnly>/<returnECs>`
+- changeTypes: 1=add, 2=delete, 4=modify, 8=modDN, 15=all
+- changesOnly: 0=false (mevcut entry'leri de gonder), 1=true
+- returnECs: 0=false, 1=true (Entry Change Notification control ekle)
 
 #### Python ldap3 ile
 
