@@ -85,7 +85,23 @@ security:
 acl:
   # Default policy when no rule matches: allow, deny
   defaultPolicy: "deny"
-  # ACL rules - configure via code or use default admin access
-  # Note: YAML list parsing for complex objects requires code configuration
-  # See docs/security.md for ACL rule examples
-  rules: []
+  # ACL rules (evaluated in order)
+  rules:
+    # Admin has full access
+    - target: "*"
+      subject: "cn=admin,dc=example,dc=com"
+      rights: ["read", "write", "add", "delete", "search", "compare"]
+    # Authenticated users can read and search
+    - target: "dc=example,dc=com"
+      subject: "authenticated"
+      rights: ["read", "search"]
+    # Users can modify their own entry
+    - target: "ou=users,dc=example,dc=com"
+      subject: "self"
+      rights: ["read", "write"]
+      attributes: ["userPassword", "mail", "telephoneNumber"]
+    # Anonymous can search for names only
+    - target: "ou=users,dc=example,dc=com"
+      subject: "anonymous"
+      rights: ["search"]
+      attributes: ["cn", "uid"]

@@ -79,12 +79,13 @@ func substituteEnvVars(data []byte) []byte {
 
 // yamlNode represents a parsed YAML node.
 type yamlNode struct {
-	key      string
-	value    string
-	indent   int
-	children []*yamlNode
-	isList   bool
-	listItems []string
+	key          string
+	value        string
+	indent       int
+	children     []*yamlNode
+	isList       bool
+	isListObject bool // true when list item contains key: value (- key: value)
+	listItems    []string
 }
 
 // parseYAML parses YAML data into the config struct.
@@ -128,7 +129,26 @@ func buildTree(lines []string, root *yamlNode) error {
 
 		// Handle list items
 		if node.isList {
-			// Add to parent's list items
+			if node.isListObject {
+				// List item that starts a new object (- key: value)
+				// Create a container node for this list item
+				listItemNode := &yamlNode{
+					indent:   indent,
+					children: []*yamlNode{},
+				}
+				// Add the first key-value as child
+				firstChild := &yamlNode{
+					key:    node.key,
+					value:  node.value,
+					indent: indent + 2,
+				}
+				listItemNode.children = append(listItemNode.children, firstChild)
+				parent.children = append(parent.children, listItemNode)
+				stack = append(stack, listItemNode)
+				continue
+			}
+
+			// Simple list item (- value)
 			if parent.listItems == nil {
 				parent.listItems = []string{}
 			}
@@ -162,9 +182,29 @@ func countIndent(line string) int {
 func parseLine(line string, indent int) (*yamlNode, error) {
 	// Check for list item
 	if strings.HasPrefix(line, "- ") {
-		value := strings.TrimPrefix(line, "- ")
+		content := strings.TrimPrefix(line, "- ")
+
+		// Check if list item contains key: value (nested object like "- target: *")
+		if colonIdx := strings.Index(content, ":"); colonIdx != -1 {
+			key := strings.TrimSpace(content[:colonIdx])
+			value := ""
+			if colonIdx+1 < len(content) {
+				value = strings.TrimSpace(content[colonIdx+1:])
+			}
+			value = unquote(value)
+
+			return &yamlNode{
+				key:          key,
+				value:        value,
+				indent:       indent,
+				isList:       true,
+				isListObject: true,
+			}, nil
+		}
+
+		// Simple list item (- value)
 		return &yamlNode{
-			value:  strings.TrimSpace(value),
+			value:  strings.TrimSpace(content),
 			indent: indent,
 			isList: true,
 		}, nil
@@ -200,6 +240,30 @@ func unquote(s string) string {
 		}
 	}
 	return s
+}
+
+// parseInlineArray parses inline array format like ["a", "b", "c"]
+func parseInlineArray(s string) []string {
+	s = strings.TrimSpace(s)
+	if !strings.HasPrefix(s, "[") || !strings.HasSuffix(s, "]") {
+		return nil
+	}
+
+	// Remove brackets
+	s = s[1 : len(s)-1]
+	if s == "" {
+		return []string{}
+	}
+
+	var result []string
+	for _, item := range strings.Split(s, ",") {
+		item = strings.TrimSpace(item)
+		item = unquote(item)
+		if item != "" {
+			result = append(result, item)
+		}
+	}
+	return result
 }
 
 // applyConfig applies parsed YAML nodes to the config struct.
@@ -483,11 +547,17 @@ func parseACLRules(node *yamlNode) ([]ACLRuleConfig, error) {
 			case "subject":
 				rule.Subject = ruleChild.value
 			case "rights":
-				if len(ruleChild.listItems) > 0 {
+				// Try inline array first, then list items
+				if inlineArr := parseInlineArray(ruleChild.value); inlineArr != nil {
+					rule.Rights = inlineArr
+				} else if len(ruleChild.listItems) > 0 {
 					rule.Rights = ruleChild.listItems
 				}
 			case "attributes":
-				if len(ruleChild.listItems) > 0 {
+				// Try inline array first, then list items
+				if inlineArr := parseInlineArray(ruleChild.value); inlineArr != nil {
+					rule.Attributes = inlineArr
+				} else if len(ruleChild.listItems) > 0 {
 					rule.Attributes = ruleChild.listItems
 				}
 			}
