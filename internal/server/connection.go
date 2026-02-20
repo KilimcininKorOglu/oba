@@ -1,0 +1,601 @@
+// Package server provides the LDAP server implementation.
+package server
+
+import (
+	"errors"
+	"io"
+	"net"
+	"sync"
+
+	"github.com/oba-ldap/oba/internal/ber"
+	"github.com/oba-ldap/oba/internal/ldap"
+)
+
+// Connection errors
+var (
+	// ErrConnectionClosed is returned when the connection is closed
+	ErrConnectionClosed = errors.New("server: connection closed")
+	// ErrInvalidMessage is returned when a message cannot be parsed
+	ErrInvalidMessage = errors.New("server: invalid message")
+	// ErrMessageTooLarge is returned when a message exceeds the size limit
+	ErrMessageTooLarge = errors.New("server: message too large")
+)
+
+// MaxMessageSize is the maximum size of an LDAP message (16 MB)
+const MaxMessageSize = 16 * 1024 * 1024
+
+// Connection represents an individual client connection to the LDAP server.
+// It manages the connection state, reads LDAP messages from the network,
+// dispatches them to appropriate handlers, and sends responses back.
+type Connection struct {
+	// conn is the underlying network connection
+	conn net.Conn
+	// server is the parent server instance
+	server *Server
+	// bindDN is the currently bound DN (empty for anonymous)
+	bindDN string
+	// authenticated indicates whether the connection is authenticated
+	authenticated bool
+	// messageID tracks the last processed message ID
+	messageID int
+	// mu protects concurrent access to connection state
+	mu sync.Mutex
+	// closed indicates whether the connection has been closed
+	closed bool
+	// handler is the operation handler for this connection
+	handler *Handler
+}
+
+// Server represents the LDAP server (placeholder for now).
+// This will be fully implemented in a separate task.
+type Server struct {
+	// Handler is the default handler for operations
+	Handler *Handler
+}
+
+// NewConnection creates a new Connection for the given network connection.
+func NewConnection(conn net.Conn, server *Server) *Connection {
+	c := &Connection{
+		conn:          conn,
+		server:        server,
+		bindDN:        "",
+		authenticated: false,
+		messageID:     0,
+		closed:        false,
+	}
+
+	// Create a handler for this connection
+	if server != nil && server.Handler != nil {
+		c.handler = server.Handler
+	} else {
+		c.handler = NewHandler()
+	}
+
+	return c
+}
+
+// Handle is the main message loop for the connection.
+// It reads LDAP messages, dispatches them to handlers, and sends responses.
+// This method blocks until the connection is closed or an error occurs.
+func (c *Connection) Handle() {
+	defer c.Close()
+
+	for {
+		// Check if connection is closed
+		c.mu.Lock()
+		if c.closed {
+			c.mu.Unlock()
+			return
+		}
+		c.mu.Unlock()
+
+		// Read the next message
+		msg, err := c.ReadMessage()
+		if err != nil {
+			// Check for expected closure conditions
+			if err == io.EOF || errors.Is(err, net.ErrClosed) || c.isClosed() {
+				return
+			}
+			// Log error and continue or close based on severity
+			if errors.Is(err, ErrMessageTooLarge) || errors.Is(err, ErrInvalidMessage) {
+				// Protocol error - close connection
+				return
+			}
+			// Network error - close connection
+			return
+		}
+
+		// Handle unbind request specially - it closes the connection
+		if msg.OperationType() == ldap.OperationType(ldap.ApplicationUnbindRequest) {
+			return
+		}
+
+		// Dispatch the message to the appropriate handler
+		response := c.dispatchMessage(msg)
+
+		// Send response(s) if any
+		if response != nil {
+			if err := c.WriteMessage(response); err != nil {
+				// Write error - close connection
+				return
+			}
+		}
+	}
+}
+
+// dispatchMessage dispatches a message to the appropriate handler.
+// It returns the response message(s) to send back to the client.
+func (c *Connection) dispatchMessage(msg *ldap.LDAPMessage) *ldap.LDAPMessage {
+	if c.handler == nil {
+		return c.createErrorResponse(msg.MessageID, ldap.ResultUnwillingToPerform, "no handler configured")
+	}
+
+	// Dispatch based on operation type
+	switch msg.OperationType() {
+	case ldap.OperationType(ldap.ApplicationBindRequest):
+		return c.handleBind(msg)
+	case ldap.OperationType(ldap.ApplicationSearchRequest):
+		return c.handleSearch(msg)
+	case ldap.OperationType(ldap.ApplicationAddRequest):
+		return c.handleAdd(msg)
+	case ldap.OperationType(ldap.ApplicationDelRequest):
+		return c.handleDelete(msg)
+	case ldap.OperationType(ldap.ApplicationModifyRequest):
+		return c.handleModify(msg)
+	case ldap.OperationType(ldap.ApplicationAbandonRequest):
+		// Abandon requests don't get a response
+		return nil
+	default:
+		return c.createErrorResponse(msg.MessageID, ldap.ResultProtocolError, "unsupported operation")
+	}
+}
+
+// handleBind handles a bind request.
+func (c *Connection) handleBind(msg *ldap.LDAPMessage) *ldap.LDAPMessage {
+	req, err := ldap.ParseBindRequest(msg.Operation.Data)
+	if err != nil {
+		return c.createBindResponse(msg.MessageID, ldap.ResultProtocolError, "", "invalid bind request")
+	}
+
+	// Call the handler
+	result := c.handler.HandleBind(c, req)
+
+	// Update connection state on successful bind
+	if result.ResultCode == ldap.ResultSuccess {
+		c.mu.Lock()
+		c.bindDN = req.Name
+		c.authenticated = !req.IsAnonymous()
+		c.mu.Unlock()
+	}
+
+	return c.createBindResponse(msg.MessageID, result.ResultCode, result.MatchedDN, result.DiagnosticMessage)
+}
+
+// handleSearch handles a search request.
+func (c *Connection) handleSearch(msg *ldap.LDAPMessage) *ldap.LDAPMessage {
+	req, err := ldap.ParseSearchRequest(msg.Operation.Data)
+	if err != nil {
+		return c.createSearchDoneResponse(msg.MessageID, ldap.ResultProtocolError, "", "invalid search request")
+	}
+
+	// Call the handler
+	result := c.handler.HandleSearch(c, req)
+
+	// Send search result entries first
+	for _, entry := range result.Entries {
+		entryMsg := c.createSearchEntryResponse(msg.MessageID, entry)
+		if err := c.WriteMessage(entryMsg); err != nil {
+			return nil // Connection error, will be handled by caller
+		}
+	}
+
+	// Return the search done response
+	return c.createSearchDoneResponse(msg.MessageID, result.ResultCode, result.MatchedDN, result.DiagnosticMessage)
+}
+
+// handleAdd handles an add request.
+func (c *Connection) handleAdd(msg *ldap.LDAPMessage) *ldap.LDAPMessage {
+	req, err := ldap.ParseAddRequest(msg.Operation.Data)
+	if err != nil {
+		return c.createAddResponse(msg.MessageID, ldap.ResultProtocolError, "", "invalid add request")
+	}
+
+	// Call the handler
+	result := c.handler.HandleAdd(c, req)
+
+	return c.createAddResponse(msg.MessageID, result.ResultCode, result.MatchedDN, result.DiagnosticMessage)
+}
+
+// handleDelete handles a delete request.
+func (c *Connection) handleDelete(msg *ldap.LDAPMessage) *ldap.LDAPMessage {
+	req, err := ldap.ParseDeleteRequest(msg.Operation.Data)
+	if err != nil {
+		return c.createDeleteResponse(msg.MessageID, ldap.ResultProtocolError, "", "invalid delete request")
+	}
+
+	// Call the handler
+	result := c.handler.HandleDelete(c, req)
+
+	return c.createDeleteResponse(msg.MessageID, result.ResultCode, result.MatchedDN, result.DiagnosticMessage)
+}
+
+// handleModify handles a modify request.
+func (c *Connection) handleModify(msg *ldap.LDAPMessage) *ldap.LDAPMessage {
+	req, err := ldap.ParseModifyRequest(msg.Operation.Data)
+	if err != nil {
+		return c.createModifyResponse(msg.MessageID, ldap.ResultProtocolError, "", "invalid modify request")
+	}
+
+	// Call the handler
+	result := c.handler.HandleModify(c, req)
+
+	return c.createModifyResponse(msg.MessageID, result.ResultCode, result.MatchedDN, result.DiagnosticMessage)
+}
+
+// ReadMessage reads the next LDAP message from the connection.
+func (c *Connection) ReadMessage() (*ldap.LDAPMessage, error) {
+	// Read the tag byte
+	tagBuf := make([]byte, 1)
+	if _, err := io.ReadFull(c.conn, tagBuf); err != nil {
+		return nil, err
+	}
+
+	// Verify it's a SEQUENCE tag (0x30)
+	if tagBuf[0] != byte(ber.ClassUniversal|ber.TypeConstructed|ber.TagSequence) {
+		return nil, ErrInvalidMessage
+	}
+
+	// Read the length
+	length, lengthBytes, err := c.readLength()
+	if err != nil {
+		return nil, err
+	}
+
+	// Check message size limit
+	if length > MaxMessageSize {
+		return nil, ErrMessageTooLarge
+	}
+
+	// Read the message content
+	content := make([]byte, length)
+	if _, err := io.ReadFull(c.conn, content); err != nil {
+		return nil, err
+	}
+
+	// Reconstruct the full message with tag and length
+	fullMessage := make([]byte, 1+len(lengthBytes)+length)
+	fullMessage[0] = tagBuf[0]
+	copy(fullMessage[1:], lengthBytes)
+	copy(fullMessage[1+len(lengthBytes):], content)
+
+	// Parse the LDAP message
+	msg, err := ldap.ParseLDAPMessage(fullMessage)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update message ID tracking
+	c.mu.Lock()
+	c.messageID = msg.MessageID
+	c.mu.Unlock()
+
+	return msg, nil
+}
+
+// readLength reads a BER length from the connection.
+// Returns the length value and the raw length bytes.
+func (c *Connection) readLength() (int, []byte, error) {
+	// Read the first length byte
+	firstByte := make([]byte, 1)
+	if _, err := io.ReadFull(c.conn, firstByte); err != nil {
+		return 0, nil, err
+	}
+
+	// Short form: bit 8 is 0, bits 1-7 contain the length
+	if firstByte[0]&ber.LengthLongFormBit == 0 {
+		return int(firstByte[0]), firstByte, nil
+	}
+
+	// Long form: bit 8 is 1, bits 1-7 contain the number of subsequent length bytes
+	numBytes := int(firstByte[0] & 0x7F)
+
+	// Check for indefinite length (0x80) - not supported
+	if numBytes == 0 {
+		return 0, nil, ErrInvalidMessage
+	}
+
+	// Read the length bytes
+	lengthBytes := make([]byte, numBytes)
+	if _, err := io.ReadFull(c.conn, lengthBytes); err != nil {
+		return 0, nil, err
+	}
+
+	// Calculate the length value
+	length := 0
+	for _, b := range lengthBytes {
+		length = (length << 8) | int(b)
+	}
+
+	// Return all length bytes (first byte + subsequent bytes)
+	allLengthBytes := make([]byte, 1+numBytes)
+	allLengthBytes[0] = firstByte[0]
+	copy(allLengthBytes[1:], lengthBytes)
+
+	return length, allLengthBytes, nil
+}
+
+// WriteMessage writes an LDAP message to the connection.
+func (c *Connection) WriteMessage(msg *ldap.LDAPMessage) error {
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return ErrConnectionClosed
+	}
+	c.mu.Unlock()
+
+	// Encode the message
+	data, err := msg.Encode()
+	if err != nil {
+		return err
+	}
+
+	// Write to the connection
+	_, err = c.conn.Write(data)
+	return err
+}
+
+// Close closes the connection.
+func (c *Connection) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.closed {
+		return nil
+	}
+
+	c.closed = true
+	return c.conn.Close()
+}
+
+// isClosed returns whether the connection is closed.
+func (c *Connection) isClosed() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.closed
+}
+
+// BindDN returns the currently bound DN.
+func (c *Connection) BindDN() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.bindDN
+}
+
+// IsAuthenticated returns whether the connection is authenticated.
+func (c *Connection) IsAuthenticated() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.authenticated
+}
+
+// RemoteAddr returns the remote address of the connection.
+func (c *Connection) RemoteAddr() net.Addr {
+	return c.conn.RemoteAddr()
+}
+
+// LocalAddr returns the local address of the connection.
+func (c *Connection) LocalAddr() net.Addr {
+	return c.conn.LocalAddr()
+}
+
+// createErrorResponse creates a generic error response.
+func (c *Connection) createErrorResponse(messageID int, resultCode ldap.ResultCode, diagnosticMessage string) *ldap.LDAPMessage {
+	// Create a generic response - use BindResponse as a fallback
+	return c.createBindResponse(messageID, resultCode, "", diagnosticMessage)
+}
+
+// createBindResponse creates a BindResponse message.
+// BindResponse ::= [APPLICATION 1] SEQUENCE {
+//
+//	COMPONENTS OF LDAPResult,
+//	serverSaslCreds    [7] OCTET STRING OPTIONAL
+//
+// }
+func (c *Connection) createBindResponse(messageID int, resultCode ldap.ResultCode, matchedDN, diagnosticMessage string) *ldap.LDAPMessage {
+	encoder := ber.NewBEREncoder(128)
+
+	// Write resultCode (ENUMERATED)
+	if err := encoder.WriteEnumerated(int64(resultCode)); err != nil {
+		return nil
+	}
+
+	// Write matchedDN (LDAPDN - OCTET STRING)
+	if err := encoder.WriteOctetString([]byte(matchedDN)); err != nil {
+		return nil
+	}
+
+	// Write diagnosticMessage (LDAPString - OCTET STRING)
+	if err := encoder.WriteOctetString([]byte(diagnosticMessage)); err != nil {
+		return nil
+	}
+
+	return &ldap.LDAPMessage{
+		MessageID: messageID,
+		Operation: &ldap.RawOperation{
+			Tag:  ldap.ApplicationBindResponse,
+			Data: encoder.Bytes(),
+		},
+	}
+}
+
+// createSearchDoneResponse creates a SearchResultDone message.
+// SearchResultDone ::= [APPLICATION 5] LDAPResult
+func (c *Connection) createSearchDoneResponse(messageID int, resultCode ldap.ResultCode, matchedDN, diagnosticMessage string) *ldap.LDAPMessage {
+	encoder := ber.NewBEREncoder(128)
+
+	// Write resultCode (ENUMERATED)
+	if err := encoder.WriteEnumerated(int64(resultCode)); err != nil {
+		return nil
+	}
+
+	// Write matchedDN (LDAPDN - OCTET STRING)
+	if err := encoder.WriteOctetString([]byte(matchedDN)); err != nil {
+		return nil
+	}
+
+	// Write diagnosticMessage (LDAPString - OCTET STRING)
+	if err := encoder.WriteOctetString([]byte(diagnosticMessage)); err != nil {
+		return nil
+	}
+
+	return &ldap.LDAPMessage{
+		MessageID: messageID,
+		Operation: &ldap.RawOperation{
+			Tag:  ldap.ApplicationSearchResultDone,
+			Data: encoder.Bytes(),
+		},
+	}
+}
+
+// createSearchEntryResponse creates a SearchResultEntry message.
+// SearchResultEntry ::= [APPLICATION 4] SEQUENCE {
+//
+//	objectName      LDAPDN,
+//	attributes      PartialAttributeList
+//
+// }
+func (c *Connection) createSearchEntryResponse(messageID int, entry *SearchEntry) *ldap.LDAPMessage {
+	encoder := ber.NewBEREncoder(256)
+
+	// Write objectName (LDAPDN - OCTET STRING)
+	if err := encoder.WriteOctetString([]byte(entry.DN)); err != nil {
+		return nil
+	}
+
+	// Write attributes (SEQUENCE OF PartialAttribute)
+	attrListPos := encoder.BeginSequence()
+
+	for _, attr := range entry.Attributes {
+		// Write PartialAttribute SEQUENCE
+		attrPos := encoder.BeginSequence()
+
+		// Write attribute type
+		if err := encoder.WriteOctetString([]byte(attr.Type)); err != nil {
+			return nil
+		}
+
+		// Write attribute values (SET OF OCTET STRING)
+		valSetPos := encoder.BeginSet()
+		for _, value := range attr.Values {
+			if err := encoder.WriteOctetString(value); err != nil {
+				return nil
+			}
+		}
+		if err := encoder.EndSet(valSetPos); err != nil {
+			return nil
+		}
+
+		if err := encoder.EndSequence(attrPos); err != nil {
+			return nil
+		}
+	}
+
+	if err := encoder.EndSequence(attrListPos); err != nil {
+		return nil
+	}
+
+	return &ldap.LDAPMessage{
+		MessageID: messageID,
+		Operation: &ldap.RawOperation{
+			Tag:  ldap.ApplicationSearchResultEntry,
+			Data: encoder.Bytes(),
+		},
+	}
+}
+
+// createAddResponse creates an AddResponse message.
+// AddResponse ::= [APPLICATION 9] LDAPResult
+func (c *Connection) createAddResponse(messageID int, resultCode ldap.ResultCode, matchedDN, diagnosticMessage string) *ldap.LDAPMessage {
+	encoder := ber.NewBEREncoder(128)
+
+	// Write resultCode (ENUMERATED)
+	if err := encoder.WriteEnumerated(int64(resultCode)); err != nil {
+		return nil
+	}
+
+	// Write matchedDN (LDAPDN - OCTET STRING)
+	if err := encoder.WriteOctetString([]byte(matchedDN)); err != nil {
+		return nil
+	}
+
+	// Write diagnosticMessage (LDAPString - OCTET STRING)
+	if err := encoder.WriteOctetString([]byte(diagnosticMessage)); err != nil {
+		return nil
+	}
+
+	return &ldap.LDAPMessage{
+		MessageID: messageID,
+		Operation: &ldap.RawOperation{
+			Tag:  ldap.ApplicationAddResponse,
+			Data: encoder.Bytes(),
+		},
+	}
+}
+
+// createDeleteResponse creates a DelResponse message.
+// DelResponse ::= [APPLICATION 11] LDAPResult
+func (c *Connection) createDeleteResponse(messageID int, resultCode ldap.ResultCode, matchedDN, diagnosticMessage string) *ldap.LDAPMessage {
+	encoder := ber.NewBEREncoder(128)
+
+	// Write resultCode (ENUMERATED)
+	if err := encoder.WriteEnumerated(int64(resultCode)); err != nil {
+		return nil
+	}
+
+	// Write matchedDN (LDAPDN - OCTET STRING)
+	if err := encoder.WriteOctetString([]byte(matchedDN)); err != nil {
+		return nil
+	}
+
+	// Write diagnosticMessage (LDAPString - OCTET STRING)
+	if err := encoder.WriteOctetString([]byte(diagnosticMessage)); err != nil {
+		return nil
+	}
+
+	return &ldap.LDAPMessage{
+		MessageID: messageID,
+		Operation: &ldap.RawOperation{
+			Tag:  ldap.ApplicationDelResponse,
+			Data: encoder.Bytes(),
+		},
+	}
+}
+
+// createModifyResponse creates a ModifyResponse message.
+// ModifyResponse ::= [APPLICATION 7] LDAPResult
+func (c *Connection) createModifyResponse(messageID int, resultCode ldap.ResultCode, matchedDN, diagnosticMessage string) *ldap.LDAPMessage {
+	encoder := ber.NewBEREncoder(128)
+
+	// Write resultCode (ENUMERATED)
+	if err := encoder.WriteEnumerated(int64(resultCode)); err != nil {
+		return nil
+	}
+
+	// Write matchedDN (LDAPDN - OCTET STRING)
+	if err := encoder.WriteOctetString([]byte(matchedDN)); err != nil {
+		return nil
+	}
+
+	// Write diagnosticMessage (LDAPString - OCTET STRING)
+	if err := encoder.WriteOctetString([]byte(diagnosticMessage)); err != nil {
+		return nil
+	}
+
+	return &ldap.LDAPMessage{
+		MessageID: messageID,
+		Operation: &ldap.RawOperation{
+			Tag:  ldap.ApplicationModifyResponse,
+			Data: encoder.Bytes(),
+		},
+	}
+}
