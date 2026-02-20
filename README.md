@@ -12,7 +12,7 @@ Oba is a lightweight, zero-dependency LDAP server implementation written in pure
 - Password policy enforcement
 - Write-Ahead Logging (WAL) for crash recovery
 - MVCC for concurrent access
-- Index persistence cache for fast startup
+- Async preload with batch I/O for fast startup
 - Backup and restore with automatic timestamps
 
 ## Quick Start
