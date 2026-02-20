@@ -202,11 +202,11 @@ func (db *ObaDB) initComponents() error {
 		}
 	}
 
-	// 11. Set up disk loader for lazy loading and preload hot entries
+	// 11. Set up disk loader for lazy loading
 	db.setupDiskLoader()
-	if err := db.preloadHotEntries(); err != nil {
-		return err
-	}
+
+	// 12. Preload hot entries asynchronously for faster startup
+	go db.preloadHotEntriesAsync()
 
 	return nil
 }
@@ -294,37 +294,87 @@ func (db *ObaDB) preloadHotEntries() error {
 	}
 
 	const maxPreload = 1000
-	count := 0
 
-	err := db.radixTree.IterateSubtree("", func(dn string, pageID storage.PageID, slotID uint16) bool {
-		if pageID == 0 || count >= maxPreload {
-			return count < maxPreload
+	// Collect entries to preload
+	type entryInfo struct {
+		dn     string
+		pageID storage.PageID
+		slotID uint16
+	}
+	entries := make([]entryInfo, 0, maxPreload)
+
+	db.radixTree.IterateSubtree("", func(dn string, pageID storage.PageID, slotID uint16) bool {
+		if pageID == 0 || len(entries) >= maxPreload {
+			return len(entries) < maxPreload
 		}
+		entries = append(entries, entryInfo{dn, pageID, slotID})
+		return true
+	})
 
-		page, err := db.pageManager.ReadPage(pageID)
-		if err != nil {
-			return true
+	if len(entries) == 0 {
+		return nil
+	}
+
+	// Collect unique page IDs
+	pageIDSet := make(map[storage.PageID]bool)
+	for _, e := range entries {
+		pageIDSet[e.pageID] = true
+	}
+
+	pageIDs := make([]storage.PageID, 0, len(pageIDSet))
+	for id := range pageIDSet {
+		pageIDs = append(pageIDs, id)
+	}
+
+	// Batch read all pages
+	pages, err := db.pageManager.ReadPages(pageIDs)
+	if err != nil {
+		return err
+	}
+
+	// Build page map for quick lookup
+	pageMap := make(map[storage.PageID]*storage.Page)
+	for i, id := range pageIDs {
+		if pages[i] != nil {
+			pageMap[id] = pages[i]
+		}
+	}
+
+	// Load entries from cached pages
+	for _, e := range entries {
+		page, ok := pageMap[e.pageID]
+		if !ok || page == nil {
+			continue
 		}
 
 		if len(page.Data) < 4 {
-			return true
+			continue
 		}
 
 		dataLen := int(page.Data[0]) | int(page.Data[1])<<8 | int(page.Data[2])<<16 | int(page.Data[3])<<24
 		if dataLen <= 0 || dataLen+4 > len(page.Data) {
-			return true
+			continue
 		}
 
 		data := make([]byte, dataLen)
 		copy(data, page.Data[4:4+dataLen])
 
-		db.versionStore.LoadCommittedVersion(dn, data, pageID, slotID)
-		count++
+		db.versionStore.LoadCommittedVersion(e.dn, data, e.pageID, e.slotID)
+	}
 
-		return true
-	})
+	return nil
+}
 
-	return err
+// preloadHotEntriesAsync preloads hot entries in the background.
+func (db *ObaDB) preloadHotEntriesAsync() {
+	db.mu.RLock()
+	if db.closed {
+		db.mu.RUnlock()
+		return
+	}
+	db.mu.RUnlock()
+
+	db.preloadHotEntries()
 }
 
 // Close closes the database and releases all resources.

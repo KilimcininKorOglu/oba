@@ -481,6 +481,38 @@ func (pm *PageManager) readPageInternal(id PageID) (*Page, error) {
 	return page, nil
 }
 
+// ReadPages reads multiple pages from disk in a single operation.
+// This is more efficient than calling ReadPage multiple times.
+func (pm *PageManager) ReadPages(ids []PageID) ([]*Page, error) {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+
+	if pm.closed {
+		return nil, ErrFileClosed
+	}
+
+	if len(ids) == 0 {
+		return []*Page{}, nil
+	}
+
+	pages := make([]*Page, len(ids))
+	
+	// Read all pages
+	for i, id := range ids {
+		if id == 0 {
+			continue // Skip invalid IDs
+		}
+		
+		page, err := pm.readPageInternal(id)
+		if err != nil {
+			continue // Skip failed reads
+		}
+		pages[i] = page
+	}
+
+	return pages, nil
+}
+
 // WritePage writes a page to disk.
 func (pm *PageManager) WritePage(page *Page) error {
 	pm.mu.Lock()
