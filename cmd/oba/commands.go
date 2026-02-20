@@ -5,6 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
+
+	"github.com/oba-ldap/oba/internal/backup"
+	"github.com/oba-ldap/oba/internal/storage"
 )
 
 // backupCmd handles the backup command.
@@ -13,9 +17,11 @@ func backupCmd(args []string) int {
 	fs.SetOutput(os.Stderr)
 
 	output := fs.String("output", "", "Output file path")
+	dataDir := fs.String("data-dir", "", "Data directory path")
 	compress := fs.Bool("compress", false, "Compress backup file")
 	incremental := fs.Bool("incremental", false, "Create incremental backup")
 	format := fs.String("format", "native", "Backup format: native, ldif")
+	baseDN := fs.String("base-dn", "", "Base DN for LDIF export (optional)")
 	help := fs.Bool("h", false, "Show help message")
 	helpLong := fs.Bool("help", false, "Show help message")
 
@@ -33,14 +39,59 @@ func backupCmd(args []string) int {
 		return 1
 	}
 
-	// TODO: Implement backup logic
+	if *dataDir == "" {
+		fmt.Fprintln(os.Stderr, "Error: -data-dir is required")
+		return 1
+	}
+
+	// Open page manager for backup
+	pmOpts := storage.Options{
+		PageSize:    4096,
+		ReadOnly:    true,
+		CreateIfNew: false,
+	}
+	dataFile := *dataDir + "/data.oba"
+	pm, err := storage.OpenPageManager(dataFile, pmOpts)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error opening data file: %v\n", err)
+		return 1
+	}
+	defer pm.Close()
+
+	// Create backup manager
+	bm := backup.NewBackupManager(pm)
+
+	// Configure backup options
+	backupOpts := &backup.BackupOptions{
+		OutputPath:  *output,
+		Compress:    *compress,
+		Incremental: *incremental,
+		Format:      backup.BackupFormat(*format),
+		BaseDN:      *baseDN,
+	}
+
 	fmt.Printf("Creating backup...\n")
 	fmt.Printf("  Output:      %s\n", *output)
+	fmt.Printf("  Data Dir:    %s\n", *dataDir)
 	fmt.Printf("  Compress:    %v\n", *compress)
 	fmt.Printf("  Incremental: %v\n", *incremental)
 	fmt.Printf("  Format:      %s\n", *format)
 
-	fmt.Println("Backup implementation pending...")
+	startTime := time.Now()
+	stats, err := bm.Backup(backupOpts)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Backup failed: %v\n", err)
+		return 1
+	}
+
+	fmt.Printf("\nBackup completed successfully!\n")
+	fmt.Printf("  Total pages: %d\n", stats.TotalPages)
+	fmt.Printf("  Total bytes: %d\n", stats.TotalBytes)
+	if *compress && stats.CompressedBytes > 0 {
+		fmt.Printf("  Compressed:  %d (%.1f%% reduction)\n", stats.CompressedBytes, stats.CompressionRatio()*100)
+	}
+	fmt.Printf("  Duration:    %v\n", time.Since(startTime).Round(time.Millisecond))
+
 	return 0
 }
 
@@ -50,6 +101,7 @@ func restoreCmd(args []string) int {
 	fs.SetOutput(os.Stderr)
 
 	input := fs.String("input", "", "Input backup file path")
+	dataDir := fs.String("data-dir", "", "Target data directory path")
 	verify := fs.Bool("verify", false, "Verify checksums before restore")
 	format := fs.String("format", "native", "Backup format: native, ldif")
 	help := fs.Bool("h", false, "Show help message")
@@ -69,13 +121,42 @@ func restoreCmd(args []string) int {
 		return 1
 	}
 
-	// TODO: Implement restore logic
-	fmt.Printf("Restoring from backup...\n")
-	fmt.Printf("  Input:  %s\n", *input)
-	fmt.Printf("  Verify: %v\n", *verify)
-	fmt.Printf("  Format: %s\n", *format)
+	if *dataDir == "" {
+		fmt.Fprintln(os.Stderr, "Error: -data-dir is required")
+		return 1
+	}
 
-	fmt.Println("Restore implementation pending...")
+	// Create restore manager
+	rm := backup.NewRestoreManager(*dataDir)
+
+	// Configure restore options
+	opts := &backup.RestoreOptions{
+		InputPath: *input,
+		Verify:    *verify,
+		Format:    backup.BackupFormat(*format),
+		DataDir:   *dataDir,
+	}
+
+	fmt.Printf("Restoring from backup...\n")
+	fmt.Printf("  Input:    %s\n", *input)
+	fmt.Printf("  Data Dir: %s\n", *dataDir)
+	fmt.Printf("  Verify:   %v\n", *verify)
+	fmt.Printf("  Format:   %s\n", *format)
+
+	startTime := time.Now()
+	stats, err := rm.Restore(opts)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Restore failed: %v\n", err)
+		return 1
+	}
+
+	fmt.Printf("\nRestore completed successfully!\n")
+	fmt.Printf("  Backup type:     %s\n", stats.BackupType)
+	fmt.Printf("  Total pages:     %d\n", stats.TotalPages)
+	fmt.Printf("  Total bytes:     %d\n", stats.TotalBytes)
+	fmt.Printf("  Backups applied: %d\n", stats.BackupsApplied)
+	fmt.Printf("  Duration:        %v\n", time.Since(startTime).Round(time.Millisecond))
+
 	return 0
 }
 

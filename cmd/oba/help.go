@@ -63,12 +63,16 @@ Usage:
 Options:
   -output string
         Output file path (required)
+  -data-dir string
+        Data directory path (required)
   -compress
         Compress backup file
   -incremental
         Create incremental backup
   -format string
         Backup format: native, ldif (default "native")
+  -base-dn string
+        Base DN for LDIF export (optional)
   -h, -help
         Show this help message
 `)
@@ -84,6 +88,8 @@ Usage:
 Options:
   -input string
         Input backup file path (required)
+  -data-dir string
+        Target data directory path (required)
   -verify
         Verify checksums before restore
   -format string

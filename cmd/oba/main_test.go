@@ -114,9 +114,10 @@ func TestRun_Backup(t *testing.T) {
 }
 
 func TestRun_BackupWithOutput(t *testing.T) {
+	// Without -data-dir flag, should fail
 	exitCode := run([]string{"oba", "backup", "-output", "/tmp/backup.bak"})
-	if exitCode != 0 {
-		t.Errorf("expected exit code 0 for backup with output, got %d", exitCode)
+	if exitCode != 1 {
+		t.Errorf("expected exit code 1 for backup without data-dir, got %d", exitCode)
 	}
 }
 
@@ -136,9 +137,10 @@ func TestRun_Restore(t *testing.T) {
 }
 
 func TestRun_RestoreWithInput(t *testing.T) {
+	// Without -data-dir flag, should fail
 	exitCode := run([]string{"oba", "restore", "-input", "/tmp/backup.bak"})
-	if exitCode != 0 {
-		t.Errorf("expected exit code 0 for restore with input, got %d", exitCode)
+	if exitCode != 1 {
+		t.Errorf("expected exit code 1 for restore without data-dir, got %d", exitCode)
 	}
 }
 
