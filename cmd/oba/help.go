@@ -35,13 +35,21 @@ Options:
   -config string
         Path to configuration file
   -address string
-        Listen address (default ":389")
+        Listen address (overrides config, default ":389")
   -tls-address string
-        TLS listen address (default ":636")
+        TLS listen address (overrides config, default ":636")
   -data-dir string
-        Data directory path (default "/var/lib/oba")
+        Data directory path (overrides config, default "/var/lib/oba")
+  -log-level string
+        Log level: debug, info, warn, error (overrides config)
   -h, -help
         Show this help message
+
+Environment Variables:
+  OBA_SERVER_ADDRESS       Override server listen address
+  OBA_SERVER_TLS_ADDRESS   Override TLS listen address
+  OBA_STORAGE_DATA_DIR     Override data directory path
+  OBA_LOGGING_LEVEL        Override log level
 `)
 }
 
