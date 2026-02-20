@@ -439,6 +439,10 @@ func applySecurityConfig(node *yamlNode, config *SecurityConfig) error {
 			if err := applyRateLimitConfig(child, &config.RateLimit); err != nil {
 				return err
 			}
+		case "encryption":
+			if err := applyEncryptionConfig(child, &config.Encryption); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -508,6 +512,21 @@ func applyRateLimitConfig(node *yamlNode, config *RateLimitConfig) error {
 					return err
 				}
 				config.LockoutDuration = dur
+			}
+		}
+	}
+	return nil
+}
+
+// applyEncryptionConfig applies encryption configuration.
+func applyEncryptionConfig(node *yamlNode, config *EncryptionConfig) error {
+	for _, child := range node.children {
+		switch child.key {
+		case "enabled":
+			config.Enabled = parseBool(child.value)
+		case "keyFile":
+			if child.value != "" {
+				config.KeyFile = child.value
 			}
 		}
 	}

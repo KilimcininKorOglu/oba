@@ -63,6 +63,13 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 		WithPageSize(cfg.Storage.PageSize).
 		WithCreateIfNotExists(true).
 		WithSyncOnWrite(true)
+
+	// Configure encryption if enabled
+	if cfg.Security.Encryption.Enabled && cfg.Security.Encryption.KeyFile != "" {
+		engineOpts = engineOpts.WithEncryptionKeyFile(cfg.Security.Encryption.KeyFile)
+		logger.Info("encryption enabled", "keyFile", cfg.Security.Encryption.KeyFile)
+	}
+
 	db, err := engine.Open(cfg.Storage.DataDir, engineOpts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open storage engine: %w", err)
