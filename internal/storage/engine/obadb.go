@@ -18,9 +18,12 @@ import (
 
 // File names for ObaDB storage.
 const (
-	DataFileName  = "data.oba"
-	IndexFileName = "index.oba"
-	WALFileName   = "wal.oba"
+	DataFileName       = "data.oba"
+	IndexFileName      = "index.oba"
+	WALFileName        = "wal.oba"
+	CacheDir           = "cache"
+	RadixCacheFileName = "radix.cache"
+	BTreeCacheFileName = "btree.cache"
 )
 
 // ObaDB errors.
@@ -214,10 +217,24 @@ func (db *ObaDB) initRadixTree() error {
 	header := db.pageManager.Header()
 
 	if header.RootPages.DNIndex != 0 {
-		// Load existing tree
+		// Try to load from cache first
+		cachePath := filepath.Join(db.path, CacheDir, RadixCacheFileName)
+		txID := db.getLastTxID()
+
+		// Create tree with root page
 		var err error
 		db.radixTree, err = radix.NewRadixTreeWithRoot(db.pageManager, header.RootPages.DNIndex)
-		return err
+		if err != nil {
+			return err
+		}
+
+		// Try to load cache (faster startup)
+		if cacheErr := db.radixTree.LoadCache(cachePath, txID); cacheErr == nil {
+			// Cache loaded successfully
+			return nil
+		}
+		// Cache miss or stale - tree already loaded from pages
+		return nil
 	}
 
 	// Create new tree
@@ -768,6 +785,9 @@ func (db *ObaDB) Checkpoint() error {
 		return err
 	}
 
+	// Save caches for faster startup
+	db.saveCaches()
+
 	return db.checkpointManager.Checkpoint()
 }
 
@@ -1088,6 +1108,36 @@ func (it *filterIterator) Next() bool {
 func (it *filterIterator) Entry() *storage.Entry { return it.current }
 func (it *filterIterator) Error() error          { return it.err }
 func (it *filterIterator) Close()                { it.radixIter.Close() }
+
+// getLastTxID returns the last transaction ID for cache validation.
+func (db *ObaDB) getLastTxID() uint64 {
+	if db.wal != nil {
+		return db.wal.CurrentLSN()
+	}
+	return 0
+}
+
+// saveCaches saves index caches for faster startup.
+func (db *ObaDB) saveCaches() {
+	cacheDir := filepath.Join(db.path, CacheDir)
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		return
+	}
+
+	txID := db.getLastTxID()
+
+	// Save radix tree cache
+	radixCachePath := filepath.Join(cacheDir, RadixCacheFileName)
+	if db.radixTree != nil {
+		db.radixTree.SaveCache(radixCachePath, txID)
+	}
+
+	// Save index cache
+	btreeCachePath := filepath.Join(cacheDir, BTreeCacheFileName)
+	if db.indexManager != nil {
+		db.indexManager.SaveCache(btreeCachePath, txID)
+	}
+}
 
 // Ensure ObaDB implements StorageEngine interface.
 var _ storage.StorageEngine = (*ObaDB)(nil)
