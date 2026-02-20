@@ -49,6 +49,9 @@ type ModifyHandler func(conn *Connection, req *ldap.ModifyRequest) *OperationRes
 // ModifyDNHandler handles modifydn requests.
 type ModifyDNHandler func(conn *Connection, req *ldap.ModifyDNRequest) *OperationResult
 
+// CompareHandler handles compare requests.
+type CompareHandler func(conn *Connection, req *ldap.CompareRequest) *OperationResult
+
 // Handler manages operation handlers for the LDAP server.
 type Handler struct {
 	// bindHandler handles bind requests
@@ -63,6 +66,8 @@ type Handler struct {
 	modifyHandler ModifyHandler
 	// modifyDNHandler handles modifydn requests
 	modifyDNHandler ModifyDNHandler
+	// compareHandler handles compare requests
+	compareHandler CompareHandler
 }
 
 // NewHandler creates a new Handler with default handlers.
@@ -74,6 +79,7 @@ func NewHandler() *Handler {
 		deleteHandler:   defaultDeleteHandler,
 		modifyHandler:   defaultModifyHandler,
 		modifyDNHandler: defaultModifyDNHandler,
+		compareHandler:  defaultCompareHandler,
 	}
 }
 
@@ -105,6 +111,11 @@ func (h *Handler) SetModifyHandler(handler ModifyHandler) {
 // SetModifyDNHandler sets the modifydn handler.
 func (h *Handler) SetModifyDNHandler(handler ModifyDNHandler) {
 	h.modifyDNHandler = handler
+}
+
+// SetCompareHandler sets the compare handler.
+func (h *Handler) SetCompareHandler(handler CompareHandler) {
+	h.compareHandler = handler
 }
 
 // HandleBind handles a bind request.
@@ -175,6 +186,17 @@ func (h *Handler) HandleModifyDN(conn *Connection, req *ldap.ModifyDNRequest) *O
 	return h.modifyDNHandler(conn, req)
 }
 
+// HandleCompare handles a compare request.
+func (h *Handler) HandleCompare(conn *Connection, req *ldap.CompareRequest) *OperationResult {
+	if h.compareHandler == nil {
+		return &OperationResult{
+			ResultCode:        ldap.ResultUnwillingToPerform,
+			DiagnosticMessage: "compare handler not configured",
+		}
+	}
+	return h.compareHandler(conn, req)
+}
+
 // Default handlers that return "unwilling to perform"
 
 func defaultBindHandler(_ *Connection, req *ldap.BindRequest) *OperationResult {
@@ -224,5 +246,12 @@ func defaultModifyDNHandler(_ *Connection, _ *ldap.ModifyDNRequest) *OperationRe
 	return &OperationResult{
 		ResultCode:        ldap.ResultUnwillingToPerform,
 		DiagnosticMessage: "modifydn not implemented",
+	}
+}
+
+func defaultCompareHandler(_ *Connection, _ *ldap.CompareRequest) *OperationResult {
+	return &OperationResult{
+		ResultCode:        ldap.ResultUnwillingToPerform,
+		DiagnosticMessage: "compare not implemented",
 	}
 }
