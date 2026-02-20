@@ -1,22 +1,91 @@
+# Oba LDAP Server Configuration
+# All available configuration options with their default values
+
+# Server configuration
 server:
+  # LDAP listen address (use :1389 for non-root users)
   address: ":1389"
+  # LDAPS (TLS) listen address (empty to disable)
   tlsAddress: ""
-  maxConnections: 1000
+  # Path to TLS certificate file
+  tlsCert: ""
+  # Path to TLS private key file
+  tlsKey: ""
+  # Maximum concurrent connections
+  maxConnections: 10000
+  # Read timeout per operation
   readTimeout: 30s
+  # Write timeout per operation
   writeTimeout: 30s
 
+# Directory configuration
 directory:
+  # Base distinguished name
   baseDN: "dc=example,dc=com"
+  # Administrator DN
   rootDN: "cn=admin,dc=example,dc=com"
+  # Administrator password (use environment variable in production)
   rootPassword: "admin"
 
+# Storage engine configuration
 storage:
-  dataDir: ""
+  # Data directory path (absolute or relative)
+  dataDir: "/var/lib/oba"
+  # WAL directory (defaults to dataDir if empty)
+  walDir: ""
+  # Page size in bytes (4096, 8192, 16384, or 32768)
   pageSize: 4096
+  # Buffer pool size (e.g., "256MB", "1GB")
   bufferPoolSize: "256MB"
+  # Checkpoint interval
   checkpointInterval: 5m
+  # Entry cache size (LRU cache for frequently accessed entries)
+  cacheSize: 10000
 
+# Logging configuration
 logging:
-  level: "debug"
+  # Log level: debug, info, warn, error
+  level: "info"
+  # Log format: json, text
   format: "json"
+  # Output: stdout, stderr, or file path
   output: "stdout"
+
+# Security configuration
+security:
+  # Password policy settings
+  passwordPolicy:
+    # Enable password policy enforcement
+    enabled: false
+    # Minimum password length
+    minLength: 8
+    # Require at least one uppercase letter
+    requireUppercase: true
+    # Require at least one lowercase letter
+    requireLowercase: true
+    # Require at least one digit
+    requireDigit: true
+    # Require at least one special character
+    requireSpecial: false
+    # Password expiration (0 = never expires)
+    maxAge: 0
+    # Number of old passwords to remember (0 = no history)
+    historyCount: 0
+
+  # Rate limiting / account lockout settings
+  rateLimit:
+    # Enable rate limiting
+    enabled: false
+    # Maximum failed authentication attempts before lockout
+    maxAttempts: 5
+    # Account lockout duration
+    lockoutDuration: 15m
+
+# Access Control List configuration
+acl:
+  # Default policy when no rule matches: allow, deny
+  defaultPolicy: "deny"
+  # ACL rules - configure via code or use default admin access
+  # Note: YAML list parsing for complex objects requires code configuration
+  # See docs/security.md for ACL rule examples
+  rules: []
