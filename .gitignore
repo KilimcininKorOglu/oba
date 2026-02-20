@@ -67,3 +67,4 @@ coverage/
 .hermes/
 docker-data/
 temp/
+plan/
