@@ -1,0 +1,42 @@
+# User entries for compatibility tests
+
+dn: uid=alice,ou=users,dc=test,dc=com
+objectClass: inetOrgPerson
+objectClass: person
+objectClass: top
+uid: alice
+cn: Alice Smith
+sn: Smith
+mail: alice@test.com
+telephoneNumber: +1-555-0101
+description: Test user Alice
+
+dn: uid=bob,ou=users,dc=test,dc=com
+objectClass: inetOrgPerson
+objectClass: person
+objectClass: top
+uid: bob
+cn: Bob Jones
+sn: Jones
+mail: bob@test.com
+description: Test user Bob
+
+dn: uid=charlie,ou=users,dc=test,dc=com
+objectClass: inetOrgPerson
+objectClass: person
+objectClass: top
+uid: charlie
+cn: Charlie Admin Brown
+sn: Brown
+mail: charlie@test.com
+description: Admin user Charlie
+
+dn: uid=diana,ou=users,dc=test,dc=com
+objectClass: inetOrgPerson
+objectClass: person
+objectClass: top
+uid: diana
+cn: Diana Prince
+sn: Prince
+mail: diana@test.com
+telephoneNumber: +1-555-0104

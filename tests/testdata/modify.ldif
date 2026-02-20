@@ -1,0 +1,30 @@
+# Modify operations for compatibility tests
+
+# Add attribute
+dn: uid=alice,ou=users,dc=test,dc=com
+changetype: modify
+add: title
+title: Senior Engineer
+
+# Replace attribute
+dn: uid=bob,ou=users,dc=test,dc=com
+changetype: modify
+replace: description
+description: Updated description for Bob
+
+# Delete attribute
+dn: uid=charlie,ou=users,dc=test,dc=com
+changetype: modify
+delete: description
+
+# Multiple modifications
+dn: uid=diana,ou=users,dc=test,dc=com
+changetype: modify
+add: title
+title: Developer
+-
+replace: description
+description: Diana is a developer
+-
+add: l
+l: New York

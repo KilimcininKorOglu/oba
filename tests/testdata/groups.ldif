@@ -1,0 +1,27 @@
+# Group entries for compatibility tests
+
+dn: cn=admins,ou=groups,dc=test,dc=com
+objectClass: groupOfNames
+objectClass: top
+cn: admins
+member: uid=alice,ou=users,dc=test,dc=com
+member: uid=charlie,ou=users,dc=test,dc=com
+description: Administrator group
+
+dn: cn=developers,ou=groups,dc=test,dc=com
+objectClass: groupOfNames
+objectClass: top
+cn: developers
+member: uid=bob,ou=users,dc=test,dc=com
+member: uid=diana,ou=users,dc=test,dc=com
+description: Developer group
+
+dn: cn=users,ou=groups,dc=test,dc=com
+objectClass: groupOfNames
+objectClass: top
+cn: users
+member: uid=alice,ou=users,dc=test,dc=com
+member: uid=bob,ou=users,dc=test,dc=com
+member: uid=charlie,ou=users,dc=test,dc=com
+member: uid=diana,ou=users,dc=test,dc=com
+description: All users group

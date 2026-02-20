@@ -1,0 +1,22 @@
+# Base LDIF file for compatibility tests
+# This file contains the base directory structure
+
+dn: dc=test,dc=com
+objectClass: domain
+objectClass: top
+dc: test
+
+dn: ou=users,dc=test,dc=com
+objectClass: organizationalUnit
+objectClass: top
+ou: users
+
+dn: ou=groups,dc=test,dc=com
+objectClass: organizationalUnit
+objectClass: top
+ou: groups
+
+dn: ou=services,dc=test,dc=com
+objectClass: organizationalUnit
+objectClass: top
+ou: services
