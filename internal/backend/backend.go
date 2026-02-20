@@ -30,6 +30,8 @@ var (
 	ErrNoPassword = errors.New("backend: no password attribute")
 	// ErrStorageError is returned when a storage operation fails.
 	ErrStorageError = errors.New("backend: storage error")
+	// ErrNotAllowedOnNonLeaf is returned when trying to delete an entry with children.
+	ErrNotAllowedOnNonLeaf = errors.New("backend: operation not allowed on non-leaf entry")
 )
 
 // PasswordAttribute is the standard LDAP attribute name for user passwords.
@@ -56,6 +58,9 @@ type Backend interface {
 	// Delete removes an entry from the directory.
 	// Returns an error if the entry does not exist.
 	Delete(dn string) error
+
+	// HasChildren returns true if the entry has child entries.
+	HasChildren(dn string) (bool, error)
 
 	// Modify modifies an existing entry.
 	// Returns an error if the entry does not exist or the modifications are invalid.
@@ -275,6 +280,25 @@ func (b *ObaBackend) Delete(dn string) error {
 	}
 
 	return nil
+}
+
+// HasChildren returns true if the entry has child entries.
+func (b *ObaBackend) HasChildren(dn string) (bool, error) {
+	if dn == "" {
+		return false, ErrInvalidDN
+	}
+
+	normalizedDN := normalizeDN(dn)
+
+	// Start a read transaction
+	txn, err := b.engine.Begin()
+	if err != nil {
+		return false, wrapStorageError(err)
+	}
+	defer b.engine.Rollback(txn)
+
+	// Check if entry has children
+	return b.engine.HasChildren(txn, normalizedDN)
 }
 
 // Modify modifies an existing entry.

@@ -198,6 +198,10 @@ type StorageEngine interface {
 	// The tx parameter should be a *tx.Transaction.
 	Delete(tx interface{}, dn string) error
 
+	// HasChildren returns true if the entry at the given DN has child entries.
+	// The tx parameter should be a *tx.Transaction.
+	HasChildren(tx interface{}, dn string) (bool, error)
+
 	// Search operations
 
 	// SearchByDN searches for entries by DN with the given scope.

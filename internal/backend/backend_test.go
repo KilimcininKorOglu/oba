@@ -57,6 +57,20 @@ func (m *mockStorageEngine) Delete(tx interface{}, dn string) error {
 	return nil
 }
 
+func (m *mockStorageEngine) HasChildren(tx interface{}, dn string) (bool, error) {
+	// Check if any entry has this DN as a parent
+	for entryDN := range m.entries {
+		if entryDN != dn && len(entryDN) > len(dn) {
+			// Check if entryDN ends with ","+dn (is a child)
+			suffix := "," + dn
+			if len(entryDN) > len(suffix) && entryDN[len(entryDN)-len(suffix):] == suffix {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
 func (m *mockStorageEngine) SearchByDN(tx interface{}, baseDN string, scope storage.Scope) storage.Iterator {
 	var results []*storage.Entry
 	for dn, entry := range m.entries {
@@ -387,6 +401,121 @@ func TestDeleteInvalidDN(t *testing.T) {
 	backend := NewBackend(engine, nil)
 
 	err := backend.Delete("")
+	if err != ErrInvalidDN {
+		t.Errorf("expected ErrInvalidDN, got %v", err)
+	}
+}
+
+// TestHasChildren tests checking if an entry has children.
+func TestHasChildren(t *testing.T) {
+	engine := newMockStorageEngine()
+	backend := NewBackend(engine, nil)
+
+	// Add parent entry
+	parent := storage.NewEntry("ou=users,dc=example,dc=com")
+	parent.SetStringAttribute("objectclass", "organizationalUnit")
+	engine.entries["ou=users,dc=example,dc=com"] = parent
+
+	// Add child entry
+	child := storage.NewEntry("uid=alice,ou=users,dc=example,dc=com")
+	child.SetStringAttribute("objectclass", "person")
+	engine.entries["uid=alice,ou=users,dc=example,dc=com"] = child
+
+	// Parent should have children
+	hasChildren, err := backend.HasChildren("ou=users,dc=example,dc=com")
+	if err != nil {
+		t.Fatalf("HasChildren() error = %v", err)
+	}
+	if !hasChildren {
+		t.Error("expected parent to have children")
+	}
+
+	// Child should not have children
+	hasChildren, err = backend.HasChildren("uid=alice,ou=users,dc=example,dc=com")
+	if err != nil {
+		t.Fatalf("HasChildren() error = %v", err)
+	}
+	if hasChildren {
+		t.Error("expected child to not have children")
+	}
+}
+
+// TestHasChildrenInvalidDN tests HasChildren with invalid DN.
+func TestHasChildrenInvalidDN(t *testing.T) {
+	engine := newMockStorageEngine()
+	backend := NewBackend(engine, nil)
+
+	_, err := backend.HasChildren("")
+	if err != ErrInvalidDN {
+		t.Errorf("expected ErrInvalidDN, got %v", err)
+	}
+}
+
+// TestDeleteEntry tests the DeleteEntry method with children check.
+func TestDeleteEntry(t *testing.T) {
+	engine := newMockStorageEngine()
+	backend := NewBackend(engine, nil)
+
+	// Add a leaf entry
+	entry := storage.NewEntry("uid=alice,ou=users,dc=example,dc=com")
+	entry.SetStringAttribute("objectclass", "person")
+	engine.entries["uid=alice,ou=users,dc=example,dc=com"] = entry
+
+	err := backend.DeleteEntry("uid=alice,ou=users,dc=example,dc=com")
+	if err != nil {
+		t.Fatalf("DeleteEntry() error = %v", err)
+	}
+
+	// Verify entry was deleted
+	if _, ok := engine.entries["uid=alice,ou=users,dc=example,dc=com"]; ok {
+		t.Error("expected entry to be deleted from storage")
+	}
+}
+
+// TestDeleteEntryWithChildren tests that DeleteEntry fails for non-leaf entries.
+func TestDeleteEntryWithChildren(t *testing.T) {
+	engine := newMockStorageEngine()
+	backend := NewBackend(engine, nil)
+
+	// Add parent entry
+	parent := storage.NewEntry("ou=users,dc=example,dc=com")
+	parent.SetStringAttribute("objectclass", "organizationalUnit")
+	engine.entries["ou=users,dc=example,dc=com"] = parent
+
+	// Add child entry
+	child := storage.NewEntry("uid=alice,ou=users,dc=example,dc=com")
+	child.SetStringAttribute("objectclass", "person")
+	engine.entries["uid=alice,ou=users,dc=example,dc=com"] = child
+
+	// Try to delete parent - should fail
+	err := backend.DeleteEntry("ou=users,dc=example,dc=com")
+	if err != ErrNotAllowedOnNonLeaf {
+		t.Errorf("expected ErrNotAllowedOnNonLeaf, got %v", err)
+	}
+
+	// Verify parent was not deleted
+	if _, ok := engine.entries["ou=users,dc=example,dc=com"]; !ok {
+		t.Error("expected parent entry to still exist")
+	}
+}
+
+// TestDeleteEntryNonExistent tests DeleteEntry with non-existent entry.
+func TestDeleteEntryNonExistent(t *testing.T) {
+	engine := newMockStorageEngine()
+	backend := NewBackend(engine, nil)
+
+	err := backend.DeleteEntry("uid=nonexistent,dc=example,dc=com")
+	if err != ErrEntryNotFound {
+		t.Errorf("expected ErrEntryNotFound, got %v", err)
+	}
+}
+
+// TestDeleteEntryInvalidDN tests DeleteEntry with invalid DN.
+func TestDeleteEntryInvalidDN(t *testing.T) {
+	engine := newMockStorageEngine()
+	backend := NewBackend(engine, nil)
+
+	err := backend.DeleteEntry("")
 	if err != ErrInvalidDN {
 		t.Errorf("expected ErrInvalidDN, got %v", err)
 	}
