@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"sync"
+
+	"github.com/oba-ldap/oba/internal/crypto"
 )
 
 // WAL constants.
@@ -42,23 +44,32 @@ type WAL struct {
 
 	// Index for fast LSN lookup: maps LSN to file offset
 	lsnIndex map[uint64]int64
+
+	// Encryption key (nil if encryption is disabled)
+	encryptionKey *crypto.EncryptionKey
 }
 
 // OpenWAL opens or creates a WAL file at the given path.
 func OpenWAL(path string) (*WAL, error) {
+	return OpenWALWithEncryption(path, nil)
+}
+
+// OpenWALWithEncryption opens or creates a WAL file with optional encryption.
+func OpenWALWithEncryption(path string, encryptionKey *crypto.EncryptionKey) (*WAL, error) {
 	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
 		return nil, err
 	}
 
 	wal := &WAL{
-		file:       file,
-		path:       path,
-		currentLSN: 0,
-		buffer:     make([]byte, WALBufferSize),
-		bufferPos:  0,
-		closed:     false,
-		lsnIndex:   make(map[uint64]int64),
+		file:          file,
+		path:          path,
+		currentLSN:    0,
+		buffer:        make([]byte, WALBufferSize),
+		bufferPos:     0,
+		closed:        false,
+		lsnIndex:      make(map[uint64]int64),
+		encryptionKey: encryptionKey,
 	}
 
 	// Recover existing records and rebuild LSN index
@@ -129,6 +140,16 @@ func (w *WAL) recover() error {
 			break
 		}
 
+		// Decrypt if encryption is enabled
+		if w.encryptionKey != nil {
+			decrypted, err := w.encryptionKey.Decrypt(recordBuf)
+			if err != nil {
+				// Corrupted or wrong key, truncate here
+				break
+			}
+			recordBuf = decrypted
+		}
+
 		// Deserialize and validate record
 		record := &WALRecord{}
 		if err := record.DeserializeAndValidate(recordBuf); err != nil {
@@ -185,6 +206,14 @@ func (w *WAL) Append(record *WALRecord) (uint64, error) {
 	recordBuf, err := record.Serialize()
 	if err != nil {
 		return 0, err
+	}
+
+	// Encrypt if encryption is enabled
+	if w.encryptionKey != nil {
+		recordBuf, err = w.encryptionKey.Encrypt(recordBuf)
+		if err != nil {
+			return 0, err
+		}
 	}
 
 	recordLen := uint32(len(recordBuf))
@@ -369,6 +398,15 @@ func (w *WAL) Truncate(lsn uint64) error {
 			break
 		}
 
+		// Decrypt if encryption is enabled
+		if w.encryptionKey != nil {
+			decrypted, err := w.encryptionKey.Decrypt(recordBuf)
+			if err != nil {
+				break
+			}
+			recordBuf = decrypted
+		}
+
 		record := &WALRecord{}
 		if err := record.Deserialize(recordBuf); err != nil {
 			break
@@ -532,6 +570,15 @@ func (it *WALIterator) Record() (*WALRecord, error) {
 	}
 	if n < int(recordLen) {
 		return nil, ErrWALRecordLength
+	}
+
+	// Decrypt if encryption is enabled
+	if it.wal.encryptionKey != nil {
+		decrypted, err := it.wal.encryptionKey.Decrypt(recordBuf)
+		if err != nil {
+			return nil, err
+		}
+		recordBuf = decrypted
 	}
 
 	// Deserialize record

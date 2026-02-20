@@ -81,6 +81,14 @@ security:
     # Account lockout duration
     lockoutDuration: 15m
 
+  # Encryption at rest settings
+  encryption:
+    # Enable encryption for stored data (AES-256-GCM)
+    enabled: false
+    # Path to encryption key file (32 bytes raw or 64 hex chars)
+    # Generate with: openssl rand -hex 32 > /etc/oba/encryption.key
+    keyFile: ""
+
 # Access Control List configuration
 acl:
   # Default policy when no rule matches: allow, deny

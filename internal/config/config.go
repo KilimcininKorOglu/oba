@@ -52,6 +52,14 @@ func (c *Config) ResolvePaths() error {
 		}
 	}
 
+	// Resolve encryption key file path
+	if c.Security.Encryption.KeyFile != "" {
+		c.Security.Encryption.KeyFile, err = filepath.Abs(c.Security.Encryption.KeyFile)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -94,6 +102,13 @@ type LogConfig struct {
 type SecurityConfig struct {
 	PasswordPolicy PasswordPolicyConfig `yaml:"passwordPolicy"`
 	RateLimit      RateLimitConfig      `yaml:"rateLimit"`
+	Encryption     EncryptionConfig     `yaml:"encryption"`
+}
+
+// EncryptionConfig holds encryption at rest configuration.
+type EncryptionConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	KeyFile string `yaml:"keyFile"`
 }
 
 // PasswordPolicyConfig holds password policy configuration.

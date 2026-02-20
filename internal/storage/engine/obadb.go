@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/oba-ldap/oba/internal/crypto"
 	"github.com/oba-ldap/oba/internal/storage"
 	"github.com/oba-ldap/oba/internal/storage/index"
 	"github.com/oba-ldap/oba/internal/storage/mvcc"
@@ -55,6 +56,9 @@ type ObaDB struct {
 	bufferPool        *storage.BufferPool
 	checkpointManager *storage.CheckpointManager
 
+	// Encryption
+	encryptionKey *crypto.EncryptionKey
+
 	// Configuration
 	options storage.EngineOptions
 	path    string
@@ -99,6 +103,11 @@ func Open(path string, opts storage.EngineOptions) (*ObaDB, error) {
 func (db *ObaDB) initComponents() error {
 	var err error
 
+	// 0. Initialize encryption if configured
+	if err := db.initEncryption(); err != nil {
+		return err
+	}
+
 	// 1. Open page manager for data file
 	dataPath := filepath.Join(db.path, DataFileName)
 	pmOpts := storage.Options{
@@ -117,7 +126,7 @@ func (db *ObaDB) initComponents() error {
 	// 2. Open WAL
 	if !db.options.ReadOnly {
 		walPath := filepath.Join(db.path, WALFileName)
-		db.wal, err = storage.OpenWAL(walPath)
+		db.wal, err = storage.OpenWALWithEncryption(walPath, db.encryptionKey)
 		if err != nil {
 			return err
 		}
@@ -560,7 +569,15 @@ func (db *ObaDB) Get(txnIface interface{}, dn string) (*storage.Entry, error) {
 	}
 
 	// Deserialize entry from version data
-	entry, err := deserializeEntry(dn, version.GetData())
+	data := version.GetData()
+
+	// Decrypt if encryption is enabled
+	data, err = db.decryptData(data)
+	if err != nil {
+		return nil, err
+	}
+
+	entry, err := deserializeEntry(dn, data)
 	if err != nil {
 		return nil, err
 	}
@@ -600,11 +617,20 @@ func (db *ObaDB) Put(txnIface interface{}, entry *storage.Entry) error {
 		return err
 	}
 
+	// Encrypt data if encryption is enabled
+	data, err = db.encryptData(data)
+	if err != nil {
+		return err
+	}
+
 	// Check if entry exists (for index update)
 	var oldEntry *storage.Entry
 	existingVersion, err := db.versionStore.GetVisibleForTx(dn, txn.Snapshot, txn.ID)
 	if err == nil && existingVersion != nil {
-		oldEntry, _ = deserializeEntry(dn, existingVersion.GetData())
+		oldData := existingVersion.GetData()
+		// Decrypt if needed
+		oldData, _ = db.decryptData(oldData)
+		oldEntry, _ = deserializeEntry(dn, oldData)
 	}
 
 	// Create version in version store and get the storage location
@@ -667,7 +693,10 @@ func (db *ObaDB) Delete(txnIface interface{}, dn string) error {
 	// Get old entry for index update
 	var oldEntry *storage.Entry
 	if existingVersion != nil {
-		oldEntry, _ = deserializeEntry(dn, existingVersion.GetData())
+		oldData := existingVersion.GetData()
+		// Decrypt if needed
+		oldData, _ = db.decryptData(oldData)
+		oldEntry, _ = deserializeEntry(dn, oldData)
 	}
 
 	// Delete version in version store
@@ -1113,7 +1142,15 @@ func (it *dnIterator) Next() bool {
 			continue
 		}
 
-		entry, err := deserializeEntry(dn, version.GetData())
+		data := version.GetData()
+		// Decrypt if needed
+		data, err = it.db.decryptData(data)
+		if err != nil {
+			it.err = err
+			return false
+		}
+
+		entry, err := deserializeEntry(dn, data)
 		if err != nil {
 			it.err = err
 			return false
@@ -1151,7 +1188,15 @@ func (it *filterIterator) Next() bool {
 			continue
 		}
 
-		entry, err := deserializeEntry(dn, version.GetData())
+		data := version.GetData()
+		// Decrypt if needed
+		data, err = it.db.decryptData(data)
+		if err != nil {
+			it.err = err
+			return false
+		}
+
+		entry, err := deserializeEntry(dn, data)
 		if err != nil {
 			it.err = err
 			return false
@@ -1215,3 +1260,50 @@ func (db *ObaDB) saveCachesInternal() {
 
 // Ensure ObaDB implements StorageEngine interface.
 var _ storage.StorageEngine = (*ObaDB)(nil)
+
+// initEncryption initializes encryption if configured.
+func (db *ObaDB) initEncryption() error {
+	// Check for raw key first
+	if len(db.options.EncryptionKey) > 0 {
+		key, err := crypto.NewEncryptionKey(db.options.EncryptionKey)
+		if err != nil {
+			return err
+		}
+		db.encryptionKey = key
+		return nil
+	}
+
+	// Check for key file
+	if db.options.EncryptionKeyFile != "" {
+		key, err := crypto.LoadKeyFromFile(db.options.EncryptionKeyFile)
+		if err != nil {
+			return err
+		}
+		db.encryptionKey = key
+		return nil
+	}
+
+	// No encryption configured
+	return nil
+}
+
+// IsEncrypted returns true if the database is using encryption.
+func (db *ObaDB) IsEncrypted() bool {
+	return db.encryptionKey != nil
+}
+
+// encryptData encrypts data if encryption is enabled.
+func (db *ObaDB) encryptData(data []byte) ([]byte, error) {
+	if db.encryptionKey == nil {
+		return data, nil
+	}
+	return db.encryptionKey.Encrypt(data)
+}
+
+// decryptData decrypts data if encryption is enabled.
+func (db *ObaDB) decryptData(data []byte) ([]byte, error) {
+	if db.encryptionKey == nil {
+		return data, nil
+	}
+	return db.encryptionKey.Decrypt(data)
+}

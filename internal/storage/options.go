@@ -53,6 +53,15 @@ type EngineOptions struct {
 	// InitialPages is the initial number of pages to allocate.
 	// Default: 16.
 	InitialPages int
+
+	// EncryptionKeyFile is the path to the encryption key file.
+	// If empty, encryption is disabled.
+	EncryptionKeyFile string
+
+	// EncryptionKey is the raw encryption key (32 bytes).
+	// If set, takes precedence over EncryptionKeyFile.
+	// Warning: Prefer EncryptionKeyFile for production use.
+	EncryptionKey []byte
 }
 
 // DefaultEngineOptions returns the default engine options.
@@ -153,5 +162,17 @@ func (o EngineOptions) WithGCInterval(interval time.Duration) EngineOptions {
 // WithGCEnabled enables or disables garbage collection.
 func (o EngineOptions) WithGCEnabled(enabled bool) EngineOptions {
 	o.GCEnabled = enabled
+	return o
+}
+
+// WithEncryptionKeyFile sets the encryption key file path.
+func (o EngineOptions) WithEncryptionKeyFile(path string) EngineOptions {
+	o.EncryptionKeyFile = path
+	return o
+}
+
+// WithEncryptionKey sets the raw encryption key.
+func (o EngineOptions) WithEncryptionKey(key []byte) EngineOptions {
+	o.EncryptionKey = key
 	return o
 }
