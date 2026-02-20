@@ -18,12 +18,13 @@ import (
 
 // File names for ObaDB storage.
 const (
-	DataFileName       = "data.oba"
-	IndexFileName      = "index.oba"
-	WALFileName        = "wal.oba"
-	CacheDir           = "cache"
-	RadixCacheFileName = "radix.cache"
-	BTreeCacheFileName = "btree.cache"
+	DataFileName        = "data.oba"
+	IndexFileName       = "index.oba"
+	WALFileName         = "wal.oba"
+	CacheDir            = "cache"
+	RadixCacheFileName  = "radix.cache"
+	BTreeCacheFileName  = "btree.cache"
+	EntryCacheFileName  = "entry.cache"
 )
 
 // ObaDB errors.
@@ -205,7 +206,16 @@ func (db *ObaDB) initComponents() error {
 	// 11. Set up disk loader for lazy loading
 	db.setupDiskLoader()
 
-	// 12. Preload hot entries asynchronously for faster startup
+	// 12. Try to load entry cache for fast startup
+	entryCachePath := filepath.Join(db.path, CacheDir, EntryCacheFileName)
+	txID := db.getLastTxID()
+
+	if err := db.versionStore.LoadCache(entryCachePath, txID); err == nil {
+		// Cache loaded successfully, skip preload
+		return nil
+	}
+
+	// 13. Fallback: Preload hot entries asynchronously
 	go db.preloadHotEntriesAsync()
 
 	return nil
@@ -1194,6 +1204,12 @@ func (db *ObaDB) saveCachesInternal() {
 	btreeCachePath := filepath.Join(cacheDir, BTreeCacheFileName)
 	if db.indexManager != nil {
 		db.indexManager.SaveCache(btreeCachePath, txID)
+	}
+
+	// Save entry cache
+	entryCachePath := filepath.Join(cacheDir, EntryCacheFileName)
+	if db.versionStore != nil {
+		db.versionStore.SaveCache(entryCachePath, txID)
 	}
 }
 

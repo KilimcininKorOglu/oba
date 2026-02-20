@@ -524,3 +524,70 @@ func putUint16(b []byte, v uint16) {
 func getUint16(b []byte) uint16 {
 	return uint16(b[0]) | uint16(b[1])<<8
 }
+
+// BenchmarkStartupWithEntryCache benchmarks startup time with entry cache.
+func BenchmarkStartupWithEntryCache(b *testing.B) {
+	// This benchmark measures the benefit of entry cache on startup
+	// Run with: go test -bench=BenchmarkStartupWithEntryCache -benchtime=10x
+
+	b.Run("100_entries", func(b *testing.B) {
+		benchmarkStartupWithCache(b, 100)
+	})
+
+	b.Run("1000_entries", func(b *testing.B) {
+		benchmarkStartupWithCache(b, 1000)
+	})
+}
+
+func benchmarkStartupWithCache(b *testing.B, numEntries int) {
+	// Setup: Create a database with entries
+	tmpDir := b.TempDir()
+
+	// First pass: create database and populate
+	pm, err := OpenPageManager(tmpDir+"/data.oba", Options{
+		PageSize:    PageSize,
+		CreateIfNew: true,
+	})
+	if err != nil {
+		b.Fatalf("Failed to create page manager: %v", err)
+	}
+
+	// Create entries
+	for i := 0; i < numEntries; i++ {
+		pageID, err := pm.AllocatePage(PageTypeData)
+		if err != nil {
+			b.Fatalf("Failed to allocate page: %v", err)
+		}
+
+		page := &Page{
+			Header: PageHeader{PageID: pageID, PageType: PageTypeData},
+			Data:   make([]byte, PageSize-PageHeaderSize),
+		}
+
+		// Write some data
+		data := fmt.Sprintf("entry_%d_data", i)
+		copy(page.Data[4:], data)
+		putUint32(page.Data[:4], uint32(len(data)))
+
+		if err := pm.WritePage(page); err != nil {
+			b.Fatalf("Failed to write page: %v", err)
+		}
+	}
+
+	pm.Close()
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		// Measure startup time
+		pm2, err := OpenPageManager(tmpDir+"/data.oba", Options{
+			PageSize:    PageSize,
+			CreateIfNew: false,
+		})
+		if err != nil {
+			b.Fatalf("Failed to open page manager: %v", err)
+		}
+		pm2.Close()
+	}
+}

@@ -18,6 +18,7 @@ const (
 const (
 	TypeRadix uint8 = 1
 	TypeBTree uint8 = 2
+	TypeEntry uint8 = 3
 )
 
 // Errors.
