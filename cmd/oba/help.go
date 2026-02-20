@@ -62,7 +62,7 @@ Usage:
 
 Options:
   -output string
-        Output file path (required)
+        Output file path (timestamp added automatically)
   -data-dir string
         Data directory path (required)
   -compress
@@ -73,8 +73,17 @@ Options:
         Backup format: native, ldif (default "native")
   -base-dn string
         Base DN for LDIF export (optional)
+  -no-timestamp
+        Don't add timestamp to filename
   -h, -help
         Show this help message
+
+Examples:
+  oba backup --data-dir /var/lib/oba --output /backup/oba.bak
+  # Creates: /backup/oba-20260220-131025.bak
+
+  oba backup --data-dir /var/lib/oba --output /backup/oba.bak --no-timestamp
+  # Creates: /backup/oba.bak
 `)
 }
 

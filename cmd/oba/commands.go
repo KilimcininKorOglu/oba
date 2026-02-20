@@ -5,22 +5,65 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/oba-ldap/oba/internal/backup"
 )
+
+// generateBackupFilename generates a backup filename with timestamp.
+// If output already has a timestamp pattern or is a full path with extension, returns as-is.
+// Otherwise, appends timestamp before the extension.
+func generateBackupFilename(output string) string {
+	if output == "" {
+		return fmt.Sprintf("oba-backup-%s.bak", time.Now().Format("20060102-150405"))
+	}
+
+	// Check if output already contains a timestamp-like pattern (8+ digits)
+	base := filepath.Base(output)
+	hasTimestamp := false
+	digitCount := 0
+	for _, c := range base {
+		if c >= '0' && c <= '9' {
+			digitCount++
+			if digitCount >= 8 {
+				hasTimestamp = true
+				break
+			}
+		} else {
+			digitCount = 0
+		}
+	}
+
+	if hasTimestamp {
+		return output
+	}
+
+	// Add timestamp before extension
+	ext := filepath.Ext(output)
+	nameWithoutExt := strings.TrimSuffix(output, ext)
+	timestamp := time.Now().Format("20060102-150405")
+
+	if ext == "" {
+		ext = ".bak"
+	}
+
+	return fmt.Sprintf("%s-%s%s", nameWithoutExt, timestamp, ext)
+}
 
 // backupCmd handles the backup command.
 func backupCmd(args []string) int {
 	fs := flag.NewFlagSet("backup", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 
-	output := fs.String("output", "", "Output file path")
+	output := fs.String("output", "", "Output file path (timestamp added automatically)")
 	dataDir := fs.String("data-dir", "", "Data directory path")
 	compress := fs.Bool("compress", false, "Compress backup file")
 	incremental := fs.Bool("incremental", false, "Create incremental backup")
 	format := fs.String("format", "native", "Backup format: native, ldif")
 	baseDN := fs.String("base-dn", "", "Base DN for LDIF export (optional)")
+	noTimestamp := fs.Bool("no-timestamp", false, "Don't add timestamp to filename")
 	help := fs.Bool("h", false, "Show help message")
 	helpLong := fs.Bool("help", false, "Show help message")
 
@@ -43,12 +86,18 @@ func backupCmd(args []string) int {
 		return 1
 	}
 
+	// Generate filename with timestamp unless disabled
+	outputPath := *output
+	if !*noTimestamp {
+		outputPath = generateBackupFilename(*output)
+	}
+
 	// Create backup manager (nil page manager - will use directory backup)
 	bm := backup.NewBackupManager(nil)
 
 	// Configure backup options with DataDir for multi-file backup
 	backupOpts := &backup.BackupOptions{
-		OutputPath:  *output,
+		OutputPath:  outputPath,
 		DataDir:     *dataDir,
 		Compress:    *compress,
 		Incremental: *incremental,
@@ -57,7 +106,7 @@ func backupCmd(args []string) int {
 	}
 
 	fmt.Printf("Creating backup...\n")
-	fmt.Printf("  Output:      %s\n", *output)
+	fmt.Printf("  Output:      %s\n", outputPath)
 	fmt.Printf("  Data Dir:    %s\n", *dataDir)
 	fmt.Printf("  Compress:    %v\n", *compress)
 	fmt.Printf("  Incremental: %v\n", *incremental)
