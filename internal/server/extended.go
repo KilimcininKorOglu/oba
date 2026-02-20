@@ -39,8 +39,18 @@ type ExtendedResponse struct {
 	Value []byte
 }
 
-// ExtendedHandler is a function that handles extended requests.
-type ExtendedHandler func(conn *Connection, req *ExtendedRequest) (*ExtendedResponse, error)
+// ExtendedHandlerFunc is a function that handles extended requests.
+type ExtendedHandlerFunc func(conn *Connection, req *ExtendedRequest) (*ExtendedResponse, error)
+
+// ExtendedHandler is the interface for extended operation handlers.
+// Each handler is responsible for a specific OID and implements the
+// Handle method to process requests.
+type ExtendedHandler interface {
+	// OID returns the object identifier for this extended operation.
+	OID() string
+	// Handle processes the extended request and returns a response.
+	Handle(conn *Connection, req *ExtendedRequest) (*ExtendedResponse, error)
+}
 
 // ParseExtendedRequest parses an ExtendedRequest from raw BER data.
 func ParseExtendedRequest(data []byte) (*ExtendedRequest, error) {
