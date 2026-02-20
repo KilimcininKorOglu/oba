@@ -4,6 +4,7 @@ package server
 import (
 	"strings"
 
+	"github.com/oba-ldap/oba/internal/acl"
 	"github.com/oba-ldap/oba/internal/ldap"
 )
 
@@ -22,6 +23,9 @@ type DeleteBackend interface {
 type DeleteConfig struct {
 	// Backend is the directory backend for entry operations.
 	Backend DeleteBackend
+	// ACLEvaluator is the ACL evaluator for access control checks.
+	// If nil, no ACL checks are performed.
+	ACLEvaluator *acl.Evaluator
 }
 
 // NewDeleteConfig creates a new DeleteConfig with default settings.
@@ -66,7 +70,21 @@ func (h *DeleteHandlerImpl) Handle(conn *Connection, req *ldap.DeleteRequest) *O
 	// Step 3: Normalize the DN
 	dn := normalizeDNForDelete(req.DN)
 
-	// Step 4: Check if entry exists
+	// Step 4: Check ACL delete permission
+	if h.config.ACLEvaluator != nil {
+		bindDN := ""
+		if conn != nil {
+			bindDN = conn.BindDN()
+		}
+		if !h.config.ACLEvaluator.CanDelete(bindDN, dn) {
+			return &OperationResult{
+				ResultCode:        ldap.ResultInsufficientAccessRights,
+				DiagnosticMessage: "insufficient access rights",
+			}
+		}
+	}
+
+	// Step 5: Check if entry exists
 	entry, err := h.config.Backend.GetEntry(dn)
 	if err != nil {
 		return &OperationResult{
@@ -83,7 +101,7 @@ func (h *DeleteHandlerImpl) Handle(conn *Connection, req *ldap.DeleteRequest) *O
 		}
 	}
 
-	// Step 5: Check if entry has children (LDAP doesn't allow deleting non-leaf entries)
+	// Step 6: Check if entry has children (LDAP doesn't allow deleting non-leaf entries)
 	hasChildren, err := h.config.Backend.HasChildren(dn)
 	if err != nil {
 		return &OperationResult{
@@ -99,7 +117,7 @@ func (h *DeleteHandlerImpl) Handle(conn *Connection, req *ldap.DeleteRequest) *O
 		}
 	}
 
-	// Step 6: Delete the entry
+	// Step 7: Delete the entry
 	if err := h.config.Backend.DeleteEntry(dn); err != nil {
 		// Check for specific error types
 		if strings.Contains(err.Error(), "not found") {
@@ -115,7 +133,7 @@ func (h *DeleteHandlerImpl) Handle(conn *Connection, req *ldap.DeleteRequest) *O
 		}
 	}
 
-	// Step 7: Return success
+	// Step 8: Return success
 	return &OperationResult{
 		ResultCode: ldap.ResultSuccess,
 	}
