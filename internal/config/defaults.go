@@ -26,6 +26,7 @@ func DefaultConfig() *Config {
 			PageSize:           4096,
 			BufferPoolSize:     "256MB",
 			CheckpointInterval: 5 * time.Minute,
+			CacheSize:          10000,
 		},
 		Logging: LogConfig{
 			Level:  "info",

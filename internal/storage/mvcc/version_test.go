@@ -328,8 +328,8 @@ func TestVersionStoreCreateAndGet(t *testing.T) {
 
 	// Version should NOT be visible to other transactions (uncommitted)
 	_, err = vs.GetVisibleForTx(dn, txn.Snapshot, txn.ID+1)
-	if err != ErrNoVisibleVersion {
-		t.Errorf("expected ErrNoVisibleVersion, got %v", err)
+	if err != ErrVersionNotFound {
+		t.Errorf("expected ErrVersionNotFound, got %v", err)
 	}
 
 	// Commit the transaction
@@ -347,8 +347,8 @@ func TestVersionStoreCreateAndGet(t *testing.T) {
 
 	// Version should NOT be visible to older snapshots
 	_, err = vs.GetVisible(dn, commitTS-1)
-	if err != ErrNoVisibleVersion {
-		t.Errorf("expected ErrNoVisibleVersion for old snapshot, got %v", err)
+	if err != ErrVersionNotFound {
+		t.Errorf("expected ErrVersionNotFound for old snapshot, got %v", err)
 	}
 }
 

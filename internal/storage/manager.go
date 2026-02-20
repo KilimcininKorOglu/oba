@@ -589,6 +589,21 @@ func (pm *PageManager) Header() FileHeader {
 	return *pm.header
 }
 
+// UpdateHeader updates the file header with the given values and saves to disk.
+func (pm *PageManager) UpdateHeader(header FileHeader) error {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	if pm.closed {
+		return ErrFileClosed
+	}
+
+	// Update header fields (preserve some internal fields)
+	pm.header.RootPages = header.RootPages
+
+	return pm.saveHeaderLocked()
+}
+
 // Stats returns statistics about the page manager.
 type Stats struct {
 	TotalPages    uint64

@@ -113,9 +113,12 @@ storage:
 }
 
 func TestNewServer(t *testing.T) {
+	tmpDir := t.TempDir()
+
 	cfg := config.DefaultConfig()
 	cfg.Server.Address = "" // Disable plain listener
 	cfg.Server.TLSAddress = "" // Disable TLS listener
+	cfg.Storage.DataDir = tmpDir
 
 	srv, err := NewServer(cfg)
 	if err != nil {
@@ -159,6 +162,7 @@ func TestNewServer_WithTLS(t *testing.T) {
 	cfg.Server.TLSAddress = ""
 	cfg.Server.TLSCert = certPath
 	cfg.Server.TLSKey = keyPath
+	cfg.Storage.DataDir = tmpDir
 
 	srv, err := NewServer(cfg)
 	if err != nil {
@@ -171,9 +175,12 @@ func TestNewServer_WithTLS(t *testing.T) {
 }
 
 func TestNewServer_InvalidTLS(t *testing.T) {
+	tmpDir := t.TempDir()
+
 	cfg := config.DefaultConfig()
 	cfg.Server.TLSCert = "/nonexistent/cert.pem"
 	cfg.Server.TLSKey = "/nonexistent/key.pem"
+	cfg.Storage.DataDir = tmpDir
 
 	_, err := NewServer(cfg)
 	if err == nil {
@@ -184,10 +191,12 @@ func TestNewServer_InvalidTLS(t *testing.T) {
 func TestLDAPServer_StartStop(t *testing.T) {
 	// Find available ports
 	plainPort := findAvailablePort(t)
+	tmpDir := t.TempDir()
 	
 	cfg := config.DefaultConfig()
 	cfg.Server.Address = plainPort
 	cfg.Server.TLSAddress = "" // Disable TLS for this test
+	cfg.Storage.DataDir = tmpDir
 
 	srv, err := NewServer(cfg)
 	if err != nil {
@@ -230,9 +239,12 @@ func TestLDAPServer_StartStop(t *testing.T) {
 }
 
 func TestLDAPServer_DoubleStart(t *testing.T) {
+	tmpDir := t.TempDir()
+
 	cfg := config.DefaultConfig()
 	cfg.Server.Address = ""
 	cfg.Server.TLSAddress = ""
+	cfg.Storage.DataDir = tmpDir
 
 	srv, err := NewServer(cfg)
 	if err != nil {
@@ -252,9 +264,12 @@ func TestLDAPServer_DoubleStart(t *testing.T) {
 }
 
 func TestLDAPServer_StopNotRunning(t *testing.T) {
+	tmpDir := t.TempDir()
+
 	cfg := config.DefaultConfig()
 	cfg.Server.Address = ""
 	cfg.Server.TLSAddress = ""
+	cfg.Storage.DataDir = tmpDir
 
 	srv, err := NewServer(cfg)
 	if err != nil {
@@ -270,10 +285,12 @@ func TestLDAPServer_StopNotRunning(t *testing.T) {
 
 func TestLDAPServer_GracefulShutdown(t *testing.T) {
 	plainPort := findAvailablePort(t)
+	tmpDir := t.TempDir()
 
 	cfg := config.DefaultConfig()
 	cfg.Server.Address = plainPort
 	cfg.Server.TLSAddress = ""
+	cfg.Storage.DataDir = tmpDir
 
 	srv, err := NewServer(cfg)
 	if err != nil {

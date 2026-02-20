@@ -80,6 +80,7 @@ type StorageConfig struct {
 	PageSize           int           `yaml:"pageSize"`
 	BufferPoolSize     string        `yaml:"bufferPoolSize"`
 	CheckpointInterval time.Duration `yaml:"checkpointInterval"`
+	CacheSize          int           `yaml:"cacheSize"`
 }
 
 // LogConfig holds logging configuration.

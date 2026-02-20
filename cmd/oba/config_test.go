@@ -427,9 +427,10 @@ storage:
 		t.Fatalf("failed to write test config: %v", err)
 	}
 
+	// Relative paths are now supported and resolved to absolute paths
 	exitCode := configValidateCmd([]string{"-config", configPath})
-	if exitCode != 1 {
-		t.Errorf("expected exit code 1 for relative data dir, got %d", exitCode)
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0 for relative data dir (now supported), got %d", exitCode)
 	}
 }
 

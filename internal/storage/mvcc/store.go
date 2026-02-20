@@ -18,6 +18,12 @@ type VersionStore struct {
 	// pageManager handles page allocation and I/O.
 	pageManager *storage.PageManager
 
+	// cache provides LRU caching for frequently accessed entries.
+	cache *EntryCache
+
+	// diskLoader is a callback to load entries from disk on cache miss.
+	diskLoader func(dn string) (*Version, storage.PageID, uint16, error)
+
 	// mu protects concurrent access to the versions map.
 	mu sync.RWMutex
 
@@ -31,11 +37,22 @@ type VersionStore struct {
 
 // NewVersionStore creates a new VersionStore with the given PageManager.
 func NewVersionStore(pm *storage.PageManager) *VersionStore {
+	return NewVersionStoreWithCache(pm, DefaultCacheSize)
+}
+
+// NewVersionStoreWithCache creates a new VersionStore with a specified cache size.
+func NewVersionStoreWithCache(pm *storage.PageManager, cacheSize int) *VersionStore {
 	return &VersionStore{
 		versions:      make(map[string]*Version),
 		pageManager:   pm,
+		cache:         NewEntryCache(cacheSize),
 		activeWriters: make(map[string]uint64),
 	}
+}
+
+// SetDiskLoader sets the callback function for loading entries from disk.
+func (vs *VersionStore) SetDiskLoader(loader func(dn string) (*Version, storage.PageID, uint16, error)) {
+	vs.diskLoader = loader
 }
 
 // GetVisible returns the version of the entry visible to the given snapshot.
@@ -58,28 +75,58 @@ func (vs *VersionStore) GetVisible(dn string, snapshot uint64) (*Version, error)
 // The activeTxID parameter allows uncommitted versions to be visible to their
 // creating transaction.
 func (vs *VersionStore) GetVisibleForTx(dn string, snapshot uint64, activeTxID uint64) (*Version, error) {
+	// First check in-memory versions (for uncommitted changes)
 	vs.mu.RLock()
 	latestVersion := vs.versions[dn]
 	vs.mu.RUnlock()
 
-	if latestVersion == nil {
-		return nil, ErrVersionNotFound
-	}
-
-	// Traverse the version chain to find the visible version
-	current := latestVersion
-	for current != nil {
-		if current.IsVisibleTo(snapshot, activeTxID) {
-			// Found a visible version
-			if current.IsDeleted() {
-				return nil, ErrVersionDeleted
+	if latestVersion != nil {
+		// Traverse the version chain to find the visible version
+		current := latestVersion
+		for current != nil {
+			if current.IsVisibleTo(snapshot, activeTxID) {
+				if current.IsDeleted() {
+					return nil, ErrVersionDeleted
+				}
+				return current.Clone(), nil
 			}
-			return current.Clone(), nil
+			current = current.GetPrev()
 		}
-		current = current.GetPrev()
 	}
 
-	return nil, ErrNoVisibleVersion
+	// Check cache
+	if vs.cache != nil {
+		if cached := vs.cache.Get(dn); cached != nil && cached.Version != nil {
+			if cached.Version.IsVisibleTo(snapshot, activeTxID) {
+				if cached.Version.IsDeleted() {
+					return nil, ErrVersionDeleted
+				}
+				return cached.Version.Clone(), nil
+			}
+		}
+	}
+
+	// Cache miss - try to load from disk
+	if vs.diskLoader != nil {
+		version, pageID, slotID, err := vs.diskLoader(dn)
+		if err != nil {
+			return nil, ErrVersionNotFound
+		}
+		if version != nil {
+			// Add to cache
+			if vs.cache != nil {
+				vs.cache.Put(dn, version, pageID, slotID)
+			}
+			if version.IsVisibleTo(snapshot, activeTxID) {
+				if version.IsDeleted() {
+					return nil, ErrVersionDeleted
+				}
+				return version.Clone(), nil
+			}
+		}
+	}
+
+	return nil, ErrVersionNotFound
 }
 
 // CreateVersion creates a new version for the given DN.
@@ -89,19 +136,25 @@ func (vs *VersionStore) GetVisibleForTx(dn string, snapshot uint64, activeTxID u
 // The version is initially uncommitted (CommitTS == 0) and will be committed
 // when the transaction commits.
 func (vs *VersionStore) CreateVersion(txn *tx.Transaction, dn string, data []byte) error {
+	_, _, err := vs.CreateVersionWithLocation(txn, dn, data)
+	return err
+}
+
+// CreateVersionWithLocation creates a new version and returns its storage location.
+func (vs *VersionStore) CreateVersionWithLocation(txn *tx.Transaction, dn string, data []byte) (storage.PageID, uint16, error) {
 	if txn == nil {
-		return ErrNilTransaction
+		return 0, 0, ErrNilTransaction
 	}
 
 	if !txn.IsActive() {
-		return ErrTransactionAborted
+		return 0, 0, ErrTransactionAborted
 	}
 
 	// Check for write-write conflicts
 	vs.writerMu.Lock()
 	if existingTxID, exists := vs.activeWriters[dn]; exists && existingTxID != txn.ID {
 		vs.writerMu.Unlock()
-		return ErrVersionConflict
+		return 0, 0, ErrVersionConflict
 	}
 	vs.activeWriters[dn] = txn.ID
 	vs.writerMu.Unlock()
@@ -110,7 +163,7 @@ func (vs *VersionStore) CreateVersion(txn *tx.Transaction, dn string, data []byt
 	pageID, slotID, err := vs.allocateStorage(data)
 	if err != nil {
 		vs.clearActiveWriter(dn, txn.ID)
-		return err
+		return 0, 0, err
 	}
 
 	// Create the new version
@@ -127,7 +180,12 @@ func (vs *VersionStore) CreateVersion(txn *tx.Transaction, dn string, data []byt
 	// Add the page to the transaction's write set
 	txn.AddToWriteSet(pageID)
 
-	return nil
+	// Write-through: update cache
+	if vs.cache != nil {
+		vs.cache.Put(dn, newVersion, pageID, slotID)
+	}
+
+	return pageID, slotID, nil
 }
 
 // DeleteVersion marks the entry as deleted by creating a delete version.
@@ -173,6 +231,11 @@ func (vs *VersionStore) DeleteVersion(txn *tx.Transaction, dn string) error {
 
 	// Add the page to the transaction's write set
 	txn.AddToWriteSet(pageID)
+
+	// Write-through: remove from cache
+	if vs.cache != nil {
+		vs.cache.Delete(dn)
+	}
 
 	return nil
 }
@@ -223,6 +286,10 @@ func (vs *VersionStore) RollbackVersion(txn *tx.Transaction) {
 		if current == nil {
 			// All versions were from this transaction, remove the entry
 			delete(vs.versions, dn)
+			// Also remove from cache
+			if vs.cache != nil {
+				vs.cache.Delete(dn)
+			}
 		} else if current != version {
 			// Some versions were removed, update the latest
 			vs.versions[dn] = current
@@ -291,6 +358,17 @@ func (vs *VersionStore) GetLatestVersion(dn string) *Version {
 	vs.mu.RLock()
 	defer vs.mu.RUnlock()
 	return vs.versions[dn]
+}
+
+// LoadCommittedVersion loads a committed version from disk into the version store.
+// This is used during database initialization to restore persisted data.
+func (vs *VersionStore) LoadCommittedVersion(dn string, data []byte, pageID storage.PageID, slotID uint16) {
+	version := NewVersion(0, data, pageID, slotID)
+	version.CommitTS = 1 // Mark as committed with timestamp 1
+
+	vs.mu.Lock()
+	vs.versions[dn] = version
+	vs.mu.Unlock()
 }
 
 // GetVersionChain returns all versions in the chain for a DN.

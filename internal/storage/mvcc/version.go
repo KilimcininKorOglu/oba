@@ -93,6 +93,22 @@ func NewVersion(txID uint64, data []byte, pageID storage.PageID, slotID uint16) 
 	}
 }
 
+// NewCommittedVersion creates a version that is already committed (loaded from disk).
+func NewCommittedVersion(data []byte, pageID storage.PageID, slotID uint16) *Version {
+	dataCopy := make([]byte, len(data))
+	copy(dataCopy, data)
+
+	return &Version{
+		TxID:     0,
+		CommitTS: 1, // Already committed
+		Data:     dataCopy,
+		Prev:     nil,
+		PageID:   pageID,
+		SlotID:   slotID,
+		State:    VersionActive,
+	}
+}
+
 // NewDeletedVersion creates a new version that marks an entry as deleted.
 func NewDeletedVersion(txID uint64, pageID storage.PageID, slotID uint16) *Version {
 	return &Version{

@@ -199,6 +199,12 @@ func (db *ObaDB) initComponents() error {
 		}
 	}
 
+	// 11. Set up disk loader for lazy loading and preload hot entries
+	db.setupDiskLoader()
+	if err := db.preloadHotEntries(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -221,7 +227,87 @@ func (db *ObaDB) initRadixTree() error {
 		return err
 	}
 
+	// Save root page ID to header
+	header.RootPages.DNIndex = db.radixTree.RootPageID()
+	if err := db.pageManager.UpdateHeader(header); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// setupDiskLoader configures the version store to load entries from disk on cache miss.
+func (db *ObaDB) setupDiskLoader() {
+	if db.versionStore == nil || db.radixTree == nil || db.pageManager == nil {
+		return
+	}
+
+	db.versionStore.SetDiskLoader(func(dn string) (*mvcc.Version, storage.PageID, uint16, error) {
+		pageID, slotID, found := db.radixTree.Lookup(dn)
+		if !found || pageID == 0 {
+			return nil, 0, 0, ErrEntryNotFound
+		}
+
+		page, err := db.pageManager.ReadPage(pageID)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+
+		if len(page.Data) < 4 {
+			return nil, 0, 0, ErrInvalidEntry
+		}
+
+		dataLen := int(page.Data[0]) | int(page.Data[1])<<8 | int(page.Data[2])<<16 | int(page.Data[3])<<24
+		if dataLen <= 0 || dataLen+4 > len(page.Data) {
+			return nil, 0, 0, ErrInvalidEntry
+		}
+
+		data := make([]byte, dataLen)
+		copy(data, page.Data[4:4+dataLen])
+
+		version := mvcc.NewCommittedVersion(data, pageID, slotID)
+		return version, pageID, slotID, nil
+	})
+}
+
+// preloadHotEntries preloads frequently accessed entries into the cache at startup.
+func (db *ObaDB) preloadHotEntries() error {
+	if db.radixTree == nil || db.versionStore == nil || db.pageManager == nil {
+		return nil
+	}
+
+	const maxPreload = 1000
+	count := 0
+
+	err := db.radixTree.IterateSubtree("", func(dn string, pageID storage.PageID, slotID uint16) bool {
+		if pageID == 0 || count >= maxPreload {
+			return count < maxPreload
+		}
+
+		page, err := db.pageManager.ReadPage(pageID)
+		if err != nil {
+			return true
+		}
+
+		if len(page.Data) < 4 {
+			return true
+		}
+
+		dataLen := int(page.Data[0]) | int(page.Data[1])<<8 | int(page.Data[2])<<16 | int(page.Data[3])<<24
+		if dataLen <= 0 || dataLen+4 > len(page.Data) {
+			return true
+		}
+
+		data := make([]byte, dataLen)
+		copy(data, page.Data[4:4+dataLen])
+
+		db.versionStore.LoadCommittedVersion(dn, data, pageID, slotID)
+		count++
+
+		return true
+	})
+
+	return err
 }
 
 // Close closes the database and releases all resources.
@@ -441,20 +527,15 @@ func (db *ObaDB) Put(txnIface interface{}, entry *storage.Entry) error {
 		oldEntry, _ = deserializeEntry(dn, existingVersion.GetData())
 	}
 
-	// Create version in version store
-	if err := db.versionStore.CreateVersion(txn, dn, data); err != nil {
+	// Create version in version store and get the storage location
+	pageID, slotID, err := db.versionStore.CreateVersionWithLocation(txn, dn, data)
+	if err != nil {
 		return err
 	}
 
 	// Update radix tree if this is a new entry
 	if oldEntry == nil {
-		// Allocate a page for the entry reference
-		pageID, err := db.pageManager.AllocatePage(storage.PageTypeData)
-		if err != nil {
-			return err
-		}
-
-		if err := db.radixTree.Insert(dn, pageID, 0); err != nil {
+		if err := db.radixTree.Insert(dn, pageID, slotID); err != nil {
 			if err != radix.ErrEntryExists {
 				return err
 			}
