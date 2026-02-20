@@ -380,14 +380,14 @@ exit 0
 Example crontab entries:
 
 ```cron
-# Daily backup at 2 AM
-0 2 * * * /usr/local/bin/oba backup --output /backup/oba-$(date +\%Y\%m\%d).bak --compress
+# Daily backup at 2 AM (timestamp added automatically)
+0 2 * * * /usr/local/bin/oba backup --data-dir /var/lib/oba --output /backup/oba.bak --compress
 
 # Weekly full backup on Sunday
-0 3 * * 0 /usr/local/bin/oba backup --output /backup/oba-full-$(date +\%Y\%m\%d).bak --compress
+0 3 * * 0 /usr/local/bin/oba backup --data-dir /var/lib/oba --output /backup/oba-full.bak --compress
 
 # Daily incremental backup
-0 2 * * 1-6 /usr/local/bin/oba backup --incremental --output /backup/oba-incr-$(date +\%Y\%m\%d).bak
+0 2 * * 1-6 /usr/local/bin/oba backup --data-dir /var/lib/oba --incremental --output /backup/oba-incr.bak
 
 # Health check every 5 minutes
 */5 * * * * /usr/local/bin/health-check.sh || /usr/local/bin/alert.sh

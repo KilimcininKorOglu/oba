@@ -17,14 +17,15 @@ Oba supports multiple backup methods:
 ### Full Backup (Native Format)
 
 ```bash
-# Basic full backup
-oba backup --data-dir /var/lib/oba --output /backup/oba-full.bak
+# Basic full backup (timestamp added automatically)
+oba backup --data-dir /var/lib/oba --output /backup/oba.bak
+# Creates: /backup/oba-20260220-131025.bak
+
+# Backup without automatic timestamp
+oba backup --data-dir /var/lib/oba --output /backup/oba.bak --no-timestamp
 
 # Compressed backup
-oba backup --data-dir /var/lib/oba --output /backup/oba-full.bak.gz --compress
-
-# Backup with timestamp
-oba backup --data-dir /var/lib/oba --output /backup/oba-$(date +%Y%m%d-%H%M%S).bak --compress
+oba backup --data-dir /var/lib/oba --output /backup/oba.bak --compress
 ```
 
 The backup includes all storage files:
@@ -46,7 +47,7 @@ oba backup --data-dir /var/lib/oba --incremental --output /backup/oba-incr.bak
 oba backup --data-dir /var/lib/oba --format ldif --output /backup/data.ldif
 
 # Compressed LDIF export
-oba backup --data-dir /var/lib/oba --format ldif --output /backup/data.ldif.gz --compress
+oba backup --data-dir /var/lib/oba --format ldif --output /backup/data.ldif --compress
 ```
 
 ## Backup Strategies
@@ -61,19 +62,18 @@ Recommended for most deployments:
 
 BACKUP_DIR="/backup/oba"
 DATA_DIR="/var/lib/oba"
-DATE=$(date +%Y%m%d)
 RETENTION_DAYS=30
 
 # Create backup directory
 mkdir -p "$BACKUP_DIR"
 
-# Create compressed backup
-oba backup --data-dir "$DATA_DIR" --output "$BACKUP_DIR/oba-$DATE.bak" --compress
+# Create compressed backup (timestamp added automatically)
+oba backup --data-dir "$DATA_DIR" --output "$BACKUP_DIR/oba.bak" --compress
 
 # Remove old backups
 find "$BACKUP_DIR" -name "oba-*.bak*" -mtime +$RETENTION_DAYS -delete
 
-echo "Backup completed: $BACKUP_DIR/oba-$DATE.bak"
+echo "Backup completed"
 ```
 
 ### Weekly Full + Daily Incremental Strategy
@@ -86,20 +86,19 @@ For larger deployments with frequent changes:
 
 BACKUP_DIR="/backup/oba"
 DATA_DIR="/var/lib/oba"
-DATE=$(date +%Y%m%d)
 DAY_OF_WEEK=$(date +%u)
 
 mkdir -p "$BACKUP_DIR/full" "$BACKUP_DIR/incremental"
 
 if [ "$DAY_OF_WEEK" -eq 7 ]; then
-    # Sunday: Full backup
-    oba backup --data-dir "$DATA_DIR" --output "$BACKUP_DIR/full/oba-full-$DATE.bak" --compress
+    # Sunday: Full backup (timestamp added automatically)
+    oba backup --data-dir "$DATA_DIR" --output "$BACKUP_DIR/full/oba-full.bak" --compress
     
     # Clean old incremental backups after full backup
     rm -f "$BACKUP_DIR/incremental/"*.bak*
 else
     # Weekdays: Incremental backup
-    oba backup --data-dir "$DATA_DIR" --incremental --output "$BACKUP_DIR/incremental/oba-incr-$DATE.bak" --compress
+    oba backup --data-dir "$DATA_DIR" --incremental --output "$BACKUP_DIR/incremental/oba-incr.bak" --compress
 fi
 ```
 
