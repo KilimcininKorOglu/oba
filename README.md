@@ -72,17 +72,17 @@ logging:
 
 ## Supported Operations
 
-| Operation | Description                |
-|-----------|----------------------------|
-| Bind      | Simple authentication      |
-| Unbind    | Connection termination     |
-| Search    | Entry lookup with filters  |
-| Add       | Create new entries         |
-| Delete    | Remove entries             |
-| Modify    | Update entry attributes    |
-| ModifyDN  | Rename or move entries     |
-| Compare   | Compare attribute values   |
-| Abandon   | Cancel pending operations  |
+| Operation | Description               |
+|-----------|---------------------------|
+| Bind      | Simple authentication     |
+| Unbind    | Connection termination    |
+| Search    | Entry lookup with filters |
+| Add       | Create new entries        |
+| Delete    | Remove entries            |
+| Modify    | Update entry attributes   |
+| ModifyDN  | Rename or move entries    |
+| Compare   | Compare attribute values  |
+| Abandon   | Cancel pending operations |
 
 ## Architecture
 
