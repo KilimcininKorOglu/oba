@@ -2,9 +2,11 @@
 package backup
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/oba-ldap/oba/internal/storage"
@@ -36,6 +38,11 @@ func NewBackupManagerWithEngine(pageManager *storage.PageManager, engine storage
 func (bm *BackupManager) Backup(opts *BackupOptions) (*BackupStats, error) {
 	if err := opts.Validate(); err != nil {
 		return nil, err
+	}
+
+	// If DataDir is specified, use directory backup
+	if opts.DataDir != "" {
+		return bm.directoryBackup(opts)
 	}
 
 	switch opts.Format {
@@ -498,4 +505,125 @@ func (bm *BackupManager) GetBackupInfo(path string) (*BackupHeader, error) {
 	}
 
 	return header, nil
+}
+
+// directoryBackup creates a backup of all storage files in the data directory.
+// This includes data.oba, index.oba, and wal.oba files.
+func (bm *BackupManager) directoryBackup(opts *BackupOptions) (*BackupStats, error) {
+	startTime := time.Now()
+	stats := &BackupStats{}
+
+	// Open output file
+	out, err := os.Create(opts.OutputPath)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrBackupFailed, err)
+	}
+	defer out.Close()
+
+	// Create backup header
+	header := NewBackupHeader()
+	header.SetCompressed(opts.Compress)
+	header.SetMultiFile(true)
+
+	// Write placeholder header
+	headerBuf, err := header.Serialize()
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrBackupFailed, err)
+	}
+	if _, err := out.Write(headerBuf); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrBackupFailed, err)
+	}
+
+	// Setup writer
+	var writer io.Writer
+	var compressWriter *CompressWriter
+	checksumWriter := newChecksumWriter(out)
+
+	if opts.Compress {
+		compressWriter = NewCompressWriter(checksumWriter)
+		writer = compressWriter
+	} else {
+		writer = checksumWriter
+	}
+
+	// Count files to backup
+	var fileCount uint32
+	for _, fileName := range StorageFiles {
+		filePath := filepath.Join(opts.DataDir, fileName)
+		if _, err := os.Stat(filePath); err == nil {
+			fileCount++
+		}
+	}
+
+	// Write file count
+	if err := binary.Write(writer, binary.LittleEndian, fileCount); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrBackupFailed, err)
+	}
+
+	// Backup each storage file
+	for _, fileName := range StorageFiles {
+		filePath := filepath.Join(opts.DataDir, fileName)
+
+		// Check if file exists
+		fileInfo, err := os.Stat(filePath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, fmt.Errorf("%w: %v", ErrBackupFailed, err)
+		}
+
+		// Write file name length and name
+		nameBytes := []byte(fileName)
+		if err := binary.Write(writer, binary.LittleEndian, uint16(len(nameBytes))); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrBackupFailed, err)
+		}
+		if _, err := writer.Write(nameBytes); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrBackupFailed, err)
+		}
+
+		// Write file size
+		fileSize := fileInfo.Size()
+		if err := binary.Write(writer, binary.LittleEndian, fileSize); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrBackupFailed, err)
+		}
+
+		// Copy file content
+		f, err := os.Open(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrBackupFailed, err)
+		}
+
+		written, err := io.Copy(writer, f)
+		f.Close()
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrBackupFailed, err)
+		}
+
+		stats.TotalBytes += written
+	}
+
+	// Close compression writer if used
+	if compressWriter != nil {
+		if err := compressWriter.Close(); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrBackupFailed, err)
+		}
+		stats.CompressedBytes = compressWriter.Written()
+	}
+
+	// Update header with checksum
+	header.Checksum = checksumWriter.Checksum()
+	header.TotalPages = uint64(fileCount)
+
+	// Seek back and write final header
+	if _, err := out.Seek(0, io.SeekStart); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrBackupFailed, err)
+	}
+	headerBuf, _ = header.Serialize()
+	if _, err := out.Write(headerBuf); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrBackupFailed, err)
+	}
+
+	stats.Duration = time.Since(startTime)
+	return stats, nil
 }

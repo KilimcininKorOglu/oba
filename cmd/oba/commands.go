@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/oba-ldap/oba/internal/backup"
-	"github.com/oba-ldap/oba/internal/storage"
 )
 
 // backupCmd handles the backup command.
@@ -44,26 +43,13 @@ func backupCmd(args []string) int {
 		return 1
 	}
 
-	// Open page manager for backup
-	pmOpts := storage.Options{
-		PageSize:    4096,
-		ReadOnly:    true,
-		CreateIfNew: false,
-	}
-	dataFile := *dataDir + "/data.oba"
-	pm, err := storage.OpenPageManager(dataFile, pmOpts)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error opening data file: %v\n", err)
-		return 1
-	}
-	defer pm.Close()
+	// Create backup manager (nil page manager - will use directory backup)
+	bm := backup.NewBackupManager(nil)
 
-	// Create backup manager
-	bm := backup.NewBackupManager(pm)
-
-	// Configure backup options
+	// Configure backup options with DataDir for multi-file backup
 	backupOpts := &backup.BackupOptions{
 		OutputPath:  *output,
+		DataDir:     *dataDir,
 		Compress:    *compress,
 		Incremental: *incremental,
 		Format:      backup.BackupFormat(*format),
@@ -85,7 +71,7 @@ func backupCmd(args []string) int {
 	}
 
 	fmt.Printf("\nBackup completed successfully!\n")
-	fmt.Printf("  Total pages: %d\n", stats.TotalPages)
+	fmt.Printf("  Files:       %d\n", stats.TotalPages)
 	fmt.Printf("  Total bytes: %d\n", stats.TotalBytes)
 	if *compress && stats.CompressedBytes > 0 {
 		fmt.Printf("  Compressed:  %d (%.1f%% reduction)\n", stats.CompressedBytes, stats.CompressionRatio()*100)

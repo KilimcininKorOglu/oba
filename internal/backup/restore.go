@@ -129,6 +129,11 @@ func (rm *RestoreManager) restoreFull(in *os.File, opts *RestoreOptions, dataDir
 		return nil, fmt.Errorf("%w: %v", ErrRestoreFailed, err)
 	}
 
+	// Check if this is a multi-file backup
+	if header.IsMultiFile() {
+		return rm.restoreMultiFile(in, opts, dataDir, header)
+	}
+
 	// Setup reader (with optional decompression)
 	var reader io.Reader
 	if header.IsCompressed() {
@@ -838,4 +843,74 @@ func (rm *RestoreManager) CleanDataDir() error {
 	}
 
 	return nil
+}
+
+// restoreMultiFile restores from a multi-file backup.
+func (rm *RestoreManager) restoreMultiFile(in *os.File, opts *RestoreOptions, dataDir string, header *BackupHeader) (*RestoreStats, error) {
+	startTime := time.Now()
+	stats := &RestoreStats{
+		BackupType:     "full",
+		BackupsApplied: 1,
+	}
+
+	// Setup reader (with optional decompression)
+	var reader io.Reader
+	if header.IsCompressed() {
+		reader = NewDecompressReader(in)
+	} else {
+		reader = in
+	}
+
+	// Ensure data directory exists
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		return nil, fmt.Errorf("%w: failed to create data directory: %v", ErrRestoreFailed, err)
+	}
+
+	// Read file count
+	var fileCount uint32
+	if err := binary.Read(reader, binary.LittleEndian, &fileCount); err != nil {
+		return nil, fmt.Errorf("%w: failed to read file count: %v", ErrRestoreFailed, err)
+	}
+
+	// Restore each file
+	for i := uint32(0); i < fileCount; i++ {
+		// Read file name length
+		var nameLen uint16
+		if err := binary.Read(reader, binary.LittleEndian, &nameLen); err != nil {
+			return nil, fmt.Errorf("%w: failed to read file name length: %v", ErrRestoreFailed, err)
+		}
+
+		// Read file name
+		nameBytes := make([]byte, nameLen)
+		if _, err := io.ReadFull(reader, nameBytes); err != nil {
+			return nil, fmt.Errorf("%w: failed to read file name: %v", ErrRestoreFailed, err)
+		}
+		fileName := string(nameBytes)
+
+		// Read file size
+		var fileSize int64
+		if err := binary.Read(reader, binary.LittleEndian, &fileSize); err != nil {
+			return nil, fmt.Errorf("%w: failed to read file size: %v", ErrRestoreFailed, err)
+		}
+
+		// Create output file
+		outPath := filepath.Join(dataDir, fileName)
+		out, err := os.Create(outPath)
+		if err != nil {
+			return nil, fmt.Errorf("%w: failed to create file %s: %v", ErrRestoreFailed, fileName, err)
+		}
+
+		// Copy file content
+		written, err := io.CopyN(out, reader, fileSize)
+		out.Close()
+		if err != nil {
+			return nil, fmt.Errorf("%w: failed to write file %s: %v", ErrRestoreFailed, fileName, err)
+		}
+
+		stats.TotalBytes += written
+		stats.TotalPages++
+	}
+
+	stats.Duration = time.Since(startTime)
+	return stats, nil
 }

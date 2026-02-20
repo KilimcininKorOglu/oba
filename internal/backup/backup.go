@@ -59,6 +59,10 @@ type BackupOptions struct {
 	// OutputPath is the path to the backup file.
 	OutputPath string
 
+	// DataDir is the data directory containing all storage files.
+	// When set, all storage files (data.oba, index.oba, wal.oba) are backed up.
+	DataDir string
+
 	// Compress enables compression for the backup.
 	Compress bool
 
@@ -151,7 +155,19 @@ const (
 	BackupFlagCompressed uint32 = 1 << iota
 	// BackupFlagIncremental indicates the backup is incremental.
 	BackupFlagIncremental
+	// BackupFlagMultiFile indicates the backup contains multiple files.
+	BackupFlagMultiFile
 )
+
+// Storage file names.
+var StorageFiles = []string{"data.oba", "index.oba", "wal.oba"}
+
+// FileEntry represents a file entry in a multi-file backup.
+type FileEntry struct {
+	Name string
+	Size int64
+	Data []byte
+}
 
 // NewBackupHeader creates a new backup header with default values.
 func NewBackupHeader() *BackupHeader {
@@ -188,6 +204,20 @@ func (h *BackupHeader) SetIncremental(incremental bool) {
 		h.Flags |= BackupFlagIncremental
 	} else {
 		h.Flags &^= BackupFlagIncremental
+	}
+}
+
+// IsMultiFile returns true if the backup contains multiple files.
+func (h *BackupHeader) IsMultiFile() bool {
+	return h.Flags&BackupFlagMultiFile != 0
+}
+
+// SetMultiFile sets the multi-file flag.
+func (h *BackupHeader) SetMultiFile(multiFile bool) {
+	if multiFile {
+		h.Flags |= BackupFlagMultiFile
+	} else {
+		h.Flags &^= BackupFlagMultiFile
 	}
 }
 
