@@ -213,7 +213,7 @@ func TestConnectionLoggingBindFailure(t *testing.T) {
 		if !strings.Contains(output, "bind failed") {
 			t.Error("Expected 'bind failed' log message")
 		}
-		if !strings.Contains(output, "InvalidCredentials") {
+		if !strings.Contains(output, "invalidCredentials") {
 			t.Error("Expected result code in log")
 		}
 	case <-time.After(time.Second):

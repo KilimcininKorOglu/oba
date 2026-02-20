@@ -288,13 +288,13 @@ func TestResultCodeString(t *testing.T) {
 		code     ldap.ResultCode
 		expected string
 	}{
-		{ldap.ResultSuccess, "Success"},
-		{ldap.ResultOperationsError, "OperationsError"},
-		{ldap.ResultProtocolError, "ProtocolError"},
-		{ldap.ResultNoSuchObject, "NoSuchObject"},
-		{ldap.ResultInvalidCredentials, "InvalidCredentials"},
-		{ldap.ResultUnwillingToPerform, "UnwillingToPerform"},
-		{ldap.ResultCode(999), "Unknown(999)"},
+		{ldap.ResultSuccess, "success"},
+		{ldap.ResultOperationsError, "operationsError"},
+		{ldap.ResultProtocolError, "protocolError"},
+		{ldap.ResultNoSuchObject, "noSuchObject"},
+		{ldap.ResultInvalidCredentials, "invalidCredentials"},
+		{ldap.ResultUnwillingToPerform, "unwillingToPerform"},
+		{ldap.ResultCode(999), "unknown"},
 	}
 
 	for _, tt := range tests {
