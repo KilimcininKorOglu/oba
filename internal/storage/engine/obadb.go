@@ -524,6 +524,26 @@ func (db *ObaDB) Delete(txnIface interface{}, dn string) error {
 	return nil
 }
 
+// HasChildren returns true if the entry at the given DN has child entries.
+func (db *ObaDB) HasChildren(txnIface interface{}, dn string) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if db.closed {
+		return false, ErrDatabaseClosed
+	}
+
+	if dn == "" {
+		return false, ErrInvalidDN
+	}
+
+	// Normalize DN
+	dn = normalizeDN(dn)
+
+	// Use the radix tree to check for children
+	return db.radixTree.HasChildren(dn)
+}
+
 // SearchByDN searches for entries by DN with the given scope.
 func (db *ObaDB) SearchByDN(txnIface interface{}, baseDN string, scope storage.Scope) storage.Iterator {
 	db.mu.RLock()
