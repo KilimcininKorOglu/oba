@@ -6,9 +6,11 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/oba-ldap/oba/internal/ber"
 	"github.com/oba-ldap/oba/internal/ldap"
+	"github.com/oba-ldap/oba/internal/logging"
 )
 
 // Connection errors
@@ -44,6 +46,14 @@ type Connection struct {
 	closed bool
 	// handler is the operation handler for this connection
 	handler *Handler
+	// logger is the logger for this connection
+	logger logging.Logger
+	// requestID is the unique identifier for this connection
+	requestID string
+	// startTime is when the connection was established
+	startTime time.Time
+	// isTLS indicates whether the connection is using TLS
+	isTLS bool
 }
 
 // Server represents the LDAP server (placeholder for now).
@@ -51,10 +61,22 @@ type Connection struct {
 type Server struct {
 	// Handler is the default handler for operations
 	Handler *Handler
+	// Logger is the server's logger
+	Logger logging.Logger
 }
 
 // NewConnection creates a new Connection for the given network connection.
 func NewConnection(conn net.Conn, server *Server) *Connection {
+	requestID := logging.GenerateRequestID()
+
+	// Get logger from server or create a nop logger
+	var logger logging.Logger
+	if server != nil && server.Logger != nil {
+		logger = server.Logger.WithRequestID(requestID)
+	} else {
+		logger = logging.NewNop()
+	}
+
 	c := &Connection{
 		conn:          conn,
 		server:        server,
@@ -62,6 +84,10 @@ func NewConnection(conn net.Conn, server *Server) *Connection {
 		authenticated: false,
 		messageID:     0,
 		closed:        false,
+		logger:        logger,
+		requestID:     requestID,
+		startTime:     time.Now(),
+		isTLS:         false,
 	}
 
 	// Create a handler for this connection
@@ -78,7 +104,18 @@ func NewConnection(conn net.Conn, server *Server) *Connection {
 // It reads LDAP messages, dispatches them to handlers, and sends responses.
 // This method blocks until the connection is closed or an error occurs.
 func (c *Connection) Handle() {
-	defer c.Close()
+	// Log connection established
+	c.logger.Info("connection established",
+		"client", c.conn.RemoteAddr().String(),
+		"tls", c.isTLS)
+
+	defer func() {
+		// Log connection closed with duration
+		c.logger.Info("connection closed",
+			"client", c.conn.RemoteAddr().String(),
+			"duration_ms", time.Since(c.startTime).Milliseconds())
+		c.Close()
+	}()
 
 	for {
 		// Check if connection is closed
@@ -99,14 +136,22 @@ func (c *Connection) Handle() {
 			// Log error and continue or close based on severity
 			if errors.Is(err, ErrMessageTooLarge) || errors.Is(err, ErrInvalidMessage) {
 				// Protocol error - close connection
+				c.logger.Warn("protocol error",
+					"error", err.Error(),
+					"client", c.conn.RemoteAddr().String())
 				return
 			}
 			// Network error - close connection
+			c.logger.Warn("network error",
+				"error", err.Error(),
+				"client", c.conn.RemoteAddr().String())
 			return
 		}
 
 		// Handle unbind request specially - it closes the connection
 		if msg.OperationType() == ldap.OperationType(ldap.ApplicationUnbindRequest) {
+			c.logger.Debug("unbind request received",
+				"message_id", msg.MessageID)
 			return
 		}
 
@@ -117,6 +162,9 @@ func (c *Connection) Handle() {
 		if response != nil {
 			if err := c.WriteMessage(response); err != nil {
 				// Write error - close connection
+				c.logger.Warn("write error",
+					"error", err.Error(),
+					"client", c.conn.RemoteAddr().String())
 				return
 			}
 		}
@@ -152,10 +200,21 @@ func (c *Connection) dispatchMessage(msg *ldap.LDAPMessage) *ldap.LDAPMessage {
 
 // handleBind handles a bind request.
 func (c *Connection) handleBind(msg *ldap.LDAPMessage) *ldap.LDAPMessage {
+	start := time.Now()
+
 	req, err := ldap.ParseBindRequest(msg.Operation.Data)
 	if err != nil {
+		c.logger.Warn("bind request parse error",
+			"error", err.Error(),
+			"message_id", msg.MessageID)
 		return c.createBindResponse(msg.MessageID, ldap.ResultProtocolError, "", "invalid bind request")
 	}
+
+	c.logger.Debug("bind request",
+		"dn", req.Name,
+		"version", req.Version,
+		"auth_method", req.AuthMethod.String(),
+		"message_id", msg.MessageID)
 
 	// Call the handler
 	result := c.handler.HandleBind(c, req)
@@ -166,6 +225,16 @@ func (c *Connection) handleBind(msg *ldap.LDAPMessage) *ldap.LDAPMessage {
 		c.bindDN = req.Name
 		c.authenticated = !req.IsAnonymous()
 		c.mu.Unlock()
+
+		c.logger.Info("bind successful",
+			"dn", req.Name,
+			"duration_ms", time.Since(start).Milliseconds())
+	} else {
+		c.logger.Warn("bind failed",
+			"dn", req.Name,
+			"result_code", result.ResultCode.String(),
+			"error", result.DiagnosticMessage,
+			"duration_ms", time.Since(start).Milliseconds())
 	}
 
 	return c.createBindResponse(msg.MessageID, result.ResultCode, result.MatchedDN, result.DiagnosticMessage)
@@ -173,10 +242,22 @@ func (c *Connection) handleBind(msg *ldap.LDAPMessage) *ldap.LDAPMessage {
 
 // handleSearch handles a search request.
 func (c *Connection) handleSearch(msg *ldap.LDAPMessage) *ldap.LDAPMessage {
+	start := time.Now()
+
 	req, err := ldap.ParseSearchRequest(msg.Operation.Data)
 	if err != nil {
+		c.logger.Warn("search request parse error",
+			"error", err.Error(),
+			"message_id", msg.MessageID)
 		return c.createSearchDoneResponse(msg.MessageID, ldap.ResultProtocolError, "", "invalid search request")
 	}
+
+	c.logger.Debug("search request",
+		"base_dn", req.BaseObject,
+		"scope", req.Scope.String(),
+		"size_limit", req.SizeLimit,
+		"time_limit", req.TimeLimit,
+		"message_id", msg.MessageID)
 
 	// Call the handler
 	result := c.handler.HandleSearch(c, req)
@@ -185,8 +266,27 @@ func (c *Connection) handleSearch(msg *ldap.LDAPMessage) *ldap.LDAPMessage {
 	for _, entry := range result.Entries {
 		entryMsg := c.createSearchEntryResponse(msg.MessageID, entry)
 		if err := c.WriteMessage(entryMsg); err != nil {
+			c.logger.Warn("search entry write error",
+				"error", err.Error(),
+				"base_dn", req.BaseObject)
 			return nil // Connection error, will be handled by caller
 		}
+	}
+
+	// Log search completion
+	if result.ResultCode == ldap.ResultSuccess {
+		c.logger.Info("search completed",
+			"base_dn", req.BaseObject,
+			"scope", req.Scope.String(),
+			"results", len(result.Entries),
+			"duration_ms", time.Since(start).Milliseconds())
+	} else {
+		c.logger.Warn("search failed",
+			"base_dn", req.BaseObject,
+			"scope", req.Scope.String(),
+			"result_code", result.ResultCode.String(),
+			"error", result.DiagnosticMessage,
+			"duration_ms", time.Since(start).Milliseconds())
 	}
 
 	// Return the search done response
@@ -195,39 +295,108 @@ func (c *Connection) handleSearch(msg *ldap.LDAPMessage) *ldap.LDAPMessage {
 
 // handleAdd handles an add request.
 func (c *Connection) handleAdd(msg *ldap.LDAPMessage) *ldap.LDAPMessage {
+	start := time.Now()
+
 	req, err := ldap.ParseAddRequest(msg.Operation.Data)
 	if err != nil {
+		c.logger.Warn("add request parse error",
+			"error", err.Error(),
+			"message_id", msg.MessageID)
 		return c.createAddResponse(msg.MessageID, ldap.ResultProtocolError, "", "invalid add request")
 	}
 
+	c.logger.Debug("add request",
+		"entry", req.Entry,
+		"attributes_count", len(req.Attributes),
+		"message_id", msg.MessageID)
+
 	// Call the handler
 	result := c.handler.HandleAdd(c, req)
+
+	// Log result
+	if result.ResultCode == ldap.ResultSuccess {
+		c.logger.Info("add successful",
+			"entry", req.Entry,
+			"duration_ms", time.Since(start).Milliseconds())
+	} else {
+		c.logger.Warn("add failed",
+			"entry", req.Entry,
+			"result_code", result.ResultCode.String(),
+			"error", result.DiagnosticMessage,
+			"duration_ms", time.Since(start).Milliseconds())
+	}
 
 	return c.createAddResponse(msg.MessageID, result.ResultCode, result.MatchedDN, result.DiagnosticMessage)
 }
 
 // handleDelete handles a delete request.
 func (c *Connection) handleDelete(msg *ldap.LDAPMessage) *ldap.LDAPMessage {
+	start := time.Now()
+
 	req, err := ldap.ParseDeleteRequest(msg.Operation.Data)
 	if err != nil {
+		c.logger.Warn("delete request parse error",
+			"error", err.Error(),
+			"message_id", msg.MessageID)
 		return c.createDeleteResponse(msg.MessageID, ldap.ResultProtocolError, "", "invalid delete request")
 	}
 
+	c.logger.Debug("delete request",
+		"dn", req.DN,
+		"message_id", msg.MessageID)
+
 	// Call the handler
 	result := c.handler.HandleDelete(c, req)
+
+	// Log result
+	if result.ResultCode == ldap.ResultSuccess {
+		c.logger.Info("delete successful",
+			"dn", req.DN,
+			"duration_ms", time.Since(start).Milliseconds())
+	} else {
+		c.logger.Warn("delete failed",
+			"dn", req.DN,
+			"result_code", result.ResultCode.String(),
+			"error", result.DiagnosticMessage,
+			"duration_ms", time.Since(start).Milliseconds())
+	}
 
 	return c.createDeleteResponse(msg.MessageID, result.ResultCode, result.MatchedDN, result.DiagnosticMessage)
 }
 
 // handleModify handles a modify request.
 func (c *Connection) handleModify(msg *ldap.LDAPMessage) *ldap.LDAPMessage {
+	start := time.Now()
+
 	req, err := ldap.ParseModifyRequest(msg.Operation.Data)
 	if err != nil {
+		c.logger.Warn("modify request parse error",
+			"error", err.Error(),
+			"message_id", msg.MessageID)
 		return c.createModifyResponse(msg.MessageID, ldap.ResultProtocolError, "", "invalid modify request")
 	}
 
+	c.logger.Debug("modify request",
+		"object", req.Object,
+		"changes_count", len(req.Changes),
+		"message_id", msg.MessageID)
+
 	// Call the handler
 	result := c.handler.HandleModify(c, req)
+
+	// Log result
+	if result.ResultCode == ldap.ResultSuccess {
+		c.logger.Info("modify successful",
+			"object", req.Object,
+			"changes_count", len(req.Changes),
+			"duration_ms", time.Since(start).Milliseconds())
+	} else {
+		c.logger.Warn("modify failed",
+			"object", req.Object,
+			"result_code", result.ResultCode.String(),
+			"error", result.DiagnosticMessage,
+			"duration_ms", time.Since(start).Milliseconds())
+	}
 
 	return c.createModifyResponse(msg.MessageID, result.ResultCode, result.MatchedDN, result.DiagnosticMessage)
 }
@@ -598,4 +767,35 @@ func (c *Connection) createModifyResponse(messageID int, resultCode ldap.ResultC
 			Data: encoder.Bytes(),
 		},
 	}
+}
+
+// Logger returns the logger for this connection.
+func (c *Connection) Logger() logging.Logger {
+	return c.logger
+}
+
+// RequestID returns the unique request ID for this connection.
+func (c *Connection) RequestID() string {
+	return c.requestID
+}
+
+// SetTLS sets whether the connection is using TLS.
+func (c *Connection) SetTLS(isTLS bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.isTLS = isTLS
+}
+
+// IsTLS returns whether the connection is using TLS.
+func (c *Connection) IsTLS() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.isTLS
+}
+
+// SetLogger sets the logger for this connection.
+func (c *Connection) SetLogger(logger logging.Logger) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.logger = logger
 }
