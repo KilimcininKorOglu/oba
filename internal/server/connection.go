@@ -62,6 +62,10 @@ type Connection struct {
 	tlsState *tls.ConnectionState
 	// clientCert holds the client certificate if provided (nil if not provided)
 	clientCert *x509.Certificate
+	// persistentSearchHandler handles persistent search requests
+	persistentSearchHandler *PersistentSearchHandler
+	// done is closed when the connection is closed
+	done chan struct{}
 }
 
 // Server represents the LDAP server (placeholder for now).
@@ -96,6 +100,7 @@ func NewConnection(conn net.Conn, server *Server) *Connection {
 		requestID:     requestID,
 		startTime:     time.Now(),
 		isTLS:         false,
+		done:          make(chan struct{}),
 	}
 
 	// Create a handler for this connection
@@ -270,6 +275,34 @@ func (c *Connection) handleSearch(msg *ldap.LDAPMessage) *ldap.LDAPMessage {
 		"size_limit", req.SizeLimit,
 		"time_limit", req.TimeLimit,
 		"message_id", msg.MessageID)
+
+	// Check for Persistent Search Control
+	if len(msg.Controls) > 0 {
+		psCtrl, err := FindPersistentSearchControl(msg.Controls)
+		if err != nil {
+			c.logger.Warn("persistent search control parse error",
+				"error", err.Error(),
+				"message_id", msg.MessageID)
+			return c.createSearchDoneResponse(msg.MessageID, ldap.ResultProtocolError, "", "invalid persistent search control")
+		}
+		if psCtrl != nil {
+			// Handle persistent search (blocks until connection closes)
+			if c.persistentSearchHandler != nil {
+				c.logger.Info("starting persistent search",
+					"base_dn", req.BaseObject,
+					"scope", req.Scope.String(),
+					"changes_only", psCtrl.ChangesOnly,
+					"message_id", msg.MessageID)
+				go c.persistentSearchHandler.Handle(c, req, psCtrl, msg.MessageID)
+				return nil // Response will be sent by the handler
+			}
+			// Persistent search not configured
+			if psCtrl.Criticality {
+				return c.createSearchDoneResponse(msg.MessageID, ldap.ResultUnavailableCriticalExtension, "", "persistent search not supported")
+			}
+			// Non-critical, fall through to normal search
+		}
+	}
 
 	// Call the handler
 	result := c.handler.HandleSearch(c, req)
@@ -617,7 +650,23 @@ func (c *Connection) Close() error {
 	}
 
 	c.closed = true
+
+	// Signal done channel
+	if c.done != nil {
+		close(c.done)
+	}
+
+	// Cancel any persistent search sessions
+	if c.persistentSearchHandler != nil {
+		c.persistentSearchHandler.CancelSession(c)
+	}
+
 	return c.conn.Close()
+}
+
+// Done returns a channel that is closed when the connection is closed.
+func (c *Connection) Done() <-chan struct{} {
+	return c.done
 }
 
 // isClosed returns whether the connection is closed.
@@ -1033,4 +1082,11 @@ func (c *Connection) SetLogger(logger logging.Logger) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.logger = logger
+}
+
+// SetPersistentSearchHandler sets the persistent search handler for this connection.
+func (c *Connection) SetPersistentSearchHandler(handler *PersistentSearchHandler) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.persistentSearchHandler = handler
 }
