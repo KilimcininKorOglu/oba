@@ -14,7 +14,7 @@ dist/
 build/
 out/
 bin/
-oba
+/oba
 *.exe
 *.dll
 *.so
@@ -65,3 +65,4 @@ coverage/
 
 # Hermes
 .hermes/
+docker-data/

@@ -1,0 +1,22 @@
+server:
+  address: ":1389"
+  tlsAddress: ""
+  maxConnections: 1000
+  readTimeout: 30s
+  writeTimeout: 30s
+
+directory:
+  baseDN: "dc=example,dc=com"
+  rootDN: "cn=admin,dc=example,dc=com"
+  rootPassword: "admin"
+
+storage:
+  dataDir: "/Users/kerem/Desktop/oba/docker-data"
+  pageSize: 4096
+  bufferPoolSize: "256MB"
+  checkpointInterval: 5m
+
+logging:
+  level: "debug"
+  format: "json"
+  output: "stdout"
