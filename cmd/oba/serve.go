@@ -14,9 +14,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/oba-ldap/oba/internal/backend"
 	"github.com/oba-ldap/oba/internal/config"
+	"github.com/oba-ldap/oba/internal/filter"
+	"github.com/oba-ldap/oba/internal/ldap"
 	"github.com/oba-ldap/oba/internal/logging"
 	"github.com/oba-ldap/oba/internal/server"
+	"github.com/oba-ldap/oba/internal/storage"
+	"github.com/oba-ldap/oba/internal/storage/engine"
 )
 
 // Server errors.
@@ -28,17 +33,19 @@ var (
 
 // LDAPServer represents the LDAP server instance.
 type LDAPServer struct {
-	config    *config.Config
-	logger    logging.Logger
-	handler   *server.Handler
-	listener  net.Listener
+	config      *config.Config
+	logger      logging.Logger
+	handler     *server.Handler
+	backend     backend.Backend
+	engine      *engine.ObaDB
+	listener    net.Listener
 	tlsListener net.Listener
-	tlsConfig *tls.Config
-	running   bool
-	mu        sync.Mutex
-	wg        sync.WaitGroup
-	ctx       context.Context
-	cancel    context.CancelFunc
+	tlsConfig   *tls.Config
+	running     bool
+	mu          sync.Mutex
+	wg          sync.WaitGroup
+	ctx         context.Context
+	cancel      context.CancelFunc
 }
 
 // NewServer creates a new LDAP server with the given configuration.
@@ -50,8 +57,22 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 		Output: cfg.Logging.Output,
 	})
 
-	// Create handler
+	// Open storage engine
+	engineOpts := storage.DefaultEngineOptions().
+		WithPageSize(cfg.Storage.PageSize).
+		WithCreateIfNotExists(true).
+		WithSyncOnWrite(true)
+	db, err := engine.Open(cfg.Storage.DataDir, engineOpts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open storage engine: %w", err)
+	}
+
+	// Create backend
+	be := backend.NewBackend(db, cfg)
+
+	// Create handler with backend integration
 	handler := server.NewHandler()
+	setupHandlers(handler, be, logger)
 
 	// Create TLS config if certificates are provided
 	var tlsConfig *tls.Config
@@ -60,6 +81,7 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 		var err error
 		tlsConfig, err = server.LoadTLSConfig(tlsCfg)
 		if err != nil {
+			db.Close()
 			return nil, fmt.Errorf("failed to load TLS config: %w", err)
 		}
 	}
@@ -70,10 +92,216 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 		config:    cfg,
 		logger:    logger,
 		handler:   handler,
+		backend:   be,
+		engine:    db,
 		tlsConfig: tlsConfig,
 		ctx:       ctx,
 		cancel:    cancel,
 	}, nil
+}
+
+// setupHandlers configures the LDAP operation handlers with backend integration.
+func setupHandlers(h *server.Handler, be backend.Backend, logger logging.Logger) {
+	// Bind handler
+	h.SetBindHandler(func(conn *server.Connection, req *ldap.BindRequest) *server.OperationResult {
+		if req.IsAnonymous() {
+			return &server.OperationResult{ResultCode: ldap.ResultSuccess}
+		}
+
+		err := be.Bind(req.Name, string(req.SimplePassword))
+		if err != nil {
+			logger.Debug("bind failed", "dn", req.Name, "error", err.Error())
+			return &server.OperationResult{
+				ResultCode:        ldap.ResultInvalidCredentials,
+				DiagnosticMessage: "invalid credentials",
+			}
+		}
+
+		logger.Info("bind successful", "dn", req.Name)
+		return &server.OperationResult{ResultCode: ldap.ResultSuccess}
+	})
+
+	// Search handler
+	h.SetSearchHandler(func(conn *server.Connection, req *ldap.SearchRequest) *server.SearchResult {
+		// Convert LDAP filter to backend filter
+		var f *filter.Filter
+		if req.Filter != nil {
+			f = convertSearchFilter(req.Filter)
+		}
+
+		entries, err := be.Search(req.BaseObject, int(req.Scope), f)
+		if err != nil {
+			logger.Debug("search failed", "baseDN", req.BaseObject, "error", err.Error())
+			return &server.SearchResult{
+				OperationResult: server.OperationResult{
+					ResultCode:        ldap.ResultOperationsError,
+					DiagnosticMessage: err.Error(),
+				},
+			}
+		}
+
+		// Convert backend entries to server entries
+		serverEntries := make([]*server.SearchEntry, len(entries))
+		for i, entry := range entries {
+			serverEntries[i] = &server.SearchEntry{
+				DN:         entry.DN,
+				Attributes: convertAttributes(entry),
+			}
+		}
+
+		return &server.SearchResult{
+			OperationResult: server.OperationResult{ResultCode: ldap.ResultSuccess},
+			Entries:         serverEntries,
+		}
+	})
+
+	// Add handler
+	h.SetAddHandler(func(conn *server.Connection, req *ldap.AddRequest) *server.OperationResult {
+		entry := backend.NewEntry(req.Entry)
+		for _, attr := range req.Attributes {
+			values := make([]string, len(attr.Values))
+			for i, v := range attr.Values {
+				values[i] = string(v)
+			}
+			entry.SetAttribute(attr.Type, values...)
+		}
+
+		err := be.AddWithBindDN(entry, conn.BindDN())
+		if err != nil {
+			logger.Debug("add failed", "dn", req.Entry, "error", err.Error())
+			if err == backend.ErrEntryExists {
+				return &server.OperationResult{
+					ResultCode:        ldap.ResultEntryAlreadyExists,
+					DiagnosticMessage: "entry already exists",
+				}
+			}
+			return &server.OperationResult{
+				ResultCode:        ldap.ResultOperationsError,
+				DiagnosticMessage: err.Error(),
+			}
+		}
+
+		logger.Info("entry added", "dn", req.Entry)
+		return &server.OperationResult{ResultCode: ldap.ResultSuccess}
+	})
+
+	// Delete handler
+	h.SetDeleteHandler(func(conn *server.Connection, req *ldap.DeleteRequest) *server.OperationResult {
+		// Check for children
+		hasChildren, err := be.HasChildren(req.DN)
+		if err != nil {
+			return &server.OperationResult{
+				ResultCode:        ldap.ResultOperationsError,
+				DiagnosticMessage: err.Error(),
+			}
+		}
+		if hasChildren {
+			return &server.OperationResult{
+				ResultCode:        ldap.ResultNotAllowedOnNonLeaf,
+				DiagnosticMessage: "entry has children",
+			}
+		}
+
+		err = be.Delete(req.DN)
+		if err != nil {
+			logger.Debug("delete failed", "dn", req.DN, "error", err.Error())
+			if err == backend.ErrEntryNotFound {
+				return &server.OperationResult{
+					ResultCode:        ldap.ResultNoSuchObject,
+					DiagnosticMessage: "entry not found",
+				}
+			}
+			return &server.OperationResult{
+				ResultCode:        ldap.ResultOperationsError,
+				DiagnosticMessage: err.Error(),
+			}
+		}
+
+		logger.Info("entry deleted", "dn", req.DN)
+		return &server.OperationResult{ResultCode: ldap.ResultSuccess}
+	})
+
+	// Modify handler
+	h.SetModifyHandler(func(conn *server.Connection, req *ldap.ModifyRequest) *server.OperationResult {
+		changes := make([]backend.Modification, len(req.Changes))
+		for i, change := range req.Changes {
+			values := make([]string, len(change.Attribute.Values))
+			for j, v := range change.Attribute.Values {
+				values[j] = string(v)
+			}
+			changes[i] = backend.Modification{
+				Type:      backend.ModificationType(change.Operation),
+				Attribute: change.Attribute.Type,
+				Values:    values,
+			}
+		}
+
+		err := be.ModifyWithBindDN(req.Object, changes, conn.BindDN())
+		if err != nil {
+			logger.Debug("modify failed", "dn", req.Object, "error", err.Error())
+			if err == backend.ErrEntryNotFound {
+				return &server.OperationResult{
+					ResultCode:        ldap.ResultNoSuchObject,
+					DiagnosticMessage: "entry not found",
+				}
+			}
+			return &server.OperationResult{
+				ResultCode:        ldap.ResultOperationsError,
+				DiagnosticMessage: err.Error(),
+			}
+		}
+
+		logger.Info("entry modified", "dn", req.Object)
+		return &server.OperationResult{ResultCode: ldap.ResultSuccess}
+	})
+}
+
+// convertSearchFilter converts an LDAP search filter to a backend filter.
+func convertSearchFilter(sf *ldap.SearchFilter) *filter.Filter {
+	if sf == nil {
+		return nil
+	}
+
+	f := &filter.Filter{
+		Type:      filter.FilterType(sf.Type),
+		Attribute: sf.Attribute,
+		Value:     sf.Value,
+	}
+
+	if sf.Substrings != nil {
+		f.Substring = &filter.SubstringFilter{
+			Attribute: sf.Attribute,
+			Initial:   sf.Substrings.Initial,
+			Any:       sf.Substrings.Any,
+			Final:     sf.Substrings.Final,
+		}
+	}
+
+	for _, child := range sf.Children {
+		f.Children = append(f.Children, convertSearchFilter(child))
+	}
+
+	if sf.Child != nil {
+		f.Child = convertSearchFilter(sf.Child)
+	}
+
+	return f
+}
+
+// convertAttributes converts backend entry attributes to LDAP attributes.
+func convertAttributes(entry *backend.Entry) []ldap.Attribute {
+	attrs := make([]ldap.Attribute, 0, len(entry.Attributes))
+	for name, values := range entry.Attributes {
+		byteValues := make([][]byte, len(values))
+		for i, v := range values {
+			byteValues[i] = []byte(v)
+		}
+		attrs = append(attrs, ldap.Attribute{
+			Type:   name,
+			Values: byteValues,
+		})
+	}
+	return attrs
 }
 
 // Start starts the LDAP server.
@@ -151,9 +379,17 @@ func (s *LDAPServer) Stop(ctx context.Context) error {
 
 	select {
 	case <-done:
+		// Close storage engine
+		if s.engine != nil {
+			s.engine.Close()
+		}
 		s.logger.Info("server stopped gracefully")
 		return nil
 	case <-ctx.Done():
+		// Close storage engine even on timeout
+		if s.engine != nil {
+			s.engine.Close()
+		}
 		s.logger.Warn("server shutdown timed out")
 		return ctx.Err()
 	}
