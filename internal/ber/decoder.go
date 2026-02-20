@@ -31,6 +31,11 @@ func (d *BERDecoder) Reset() {
 	d.offset = 0
 }
 
+// SetOffset sets the current read position.
+func (d *BERDecoder) SetOffset(offset int) {
+	d.offset = offset
+}
+
 // SetData sets new data for the decoder and resets the offset.
 func (d *BERDecoder) SetData(data []byte) {
 	d.data = data

@@ -125,21 +125,66 @@ func parseControls(decoder *ber.BERDecoder) ([]Control, error) {
 		return nil, nil
 	}
 
-	// The content should be a SEQUENCE OF Control
-	seqLength, err := decoder.ExpectSequence()
-	if err != nil {
-		return nil, err
+	// Check what comes next - it could be:
+	// 1. A SEQUENCE OF Control (standard)
+	// 2. Direct Control SEQUENCE(s) (some clients)
+	class, _, tagNum, peekErr := decoder.PeekTag()
+	if peekErr != nil {
+		return nil, peekErr
 	}
 
 	var controls []Control
-	seqEnd := decoder.Offset() + seqLength
 
-	for decoder.Offset() < seqEnd && decoder.Remaining() > 0 {
-		ctrl, err := parseControl(decoder)
+	// If it's a SEQUENCE, check if it's a wrapper SEQUENCE OF or a Control SEQUENCE
+	if class == ber.ClassUniversal && tagNum == ber.TagSequence {
+		// Save position to potentially re-read
+		startOffset := decoder.Offset()
+
+		// Try to read as SEQUENCE OF Control first
+		seqLength, err := decoder.ExpectSequence()
 		if err != nil {
 			return nil, err
 		}
-		controls = append(controls, ctrl)
+
+		seqEnd := decoder.Offset() + seqLength
+
+		// Check if the first element inside is an OCTET STRING (OID) or another SEQUENCE
+		if decoder.Remaining() > 0 {
+			innerClass, _, innerTag, _ := decoder.PeekTag()
+
+			if innerClass == ber.ClassUniversal && innerTag == ber.TagOctetString {
+				// This SEQUENCE is a Control, not a wrapper
+				// Reset and parse as single Control
+				decoder.SetOffset(startOffset)
+				ctrl, err := parseControl(decoder)
+				if err != nil {
+					return nil, err
+				}
+				controls = append(controls, ctrl)
+
+				// Parse remaining controls
+				for decoder.Remaining() > 0 {
+					ctrl, err := parseControl(decoder)
+					if err != nil {
+						break
+					}
+					controls = append(controls, ctrl)
+				}
+				return controls, nil
+			}
+		}
+
+		// It's a wrapper SEQUENCE OF Control
+		for decoder.Offset() < seqEnd && decoder.Remaining() > 0 {
+			ctrl, err := parseControl(decoder)
+			if err != nil {
+				return nil, err
+			}
+			controls = append(controls, ctrl)
+		}
+	} else {
+		// Not a SEQUENCE, unexpected
+		return nil, NewParseError(decoder.Offset(), "expected SEQUENCE for controls", nil)
 	}
 
 	return controls, nil
