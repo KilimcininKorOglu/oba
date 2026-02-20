@@ -361,6 +361,9 @@ func (db *ObaDB) Close() error {
 		}
 	}
 
+	// Save caches before closing
+	db.saveCachesInternal()
+
 	// Close index manager
 	if db.indexManager != nil {
 		if err := db.indexManager.Close(); err != nil {
@@ -1117,8 +1120,13 @@ func (db *ObaDB) getLastTxID() uint64 {
 	return 0
 }
 
-// saveCaches saves index caches for faster startup.
+// saveCaches saves index caches for faster startup (acquires lock).
 func (db *ObaDB) saveCaches() {
+	db.saveCachesInternal()
+}
+
+// saveCachesInternal saves index caches without acquiring lock.
+func (db *ObaDB) saveCachesInternal() {
 	cacheDir := filepath.Join(db.path, CacheDir)
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
 		return
