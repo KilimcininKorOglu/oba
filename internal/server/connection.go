@@ -2,6 +2,8 @@
 package server
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"io"
 	"net"
@@ -21,6 +23,8 @@ var (
 	ErrInvalidMessage = errors.New("server: invalid message")
 	// ErrMessageTooLarge is returned when a message exceeds the size limit
 	ErrMessageTooLarge = errors.New("server: message too large")
+	// ErrTLSRequired is returned when TLS is required but not active
+	ErrTLSRequired = errors.New("server: TLS required for this operation")
 )
 
 // MaxMessageSize is the maximum size of an LDAP message (16 MB)
@@ -54,6 +58,10 @@ type Connection struct {
 	startTime time.Time
 	// isTLS indicates whether the connection is using TLS
 	isTLS bool
+	// tlsState holds the TLS connection state (nil if not TLS)
+	tlsState *tls.ConnectionState
+	// clientCert holds the client certificate if provided (nil if not provided)
+	clientCert *x509.Certificate
 }
 
 // Server represents the LDAP server (placeholder for now).
@@ -779,11 +787,29 @@ func (c *Connection) RequestID() string {
 	return c.requestID
 }
 
-// SetTLS sets whether the connection is using TLS.
+// SetTLS sets whether the connection is using TLS and captures the TLS state.
+// If the underlying connection is a TLS connection, it extracts the connection
+// state and client certificate (if provided).
 func (c *Connection) SetTLS(isTLS bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.isTLS = isTLS
+
+	// If TLS is enabled, try to extract TLS state from the connection
+	if isTLS {
+		if tlsConn, ok := c.conn.(*tls.Conn); ok {
+			state := tlsConn.ConnectionState()
+			c.tlsState = &state
+
+			// Extract client certificate if provided
+			if len(state.PeerCertificates) > 0 {
+				c.clientCert = state.PeerCertificates[0]
+			}
+		}
+	} else {
+		c.tlsState = nil
+		c.clientCert = nil
+	}
 }
 
 // IsTLS returns whether the connection is using TLS.
@@ -791,6 +817,71 @@ func (c *Connection) IsTLS() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.isTLS
+}
+
+// RequireTLS checks if the connection is using TLS and returns an error if not.
+// This is used to enforce TLS for security-sensitive operations like password changes.
+func (c *Connection) RequireTLS() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if !c.isTLS {
+		return ErrTLSRequired
+	}
+	return nil
+}
+
+// GetTLSState returns the TLS connection state if the connection is using TLS.
+// Returns nil if the connection is not using TLS.
+func (c *Connection) GetTLSState() *tls.ConnectionState {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.tlsState
+}
+
+// GetClientCertificate returns the client certificate if one was provided during
+// the TLS handshake. Returns nil if no client certificate was provided or if
+// the connection is not using TLS.
+func (c *Connection) GetClientCertificate() *x509.Certificate {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.clientCert
+}
+
+// GetTLSVersion returns the TLS version being used by the connection.
+// Returns 0 if the connection is not using TLS.
+func (c *Connection) GetTLSVersion() uint16 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.tlsState == nil {
+		return 0
+	}
+	return c.tlsState.Version
+}
+
+// GetCipherSuite returns the cipher suite being used by the TLS connection.
+// Returns 0 if the connection is not using TLS.
+func (c *Connection) GetCipherSuite() uint16 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.tlsState == nil {
+		return 0
+	}
+	return c.tlsState.CipherSuite
+}
+
+// GetServerName returns the server name indicated by the client during TLS handshake.
+// Returns an empty string if the connection is not using TLS or if SNI was not used.
+func (c *Connection) GetServerName() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.tlsState == nil {
+		return ""
+	}
+	return c.tlsState.ServerName
 }
 
 // SetLogger sets the logger for this connection.
