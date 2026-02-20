@@ -48,7 +48,6 @@ cp config.example.yaml config.yaml
 
 # Edit the configuration
 # Set your directory configuration (baseDN, rootDN, rootPassword)
-# IMPORTANT: dataDir must be an absolute path
 ```
 
 Example `config.yaml`:
@@ -63,7 +62,7 @@ directory:
   rootPassword: "your-secure-password"
 
 storage:
-  dataDir: "/var/lib/oba"  # Must be absolute path
+  dataDir: "/var/lib/oba"  # Absolute or relative path
   pageSize: 4096
 
 logging:

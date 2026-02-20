@@ -18,30 +18,35 @@ Oba supports multiple backup methods:
 
 ```bash
 # Basic full backup
-oba backup --output /backup/oba-full.bak
+oba backup --data-dir /var/lib/oba --output /backup/oba-full.bak
 
 # Compressed backup
-oba backup --output /backup/oba-full.bak.gz --compress
+oba backup --data-dir /var/lib/oba --output /backup/oba-full.bak.gz --compress
 
 # Backup with timestamp
-oba backup --output /backup/oba-$(date +%Y%m%d-%H%M%S).bak --compress
+oba backup --data-dir /var/lib/oba --output /backup/oba-$(date +%Y%m%d-%H%M%S).bak --compress
 ```
+
+The backup includes all storage files:
+- `data.oba` - Main data file with entries
+- `index.oba` - B+ tree indexes
+- `wal.oba` - Write-ahead log
 
 ### Incremental Backup
 
 ```bash
 # Incremental backup (changes since last full backup)
-oba backup --incremental --output /backup/oba-incr.bak
+oba backup --data-dir /var/lib/oba --incremental --output /backup/oba-incr.bak
 ```
 
 ### LDIF Export
 
 ```bash
 # Export to LDIF format
-oba backup --format ldif --output /backup/data.ldif
+oba backup --data-dir /var/lib/oba --format ldif --output /backup/data.ldif
 
 # Compressed LDIF export
-oba backup --format ldif --output /backup/data.ldif.gz --compress
+oba backup --data-dir /var/lib/oba --format ldif --output /backup/data.ldif.gz --compress
 ```
 
 ## Backup Strategies
@@ -55,6 +60,7 @@ Recommended for most deployments:
 # daily-backup.sh
 
 BACKUP_DIR="/backup/oba"
+DATA_DIR="/var/lib/oba"
 DATE=$(date +%Y%m%d)
 RETENTION_DAYS=30
 
@@ -62,7 +68,7 @@ RETENTION_DAYS=30
 mkdir -p "$BACKUP_DIR"
 
 # Create compressed backup
-oba backup --output "$BACKUP_DIR/oba-$DATE.bak" --compress
+oba backup --data-dir "$DATA_DIR" --output "$BACKUP_DIR/oba-$DATE.bak" --compress
 
 # Remove old backups
 find "$BACKUP_DIR" -name "oba-*.bak*" -mtime +$RETENTION_DAYS -delete
@@ -79,6 +85,7 @@ For larger deployments with frequent changes:
 # backup-strategy.sh
 
 BACKUP_DIR="/backup/oba"
+DATA_DIR="/var/lib/oba"
 DATE=$(date +%Y%m%d)
 DAY_OF_WEEK=$(date +%u)
 
@@ -86,13 +93,13 @@ mkdir -p "$BACKUP_DIR/full" "$BACKUP_DIR/incremental"
 
 if [ "$DAY_OF_WEEK" -eq 7 ]; then
     # Sunday: Full backup
-    oba backup --output "$BACKUP_DIR/full/oba-full-$DATE.bak" --compress
+    oba backup --data-dir "$DATA_DIR" --output "$BACKUP_DIR/full/oba-full-$DATE.bak" --compress
     
     # Clean old incremental backups after full backup
     rm -f "$BACKUP_DIR/incremental/"*.bak*
 else
     # Weekdays: Incremental backup
-    oba backup --incremental --output "$BACKUP_DIR/incremental/oba-incr-$DATE.bak" --compress
+    oba backup --data-dir "$DATA_DIR" --incremental --output "$BACKUP_DIR/incremental/oba-incr-$DATE.bak" --compress
 fi
 ```
 
@@ -123,7 +130,7 @@ cp "$WAL_DIR"/*.oba "$ARCHIVE_DIR/wal-$DATE/"
 sudo systemctl stop oba
 
 # Restore from backup
-oba restore --input /backup/oba-full.bak
+oba restore --data-dir /var/lib/oba --input /backup/oba-full.bak
 
 # Verify the restore
 oba config validate --config /etc/oba/config.yaml
@@ -136,7 +143,7 @@ sudo systemctl start oba
 
 ```bash
 # Restore with checksum verification
-oba restore --input /backup/oba-full.bak --verify
+oba restore --data-dir /var/lib/oba --input /backup/oba-full.bak --verify
 ```
 
 ### Restore from LDIF
@@ -149,7 +156,7 @@ sudo systemctl stop oba
 rm -rf /var/lib/oba/*
 
 # Restore from LDIF
-oba restore --format ldif --input /backup/data.ldif
+oba restore --data-dir /var/lib/oba --format ldif --input /backup/data.ldif
 
 # Start the server
 sudo systemctl start oba
@@ -164,12 +171,12 @@ Restore full backup first, then apply incrementals in order:
 sudo systemctl stop oba
 
 # Restore full backup
-oba restore --input /backup/full/oba-full-20260215.bak
+oba restore --data-dir /var/lib/oba --input /backup/full/oba-full-20260215.bak
 
 # Apply incremental backups in chronological order
-oba restore --input /backup/incremental/oba-incr-20260216.bak
-oba restore --input /backup/incremental/oba-incr-20260217.bak
-oba restore --input /backup/incremental/oba-incr-20260218.bak
+oba restore --data-dir /var/lib/oba --input /backup/incremental/oba-incr-20260216.bak
+oba restore --data-dir /var/lib/oba --input /backup/incremental/oba-incr-20260217.bak
+oba restore --data-dir /var/lib/oba --input /backup/incremental/oba-incr-20260218.bak
 
 # Start the server
 sudo systemctl start oba

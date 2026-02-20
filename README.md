@@ -50,6 +50,7 @@ directory:
 
 storage:
   dataDir: "/var/lib/oba"
+  cacheSize: 10000
 
 logging:
   level: "info"

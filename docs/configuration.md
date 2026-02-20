@@ -74,6 +74,7 @@ directory:
 | storage.pageSize           | int      | 4096           | Page size in bytes                  |
 | storage.bufferPoolSize     | string   | "256MB"        | Buffer pool size                    |
 | storage.checkpointInterval | duration | 5m             | Checkpoint interval                 |
+| storage.cacheSize          | int      | 10000          | Entry cache size (LRU)              |
 
 Both absolute and relative paths are supported for `dataDir` and `walDir`. Relative paths are resolved from the current working directory.
 
@@ -91,6 +92,7 @@ storage:
   pageSize: 4096
   bufferPoolSize: "256MB"
   checkpointInterval: 5m
+  cacheSize: 10000
 ```
 
 ### Storage File Layout
