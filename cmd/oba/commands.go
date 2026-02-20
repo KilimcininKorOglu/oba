@@ -114,219 +114,38 @@ func userCmd(args []string) int {
 
 // userAddCmd handles the user add subcommand.
 func userAddCmd(args []string) int {
-	fs := flag.NewFlagSet("user add", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-
-	dn := fs.String("dn", "", "User DN")
-	password := fs.Bool("password", false, "Prompt for password")
-	help := fs.Bool("h", false, "Show help message")
-	helpLong := fs.Bool("help", false, "Show help message")
-
-	if err := fs.Parse(args); err != nil {
-		return 1
-	}
-
-	if *help || *helpLong {
-		fmt.Println("Add a new user")
-		fmt.Println()
-		fmt.Println("Usage:")
-		fmt.Println("  oba user add [options]")
-		fmt.Println()
-		fmt.Println("Options:")
-		fmt.Println("  -dn string")
-		fmt.Println("        User DN (required)")
-		fmt.Println("  -password")
-		fmt.Println("        Prompt for password")
-		return 0
-	}
-
-	if *dn == "" {
-		fmt.Fprintln(os.Stderr, "Error: -dn is required")
-		return 1
-	}
-
-	// TODO: Implement user add logic
-	fmt.Printf("Adding user: %s\n", *dn)
-	if *password {
-		fmt.Println("Password prompt pending...")
-	}
-	fmt.Println("User add implementation pending...")
-	return 0
+	impl := newUserCmdImpl()
+	return impl.userAddCmdImpl(args)
 }
 
 // userDeleteCmd handles the user delete subcommand.
 func userDeleteCmd(args []string) int {
-	fs := flag.NewFlagSet("user delete", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-
-	dn := fs.String("dn", "", "User DN")
-	help := fs.Bool("h", false, "Show help message")
-	helpLong := fs.Bool("help", false, "Show help message")
-
-	if err := fs.Parse(args); err != nil {
-		return 1
-	}
-
-	if *help || *helpLong {
-		fmt.Println("Delete a user")
-		fmt.Println()
-		fmt.Println("Usage:")
-		fmt.Println("  oba user delete [options]")
-		fmt.Println()
-		fmt.Println("Options:")
-		fmt.Println("  -dn string")
-		fmt.Println("        User DN (required)")
-		return 0
-	}
-
-	if *dn == "" {
-		fmt.Fprintln(os.Stderr, "Error: -dn is required")
-		return 1
-	}
-
-	// TODO: Implement user delete logic
-	fmt.Printf("Deleting user: %s\n", *dn)
-	fmt.Println("User delete implementation pending...")
-	return 0
+	impl := newUserCmdImpl()
+	return impl.userDeleteCmdImpl(args)
 }
 
 // userPasswdCmd handles the user passwd subcommand.
 func userPasswdCmd(args []string) int {
-	fs := flag.NewFlagSet("user passwd", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-
-	dn := fs.String("dn", "", "User DN")
-	help := fs.Bool("h", false, "Show help message")
-	helpLong := fs.Bool("help", false, "Show help message")
-
-	if err := fs.Parse(args); err != nil {
-		return 1
-	}
-
-	if *help || *helpLong {
-		fmt.Println("Change user password")
-		fmt.Println()
-		fmt.Println("Usage:")
-		fmt.Println("  oba user passwd [options]")
-		fmt.Println()
-		fmt.Println("Options:")
-		fmt.Println("  -dn string")
-		fmt.Println("        User DN (required)")
-		return 0
-	}
-
-	if *dn == "" {
-		fmt.Fprintln(os.Stderr, "Error: -dn is required")
-		return 1
-	}
-
-	// TODO: Implement password change logic
-	fmt.Printf("Changing password for: %s\n", *dn)
-	fmt.Println("Password change implementation pending...")
-	return 0
+	impl := newUserCmdImpl()
+	return impl.userPasswdCmdImpl(args)
 }
 
 // userListCmd handles the user list subcommand.
 func userListCmd(args []string) int {
-	fs := flag.NewFlagSet("user list", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-
-	base := fs.String("base", "", "Base DN for search")
-	help := fs.Bool("h", false, "Show help message")
-	helpLong := fs.Bool("help", false, "Show help message")
-
-	if err := fs.Parse(args); err != nil {
-		return 1
-	}
-
-	if *help || *helpLong {
-		fmt.Println("List users")
-		fmt.Println()
-		fmt.Println("Usage:")
-		fmt.Println("  oba user list [options]")
-		fmt.Println()
-		fmt.Println("Options:")
-		fmt.Println("  -base string")
-		fmt.Println("        Base DN for search")
-		return 0
-	}
-
-	// TODO: Implement user list logic
-	fmt.Printf("Listing users under: %s\n", valueOrDefault(*base, "(root)"))
-	fmt.Println("User list implementation pending...")
-	return 0
+	impl := newUserCmdImpl()
+	return impl.userListCmdImpl(args)
 }
 
 // userLockCmd handles the user lock subcommand.
 func userLockCmd(args []string) int {
-	fs := flag.NewFlagSet("user lock", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-
-	dn := fs.String("dn", "", "User DN")
-	help := fs.Bool("h", false, "Show help message")
-	helpLong := fs.Bool("help", false, "Show help message")
-
-	if err := fs.Parse(args); err != nil {
-		return 1
-	}
-
-	if *help || *helpLong {
-		fmt.Println("Lock a user account")
-		fmt.Println()
-		fmt.Println("Usage:")
-		fmt.Println("  oba user lock [options]")
-		fmt.Println()
-		fmt.Println("Options:")
-		fmt.Println("  -dn string")
-		fmt.Println("        User DN (required)")
-		return 0
-	}
-
-	if *dn == "" {
-		fmt.Fprintln(os.Stderr, "Error: -dn is required")
-		return 1
-	}
-
-	// TODO: Implement user lock logic
-	fmt.Printf("Locking user: %s\n", *dn)
-	fmt.Println("User lock implementation pending...")
-	return 0
+	impl := newUserCmdImpl()
+	return impl.userLockCmdImpl(args)
 }
 
 // userUnlockCmd handles the user unlock subcommand.
 func userUnlockCmd(args []string) int {
-	fs := flag.NewFlagSet("user unlock", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-
-	dn := fs.String("dn", "", "User DN")
-	help := fs.Bool("h", false, "Show help message")
-	helpLong := fs.Bool("help", false, "Show help message")
-
-	if err := fs.Parse(args); err != nil {
-		return 1
-	}
-
-	if *help || *helpLong {
-		fmt.Println("Unlock a user account")
-		fmt.Println()
-		fmt.Println("Usage:")
-		fmt.Println("  oba user unlock [options]")
-		fmt.Println()
-		fmt.Println("Options:")
-		fmt.Println("  -dn string")
-		fmt.Println("        User DN (required)")
-		return 0
-	}
-
-	if *dn == "" {
-		fmt.Fprintln(os.Stderr, "Error: -dn is required")
-		return 1
-	}
-
-	// TODO: Implement user unlock logic
-	fmt.Printf("Unlocking user: %s\n", *dn)
-	fmt.Println("User unlock implementation pending...")
-	return 0
+	impl := newUserCmdImpl()
+	return impl.userUnlockCmdImpl(args)
 }
 
 // valueOrDefault returns the value if non-empty, otherwise returns the default.
