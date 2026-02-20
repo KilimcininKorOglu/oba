@@ -46,6 +46,9 @@ type DeleteHandler func(conn *Connection, req *ldap.DeleteRequest) *OperationRes
 // ModifyHandler handles modify requests.
 type ModifyHandler func(conn *Connection, req *ldap.ModifyRequest) *OperationResult
 
+// ModifyDNHandler handles modifydn requests.
+type ModifyDNHandler func(conn *Connection, req *ldap.ModifyDNRequest) *OperationResult
+
 // Handler manages operation handlers for the LDAP server.
 type Handler struct {
 	// bindHandler handles bind requests
@@ -58,16 +61,19 @@ type Handler struct {
 	deleteHandler DeleteHandler
 	// modifyHandler handles modify requests
 	modifyHandler ModifyHandler
+	// modifyDNHandler handles modifydn requests
+	modifyDNHandler ModifyDNHandler
 }
 
 // NewHandler creates a new Handler with default handlers.
 func NewHandler() *Handler {
 	return &Handler{
-		bindHandler:   defaultBindHandler,
-		searchHandler: defaultSearchHandler,
-		addHandler:    defaultAddHandler,
-		deleteHandler: defaultDeleteHandler,
-		modifyHandler: defaultModifyHandler,
+		bindHandler:     defaultBindHandler,
+		searchHandler:   defaultSearchHandler,
+		addHandler:      defaultAddHandler,
+		deleteHandler:   defaultDeleteHandler,
+		modifyHandler:   defaultModifyHandler,
+		modifyDNHandler: defaultModifyDNHandler,
 	}
 }
 
@@ -94,6 +100,11 @@ func (h *Handler) SetDeleteHandler(handler DeleteHandler) {
 // SetModifyHandler sets the modify handler.
 func (h *Handler) SetModifyHandler(handler ModifyHandler) {
 	h.modifyHandler = handler
+}
+
+// SetModifyDNHandler sets the modifydn handler.
+func (h *Handler) SetModifyDNHandler(handler ModifyDNHandler) {
+	h.modifyDNHandler = handler
 }
 
 // HandleBind handles a bind request.
@@ -153,6 +164,17 @@ func (h *Handler) HandleModify(conn *Connection, req *ldap.ModifyRequest) *Opera
 	return h.modifyHandler(conn, req)
 }
 
+// HandleModifyDN handles a modifydn request.
+func (h *Handler) HandleModifyDN(conn *Connection, req *ldap.ModifyDNRequest) *OperationResult {
+	if h.modifyDNHandler == nil {
+		return &OperationResult{
+			ResultCode:        ldap.ResultUnwillingToPerform,
+			DiagnosticMessage: "modifydn handler not configured",
+		}
+	}
+	return h.modifyDNHandler(conn, req)
+}
+
 // Default handlers that return "unwilling to perform"
 
 func defaultBindHandler(_ *Connection, req *ldap.BindRequest) *OperationResult {
@@ -195,5 +217,12 @@ func defaultModifyHandler(_ *Connection, _ *ldap.ModifyRequest) *OperationResult
 	return &OperationResult{
 		ResultCode:        ldap.ResultUnwillingToPerform,
 		DiagnosticMessage: "modify not implemented",
+	}
+}
+
+func defaultModifyDNHandler(_ *Connection, _ *ldap.ModifyDNRequest) *OperationResult {
+	return &OperationResult{
+		ResultCode:        ldap.ResultUnwillingToPerform,
+		DiagnosticMessage: "modifydn not implemented",
 	}
 }

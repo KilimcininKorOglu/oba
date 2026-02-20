@@ -883,3 +883,251 @@ func TestParseAbandonRequest_LargeMessageID(t *testing.T) {
 		t.Errorf("MessageID = %d, want 1000", req.MessageID)
 	}
 }
+
+// ============================================================================
+// ModifyDNRequest Tests
+// ============================================================================
+
+func TestParseModifyDNRequest_BasicRename(t *testing.T) {
+	encoder := ber.NewBEREncoder(128)
+
+	// entry = "uid=alice,ou=users,dc=example,dc=com"
+	encoder.WriteOctetString([]byte("uid=alice,ou=users,dc=example,dc=com"))
+	// newrdn = "uid=alice2"
+	encoder.WriteOctetString([]byte("uid=alice2"))
+	// deleteoldrdn = true
+	encoder.WriteBoolean(true)
+
+	data := encoder.Bytes()
+
+	req, err := ParseModifyDNRequest(data)
+	if err != nil {
+		t.Fatalf("ParseModifyDNRequest failed: %v", err)
+	}
+
+	if req.Entry != "uid=alice,ou=users,dc=example,dc=com" {
+		t.Errorf("Entry = %q, want %q", req.Entry, "uid=alice,ou=users,dc=example,dc=com")
+	}
+
+	if req.NewRDN != "uid=alice2" {
+		t.Errorf("NewRDN = %q, want %q", req.NewRDN, "uid=alice2")
+	}
+
+	if !req.DeleteOldRDN {
+		t.Error("DeleteOldRDN = false, want true")
+	}
+
+	if req.NewSuperior != "" {
+		t.Errorf("NewSuperior = %q, want empty", req.NewSuperior)
+	}
+}
+
+func TestParseModifyDNRequest_WithNewSuperior(t *testing.T) {
+	encoder := ber.NewBEREncoder(256)
+
+	// entry = "uid=alice,ou=users,dc=example,dc=com"
+	encoder.WriteOctetString([]byte("uid=alice,ou=users,dc=example,dc=com"))
+	// newrdn = "uid=alice"
+	encoder.WriteOctetString([]byte("uid=alice"))
+	// deleteoldrdn = false
+	encoder.WriteBoolean(false)
+	// newSuperior [0] = "ou=people,dc=example,dc=com"
+	encoder.WriteTaggedValue(0, false, []byte("ou=people,dc=example,dc=com"))
+
+	data := encoder.Bytes()
+
+	req, err := ParseModifyDNRequest(data)
+	if err != nil {
+		t.Fatalf("ParseModifyDNRequest failed: %v", err)
+	}
+
+	if req.Entry != "uid=alice,ou=users,dc=example,dc=com" {
+		t.Errorf("Entry = %q, want %q", req.Entry, "uid=alice,ou=users,dc=example,dc=com")
+	}
+
+	if req.NewRDN != "uid=alice" {
+		t.Errorf("NewRDN = %q, want %q", req.NewRDN, "uid=alice")
+	}
+
+	if req.DeleteOldRDN {
+		t.Error("DeleteOldRDN = true, want false")
+	}
+
+	if req.NewSuperior != "ou=people,dc=example,dc=com" {
+		t.Errorf("NewSuperior = %q, want %q", req.NewSuperior, "ou=people,dc=example,dc=com")
+	}
+}
+
+func TestParseModifyDNRequest_DeleteOldRDNFalse(t *testing.T) {
+	encoder := ber.NewBEREncoder(128)
+
+	// entry = "cn=admin,dc=example,dc=com"
+	encoder.WriteOctetString([]byte("cn=admin,dc=example,dc=com"))
+	// newrdn = "cn=administrator"
+	encoder.WriteOctetString([]byte("cn=administrator"))
+	// deleteoldrdn = false
+	encoder.WriteBoolean(false)
+
+	data := encoder.Bytes()
+
+	req, err := ParseModifyDNRequest(data)
+	if err != nil {
+		t.Fatalf("ParseModifyDNRequest failed: %v", err)
+	}
+
+	if req.DeleteOldRDN {
+		t.Error("DeleteOldRDN = true, want false")
+	}
+}
+
+func TestParseModifyDNRequest_EmptyData(t *testing.T) {
+	_, err := ParseModifyDNRequest([]byte{})
+	if err == nil {
+		t.Error("Expected error for empty data")
+	}
+}
+
+func TestModifyDNRequest_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		req     *ModifyDNRequest
+		wantErr bool
+	}{
+		{
+			name: "valid request",
+			req: &ModifyDNRequest{
+				Entry:        "uid=alice,ou=users,dc=example,dc=com",
+				NewRDN:       "uid=alice2",
+				DeleteOldRDN: true,
+			},
+			wantErr: false,
+		},
+		{
+			name: "empty entry",
+			req: &ModifyDNRequest{
+				Entry:        "",
+				NewRDN:       "uid=alice2",
+				DeleteOldRDN: true,
+			},
+			wantErr: true,
+		},
+		{
+			name: "empty new RDN",
+			req: &ModifyDNRequest{
+				Entry:        "uid=alice,ou=users,dc=example,dc=com",
+				NewRDN:       "",
+				DeleteOldRDN: true,
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.req.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestModifyDNRequest_HasNewSuperior(t *testing.T) {
+	tests := []struct {
+		name        string
+		newSuperior string
+		want        bool
+	}{
+		{
+			name:        "with new superior",
+			newSuperior: "ou=people,dc=example,dc=com",
+			want:        true,
+		},
+		{
+			name:        "without new superior",
+			newSuperior: "",
+			want:        false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &ModifyDNRequest{
+				Entry:       "uid=alice,ou=users,dc=example,dc=com",
+				NewRDN:      "uid=alice2",
+				NewSuperior: tt.newSuperior,
+			}
+
+			if got := req.HasNewSuperior(); got != tt.want {
+				t.Errorf("HasNewSuperior() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestModifyDNRequest_Encode(t *testing.T) {
+	req := &ModifyDNRequest{
+		Entry:        "uid=alice,ou=users,dc=example,dc=com",
+		NewRDN:       "uid=alice2",
+		DeleteOldRDN: true,
+	}
+
+	data, err := req.Encode()
+	if err != nil {
+		t.Fatalf("Encode failed: %v", err)
+	}
+
+	// Parse it back
+	parsed, err := ParseModifyDNRequest(data)
+	if err != nil {
+		t.Fatalf("ParseModifyDNRequest failed: %v", err)
+	}
+
+	if parsed.Entry != req.Entry {
+		t.Errorf("Entry = %q, want %q", parsed.Entry, req.Entry)
+	}
+
+	if parsed.NewRDN != req.NewRDN {
+		t.Errorf("NewRDN = %q, want %q", parsed.NewRDN, req.NewRDN)
+	}
+
+	if parsed.DeleteOldRDN != req.DeleteOldRDN {
+		t.Errorf("DeleteOldRDN = %v, want %v", parsed.DeleteOldRDN, req.DeleteOldRDN)
+	}
+}
+
+func TestModifyDNRequest_EncodeWithNewSuperior(t *testing.T) {
+	req := &ModifyDNRequest{
+		Entry:        "uid=alice,ou=users,dc=example,dc=com",
+		NewRDN:       "uid=alice",
+		DeleteOldRDN: false,
+		NewSuperior:  "ou=people,dc=example,dc=com",
+	}
+
+	data, err := req.Encode()
+	if err != nil {
+		t.Fatalf("Encode failed: %v", err)
+	}
+
+	// Parse it back
+	parsed, err := ParseModifyDNRequest(data)
+	if err != nil {
+		t.Fatalf("ParseModifyDNRequest failed: %v", err)
+	}
+
+	if parsed.Entry != req.Entry {
+		t.Errorf("Entry = %q, want %q", parsed.Entry, req.Entry)
+	}
+
+	if parsed.NewRDN != req.NewRDN {
+		t.Errorf("NewRDN = %q, want %q", parsed.NewRDN, req.NewRDN)
+	}
+
+	if parsed.DeleteOldRDN != req.DeleteOldRDN {
+		t.Errorf("DeleteOldRDN = %v, want %v", parsed.DeleteOldRDN, req.DeleteOldRDN)
+	}
+
+	if parsed.NewSuperior != req.NewSuperior {
+		t.Errorf("NewSuperior = %q, want %q", parsed.NewSuperior, req.NewSuperior)
+	}
+}
