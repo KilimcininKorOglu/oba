@@ -4,6 +4,7 @@ package server
 import (
 	"strings"
 
+	"github.com/oba-ldap/oba/internal/acl"
 	"github.com/oba-ldap/oba/internal/ldap"
 )
 
@@ -42,6 +43,9 @@ type ModifyBackend interface {
 type ModifyConfig struct {
 	// Backend is the directory backend for entry operations.
 	Backend ModifyBackend
+	// ACLEvaluator is the ACL evaluator for access control checks.
+	// If nil, no ACL checks are performed.
+	ACLEvaluator *acl.Evaluator
 }
 
 // NewModifyConfig creates a new ModifyConfig with default settings.
@@ -86,7 +90,28 @@ func (h *ModifyHandlerImpl) Handle(conn *Connection, req *ldap.ModifyRequest) *O
 	// Step 3: Normalize the DN
 	dn := normalizeDNForModify(req.Object)
 
-	// Step 4: Check if entry exists
+	// Step 4: Check ACL write permission
+	if h.config.ACLEvaluator != nil {
+		bindDN := ""
+		if conn != nil {
+			bindDN = conn.BindDN()
+		}
+
+		// Get the list of attributes being modified
+		modifiedAttrs := getModifiedAttributes(req.Changes)
+
+		// Create access context with attributes
+		ctx := acl.NewAccessContext(bindDN, dn, acl.Write).WithAttributes(modifiedAttrs...)
+
+		if !h.config.ACLEvaluator.CheckAccess(ctx) {
+			return &OperationResult{
+				ResultCode:        ldap.ResultInsufficientAccessRights,
+				DiagnosticMessage: "insufficient access rights",
+			}
+		}
+	}
+
+	// Step 5: Check if entry exists
 	entry, err := h.config.Backend.GetEntry(dn)
 	if err != nil {
 		return &OperationResult{
@@ -103,18 +128,34 @@ func (h *ModifyHandlerImpl) Handle(conn *Connection, req *ldap.ModifyRequest) *O
 		}
 	}
 
-	// Step 5: Convert LDAP modifications to backend modifications
+	// Step 6: Convert LDAP modifications to backend modifications
 	backendChanges := convertToBackendModifications(req.Changes)
 
-	// Step 6: Apply the modifications
+	// Step 7: Apply the modifications
 	if err := h.config.Backend.ModifyEntry(dn, backendChanges); err != nil {
 		return h.mapError(err, dn)
 	}
 
-	// Step 7: Return success
+	// Step 8: Return success
 	return &OperationResult{
 		ResultCode: ldap.ResultSuccess,
 	}
+}
+
+// getModifiedAttributes extracts the list of attribute names being modified.
+func getModifiedAttributes(changes []ldap.Modification) []string {
+	attrs := make([]string, 0, len(changes))
+	seen := make(map[string]bool)
+
+	for _, change := range changes {
+		attrName := strings.ToLower(change.Attribute.Type)
+		if !seen[attrName] {
+			attrs = append(attrs, attrName)
+			seen[attrName] = true
+		}
+	}
+
+	return attrs
 }
 
 // mapError maps backend errors to LDAP result codes.

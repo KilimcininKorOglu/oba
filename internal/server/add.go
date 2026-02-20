@@ -4,6 +4,7 @@ package server
 import (
 	"strings"
 
+	"github.com/oba-ldap/oba/internal/acl"
 	"github.com/oba-ldap/oba/internal/ldap"
 	"github.com/oba-ldap/oba/internal/storage"
 )
@@ -22,6 +23,9 @@ type AddBackend interface {
 type AddConfig struct {
 	// Backend is the directory backend for entry operations.
 	Backend AddBackend
+	// ACLEvaluator is the ACL evaluator for access control checks.
+	// If nil, no ACL checks are performed.
+	ACLEvaluator *acl.Evaluator
 }
 
 // NewAddConfig creates a new AddConfig with default settings.
@@ -66,7 +70,21 @@ func (h *AddHandlerImpl) Handle(conn *Connection, req *ldap.AddRequest) *Operati
 	// Step 3: Normalize the DN
 	dn := normalizeDNForAdd(req.Entry)
 
-	// Step 4: Check if entry already exists
+	// Step 4: Check ACL add permission
+	if h.config.ACLEvaluator != nil {
+		bindDN := ""
+		if conn != nil {
+			bindDN = conn.BindDN()
+		}
+		if !h.config.ACLEvaluator.CanAdd(bindDN, dn) {
+			return &OperationResult{
+				ResultCode:        ldap.ResultInsufficientAccessRights,
+				DiagnosticMessage: "insufficient access rights",
+			}
+		}
+	}
+
+	// Step 5: Check if entry already exists
 	existingEntry, err := h.config.Backend.GetEntry(dn)
 	if err != nil {
 		return &OperationResult{
@@ -82,7 +100,7 @@ func (h *AddHandlerImpl) Handle(conn *Connection, req *ldap.AddRequest) *Operati
 		}
 	}
 
-	// Step 5: Check if objectClass attribute is present
+	// Step 6: Check if objectClass attribute is present
 	if !hasObjectClassAttribute(req) {
 		return &OperationResult{
 			ResultCode:        ldap.ResultObjectClassViolation,
@@ -90,15 +108,15 @@ func (h *AddHandlerImpl) Handle(conn *Connection, req *ldap.AddRequest) *Operati
 		}
 	}
 
-	// Step 6: Convert request to backend entry
+	// Step 7: Convert request to backend entry
 	entry := convertAddRequestToEntry(req)
 
-	// Step 7: Add the entry
+	// Step 8: Add the entry
 	if err := h.config.Backend.AddEntry(entry); err != nil {
 		return mapAddError(err, dn)
 	}
 
-	// Step 8: Return success
+	// Step 9: Return success
 	return &OperationResult{
 		ResultCode: ldap.ResultSuccess,
 	}

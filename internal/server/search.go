@@ -4,6 +4,7 @@ package server
 import (
 	"strings"
 
+	"github.com/oba-ldap/oba/internal/acl"
 	"github.com/oba-ldap/oba/internal/filter"
 	"github.com/oba-ldap/oba/internal/ldap"
 	"github.com/oba-ldap/oba/internal/storage"
@@ -33,6 +34,9 @@ type SearchConfig struct {
 	DefaultSizeLimit int
 	// DefaultTimeLimit is the default time limit if client doesn't specify one.
 	DefaultTimeLimit int
+	// ACLEvaluator is the ACL evaluator for access control checks.
+	// If nil, no ACL checks are performed.
+	ACLEvaluator *acl.Evaluator
 }
 
 // NewSearchConfig creates a new SearchConfig with default settings.
@@ -47,8 +51,8 @@ func NewSearchConfig() *SearchConfig {
 
 // SearchHandlerImpl implements the search operation handler.
 type SearchHandlerImpl struct {
-	config          *SearchConfig
-	evaluator       *filter.Evaluator
+	config           *SearchConfig
+	evaluator        *filter.Evaluator
 	oneLevelSearcher *OneLevelSearcher
 	subtreeSearcher  *SubtreeSearcher
 }
@@ -99,14 +103,31 @@ func (h *SearchHandlerImpl) Handle(conn *Connection, req *ldap.SearchRequest) *S
 		}
 	}
 
+	// Check ACL search permission on the base DN
+	if h.config.ACLEvaluator != nil {
+		bindDN := ""
+		if conn != nil {
+			bindDN = conn.BindDN()
+		}
+		if !h.config.ACLEvaluator.CanSearch(bindDN, req.BaseObject) {
+			return &SearchResult{
+				OperationResult: OperationResult{
+					ResultCode:        ldap.ResultInsufficientAccessRights,
+					DiagnosticMessage: "insufficient access rights",
+				},
+			}
+		}
+	}
+
 	// Dispatch based on search scope
+	var result *SearchResult
 	switch req.Scope {
 	case ldap.ScopeBaseObject:
-		return h.searchBase(conn, req)
+		result = h.searchBase(conn, req)
 	case ldap.ScopeSingleLevel:
-		return h.searchOneLevel(conn, req)
+		result = h.searchOneLevel(conn, req)
 	case ldap.ScopeWholeSubtree:
-		return h.searchSubtree(conn, req)
+		result = h.searchSubtree(conn, req)
 	default:
 		return &SearchResult{
 			OperationResult: OperationResult{
@@ -115,6 +136,17 @@ func (h *SearchHandlerImpl) Handle(conn *Connection, req *ldap.SearchRequest) *S
 			},
 		}
 	}
+
+	// Filter attributes based on read permission
+	if h.config.ACLEvaluator != nil && result != nil && result.Entries != nil {
+		bindDN := ""
+		if conn != nil {
+			bindDN = conn.BindDN()
+		}
+		result.Entries = h.filterEntriesByACL(bindDN, result.Entries)
+	}
+
+	return result
 }
 
 // searchOneLevel performs a one-level scope search (returns immediate children).
@@ -393,5 +425,55 @@ func isOperationalAttribute(name string) bool {
 func CreateSearchHandler(impl *SearchHandlerImpl) SearchHandler {
 	return func(conn *Connection, req *ldap.SearchRequest) *SearchResult {
 		return impl.Handle(conn, req)
+	}
+}
+
+// filterEntriesByACL filters search result entries based on read permissions.
+// It removes entries the user cannot read and filters attributes within each entry.
+func (h *SearchHandlerImpl) filterEntriesByACL(bindDN string, entries []*SearchEntry) []*SearchEntry {
+	if h.config.ACLEvaluator == nil {
+		return entries
+	}
+
+	filtered := make([]*SearchEntry, 0, len(entries))
+	for _, entry := range entries {
+		// Check if user can read this entry
+		if !h.config.ACLEvaluator.CanRead(bindDN, entry.DN) {
+			continue
+		}
+
+		// Filter attributes based on read permission
+		filteredEntry := h.filterEntryAttributes(bindDN, entry)
+		if filteredEntry != nil {
+			filtered = append(filtered, filteredEntry)
+		}
+	}
+
+	return filtered
+}
+
+// filterEntryAttributes filters attributes in a search entry based on read permissions.
+func (h *SearchHandlerImpl) filterEntryAttributes(bindDN string, entry *SearchEntry) *SearchEntry {
+	if h.config.ACLEvaluator == nil || entry == nil {
+		return entry
+	}
+
+	// Create access context for attribute filtering
+	ctx := &acl.AccessContext{
+		BindDN:    bindDN,
+		TargetDN:  entry.DN,
+		Operation: acl.Read,
+	}
+
+	filteredAttrs := make([]ldap.Attribute, 0, len(entry.Attributes))
+	for _, attr := range entry.Attributes {
+		if h.config.ACLEvaluator.CheckAttributeAccess(ctx, attr.Type) {
+			filteredAttrs = append(filteredAttrs, attr)
+		}
+	}
+
+	return &SearchEntry{
+		DN:         entry.DN,
+		Attributes: filteredAttrs,
 	}
 }
