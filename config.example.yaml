@@ -11,7 +11,7 @@ directory:
   rootPassword: "admin"
 
 storage:
-  dataDir: "/Users/kerem/Desktop/oba/docker-data"
+  dataDir: ""
   pageSize: 4096
   bufferPoolSize: "256MB"
   checkpointInterval: 5m
