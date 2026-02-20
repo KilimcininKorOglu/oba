@@ -99,6 +99,10 @@ type RestoreOptions struct {
 
 	// Format specifies the backup format ("native" or "ldif").
 	Format BackupFormat
+
+	// DataDir is the target directory for restored data.
+	// Used by RestoreManager for specifying the restore destination.
+	DataDir string
 }
 
 // Validate validates the restore options.
