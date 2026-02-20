@@ -825,3 +825,317 @@ func TestMultiValuedAttributes(t *testing.T) {
 		}
 	}
 }
+
+// ============================================================================
+// ModifyDN Tests
+// ============================================================================
+
+// TestModifyDN_BasicRename tests basic RDN change.
+func TestModifyDN_BasicRename(t *testing.T) {
+	engine := newMockStorageEngine()
+	backend := NewBackend(engine, nil)
+
+	// Add an entry
+	entry := storage.NewEntry("uid=alice,ou=users,dc=example,dc=com")
+	entry.SetStringAttribute("uid", "alice")
+	entry.SetStringAttribute("cn", "Alice")
+	engine.entries["uid=alice,ou=users,dc=example,dc=com"] = entry
+
+	// Add parent entry
+	parent := storage.NewEntry("ou=users,dc=example,dc=com")
+	parent.SetStringAttribute("ou", "users")
+	engine.entries["ou=users,dc=example,dc=com"] = parent
+
+	req := &ModifyDNRequest{
+		DN:           "uid=alice,ou=users,dc=example,dc=com",
+		NewRDN:       "uid=alice2",
+		DeleteOldRDN: true,
+	}
+
+	err := backend.ModifyDN(req)
+	if err != nil {
+		t.Fatalf("ModifyDN failed: %v", err)
+	}
+
+	// Verify old entry is gone
+	if _, ok := engine.entries["uid=alice,ou=users,dc=example,dc=com"]; ok {
+		t.Error("old entry should be deleted")
+	}
+
+	// Verify new entry exists
+	newEntry, ok := engine.entries["uid=alice2,ou=users,dc=example,dc=com"]
+	if !ok {
+		t.Fatal("new entry should exist")
+	}
+
+	// Verify DN is updated
+	if newEntry.DN != "uid=alice2,ou=users,dc=example,dc=com" {
+		t.Errorf("DN = %q, want %q", newEntry.DN, "uid=alice2,ou=users,dc=example,dc=com")
+	}
+}
+
+// TestModifyDN_MoveToNewParent tests moving an entry to a new parent.
+func TestModifyDN_MoveToNewParent(t *testing.T) {
+	engine := newMockStorageEngine()
+	backend := NewBackend(engine, nil)
+
+	// Add an entry
+	entry := storage.NewEntry("uid=alice,ou=users,dc=example,dc=com")
+	entry.SetStringAttribute("uid", "alice")
+	engine.entries["uid=alice,ou=users,dc=example,dc=com"] = entry
+
+	// Add old parent
+	oldParent := storage.NewEntry("ou=users,dc=example,dc=com")
+	oldParent.SetStringAttribute("ou", "users")
+	engine.entries["ou=users,dc=example,dc=com"] = oldParent
+
+	// Add new parent
+	newParent := storage.NewEntry("ou=people,dc=example,dc=com")
+	newParent.SetStringAttribute("ou", "people")
+	engine.entries["ou=people,dc=example,dc=com"] = newParent
+
+	req := &ModifyDNRequest{
+		DN:           "uid=alice,ou=users,dc=example,dc=com",
+		NewRDN:       "uid=alice",
+		DeleteOldRDN: false,
+		NewSuperior:  "ou=people,dc=example,dc=com",
+	}
+
+	err := backend.ModifyDN(req)
+	if err != nil {
+		t.Fatalf("ModifyDN failed: %v", err)
+	}
+
+	// Verify old entry is gone
+	if _, ok := engine.entries["uid=alice,ou=users,dc=example,dc=com"]; ok {
+		t.Error("old entry should be deleted")
+	}
+
+	// Verify new entry exists
+	newEntry, ok := engine.entries["uid=alice,ou=people,dc=example,dc=com"]
+	if !ok {
+		t.Fatal("new entry should exist at new location")
+	}
+
+	// Verify DN is updated
+	if newEntry.DN != "uid=alice,ou=people,dc=example,dc=com" {
+		t.Errorf("DN = %q, want %q", newEntry.DN, "uid=alice,ou=people,dc=example,dc=com")
+	}
+}
+
+// TestModifyDN_EntryNotFound tests error when entry doesn't exist.
+func TestModifyDN_EntryNotFound(t *testing.T) {
+	engine := newMockStorageEngine()
+	backend := NewBackend(engine, nil)
+
+	req := &ModifyDNRequest{
+		DN:           "uid=nonexistent,ou=users,dc=example,dc=com",
+		NewRDN:       "uid=newname",
+		DeleteOldRDN: true,
+	}
+
+	err := backend.ModifyDN(req)
+	if err != ErrEntryNotFound {
+		t.Errorf("expected ErrEntryNotFound, got %v", err)
+	}
+}
+
+// TestModifyDN_NewDNAlreadyExists tests error when new DN already exists.
+func TestModifyDN_NewDNAlreadyExists(t *testing.T) {
+	engine := newMockStorageEngine()
+	backend := NewBackend(engine, nil)
+
+	// Add the entry to rename
+	entry := storage.NewEntry("uid=alice,ou=users,dc=example,dc=com")
+	entry.SetStringAttribute("uid", "alice")
+	engine.entries["uid=alice,ou=users,dc=example,dc=com"] = entry
+
+	// Add parent
+	parent := storage.NewEntry("ou=users,dc=example,dc=com")
+	parent.SetStringAttribute("ou", "users")
+	engine.entries["ou=users,dc=example,dc=com"] = parent
+
+	// Add an entry at the target DN
+	existing := storage.NewEntry("uid=bob,ou=users,dc=example,dc=com")
+	existing.SetStringAttribute("uid", "bob")
+	engine.entries["uid=bob,ou=users,dc=example,dc=com"] = existing
+
+	req := &ModifyDNRequest{
+		DN:           "uid=alice,ou=users,dc=example,dc=com",
+		NewRDN:       "uid=bob",
+		DeleteOldRDN: true,
+	}
+
+	err := backend.ModifyDN(req)
+	if err != ErrEntryExists {
+		t.Errorf("expected ErrEntryExists, got %v", err)
+	}
+}
+
+// TestModifyDN_NewSuperiorNotFound tests error when new superior doesn't exist.
+func TestModifyDN_NewSuperiorNotFound(t *testing.T) {
+	engine := newMockStorageEngine()
+	backend := NewBackend(engine, nil)
+
+	// Add the entry to move
+	entry := storage.NewEntry("uid=alice,ou=users,dc=example,dc=com")
+	entry.SetStringAttribute("uid", "alice")
+	engine.entries["uid=alice,ou=users,dc=example,dc=com"] = entry
+
+	req := &ModifyDNRequest{
+		DN:           "uid=alice,ou=users,dc=example,dc=com",
+		NewRDN:       "uid=alice",
+		DeleteOldRDN: false,
+		NewSuperior:  "ou=nonexistent,dc=example,dc=com",
+	}
+
+	err := backend.ModifyDN(req)
+	if err != ErrNewSuperiorNotFound {
+		t.Errorf("expected ErrNewSuperiorNotFound, got %v", err)
+	}
+}
+
+// TestModifyDN_InvalidRequest tests validation errors.
+func TestModifyDN_InvalidRequest(t *testing.T) {
+	engine := newMockStorageEngine()
+	backend := NewBackend(engine, nil)
+
+	tests := []struct {
+		name    string
+		req     *ModifyDNRequest
+		wantErr error
+	}{
+		{
+			name:    "nil request",
+			req:     nil,
+			wantErr: ErrInvalidEntry,
+		},
+		{
+			name: "empty DN",
+			req: &ModifyDNRequest{
+				DN:           "",
+				NewRDN:       "uid=newname",
+				DeleteOldRDN: true,
+			},
+			wantErr: ErrInvalidDN,
+		},
+		{
+			name: "empty new RDN",
+			req: &ModifyDNRequest{
+				DN:           "uid=alice,ou=users,dc=example,dc=com",
+				NewRDN:       "",
+				DeleteOldRDN: true,
+			},
+			wantErr: ErrInvalidDN,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := backend.ModifyDN(tt.req)
+			if err != tt.wantErr {
+				t.Errorf("ModifyDN() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestModifyDN_DeleteOldRDN tests the DeleteOldRDN flag.
+func TestModifyDN_DeleteOldRDN(t *testing.T) {
+	engine := newMockStorageEngine()
+	backend := NewBackend(engine, nil)
+
+	// Add an entry with uid attribute
+	entry := storage.NewEntry("uid=alice,ou=users,dc=example,dc=com")
+	entry.SetStringAttribute("uid", "alice")
+	entry.SetStringAttribute("cn", "Alice")
+	engine.entries["uid=alice,ou=users,dc=example,dc=com"] = entry
+
+	// Add parent
+	parent := storage.NewEntry("ou=users,dc=example,dc=com")
+	parent.SetStringAttribute("ou", "users")
+	engine.entries["ou=users,dc=example,dc=com"] = parent
+
+	req := &ModifyDNRequest{
+		DN:           "uid=alice,ou=users,dc=example,dc=com",
+		NewRDN:       "uid=alice2",
+		DeleteOldRDN: true,
+	}
+
+	err := backend.ModifyDN(req)
+	if err != nil {
+		t.Fatalf("ModifyDN failed: %v", err)
+	}
+
+	// Verify new entry exists
+	newEntry, ok := engine.entries["uid=alice2,ou=users,dc=example,dc=com"]
+	if !ok {
+		t.Fatal("new entry should exist")
+	}
+
+	// Verify new RDN attribute is added
+	uidValues := newEntry.GetAttribute("uid")
+	hasNewUID := false
+	for _, v := range uidValues {
+		if string(v) == "alice2" {
+			hasNewUID = true
+			break
+		}
+	}
+	if !hasNewUID {
+		t.Error("new uid attribute value should be present")
+	}
+}
+
+// TestModifyDN_KeepOldRDN tests keeping the old RDN attribute.
+func TestModifyDN_KeepOldRDN(t *testing.T) {
+	engine := newMockStorageEngine()
+	backend := NewBackend(engine, nil)
+
+	// Add an entry with uid attribute
+	entry := storage.NewEntry("uid=alice,ou=users,dc=example,dc=com")
+	entry.SetStringAttribute("uid", "alice")
+	entry.SetStringAttribute("cn", "Alice")
+	engine.entries["uid=alice,ou=users,dc=example,dc=com"] = entry
+
+	// Add parent
+	parent := storage.NewEntry("ou=users,dc=example,dc=com")
+	parent.SetStringAttribute("ou", "users")
+	engine.entries["ou=users,dc=example,dc=com"] = parent
+
+	req := &ModifyDNRequest{
+		DN:           "uid=alice,ou=users,dc=example,dc=com",
+		NewRDN:       "uid=alice2",
+		DeleteOldRDN: false,
+	}
+
+	err := backend.ModifyDN(req)
+	if err != nil {
+		t.Fatalf("ModifyDN failed: %v", err)
+	}
+
+	// Verify new entry exists
+	newEntry, ok := engine.entries["uid=alice2,ou=users,dc=example,dc=com"]
+	if !ok {
+		t.Fatal("new entry should exist")
+	}
+
+	// Verify both old and new uid values are present
+	uidValues := newEntry.GetAttribute("uid")
+	hasOldUID := false
+	hasNewUID := false
+	for _, v := range uidValues {
+		if string(v) == "alice" {
+			hasOldUID = true
+		}
+		if string(v) == "alice2" {
+			hasNewUID = true
+		}
+	}
+	if !hasOldUID {
+		t.Error("old uid attribute value should be kept")
+	}
+	if !hasNewUID {
+		t.Error("new uid attribute value should be present")
+	}
+}

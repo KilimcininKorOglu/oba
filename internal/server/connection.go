@@ -198,6 +198,8 @@ func (c *Connection) dispatchMessage(msg *ldap.LDAPMessage) *ldap.LDAPMessage {
 		return c.handleDelete(msg)
 	case ldap.OperationType(ldap.ApplicationModifyRequest):
 		return c.handleModify(msg)
+	case ldap.OperationType(ldap.ApplicationModifyDNRequest):
+		return c.handleModifyDN(msg)
 	case ldap.OperationType(ldap.ApplicationAbandonRequest):
 		// Abandon requests don't get a response
 		return nil
@@ -407,6 +409,45 @@ func (c *Connection) handleModify(msg *ldap.LDAPMessage) *ldap.LDAPMessage {
 	}
 
 	return c.createModifyResponse(msg.MessageID, result.ResultCode, result.MatchedDN, result.DiagnosticMessage)
+}
+
+// handleModifyDN handles a modifydn request.
+func (c *Connection) handleModifyDN(msg *ldap.LDAPMessage) *ldap.LDAPMessage {
+	start := time.Now()
+
+	req, err := ldap.ParseModifyDNRequest(msg.Operation.Data)
+	if err != nil {
+		c.logger.Warn("modifydn request parse error",
+			"error", err.Error(),
+			"message_id", msg.MessageID)
+		return c.createModifyDNResponse(msg.MessageID, ldap.ResultProtocolError, "", "invalid modifydn request")
+	}
+
+	c.logger.Debug("modifydn request",
+		"entry", req.Entry,
+		"new_rdn", req.NewRDN,
+		"delete_old_rdn", req.DeleteOldRDN,
+		"new_superior", req.NewSuperior,
+		"message_id", msg.MessageID)
+
+	// Call the handler
+	result := c.handler.HandleModifyDN(c, req)
+
+	// Log result
+	if result.ResultCode == ldap.ResultSuccess {
+		c.logger.Info("modifydn successful",
+			"entry", req.Entry,
+			"new_rdn", req.NewRDN,
+			"duration_ms", time.Since(start).Milliseconds())
+	} else {
+		c.logger.Warn("modifydn failed",
+			"entry", req.Entry,
+			"result_code", result.ResultCode.String(),
+			"error", result.DiagnosticMessage,
+			"duration_ms", time.Since(start).Milliseconds())
+	}
+
+	return c.createModifyDNResponse(msg.MessageID, result.ResultCode, result.MatchedDN, result.DiagnosticMessage)
 }
 
 // ReadMessage reads the next LDAP message from the connection.
@@ -772,6 +813,35 @@ func (c *Connection) createModifyResponse(messageID int, resultCode ldap.ResultC
 		MessageID: messageID,
 		Operation: &ldap.RawOperation{
 			Tag:  ldap.ApplicationModifyResponse,
+			Data: encoder.Bytes(),
+		},
+	}
+}
+
+// createModifyDNResponse creates a ModifyDNResponse message.
+// ModifyDNResponse ::= [APPLICATION 13] LDAPResult
+func (c *Connection) createModifyDNResponse(messageID int, resultCode ldap.ResultCode, matchedDN, diagnosticMessage string) *ldap.LDAPMessage {
+	encoder := ber.NewBEREncoder(128)
+
+	// Write resultCode (ENUMERATED)
+	if err := encoder.WriteEnumerated(int64(resultCode)); err != nil {
+		return nil
+	}
+
+	// Write matchedDN (LDAPDN - OCTET STRING)
+	if err := encoder.WriteOctetString([]byte(matchedDN)); err != nil {
+		return nil
+	}
+
+	// Write diagnosticMessage (LDAPString - OCTET STRING)
+	if err := encoder.WriteOctetString([]byte(diagnosticMessage)); err != nil {
+		return nil
+	}
+
+	return &ldap.LDAPMessage{
+		MessageID: messageID,
+		Operation: &ldap.RawOperation{
+			Tag:  ldap.ApplicationModifyDNResponse,
 			Data: encoder.Bytes(),
 		},
 	}
