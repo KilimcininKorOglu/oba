@@ -12,6 +12,7 @@ import (
 	"github.com/oba-ldap/oba/internal/schema"
 	"github.com/oba-ldap/oba/internal/server"
 	"github.com/oba-ldap/oba/internal/storage"
+	"github.com/oba-ldap/oba/internal/storage/stream"
 )
 
 // Backend errors.
@@ -79,16 +80,18 @@ type Backend interface {
 
 // ObaBackend implements the Backend interface using the ObaDB storage engine.
 type ObaBackend struct {
-	engine storage.StorageEngine
-	schema *schema.Schema
-	rootDN string
-	rootPW string
+	engine       storage.StorageEngine
+	schema       *schema.Schema
+	rootDN       string
+	rootPW       string
+	changeStream *stream.Broker
 }
 
 // NewBackend creates a new ObaBackend with the given storage engine and configuration.
 func NewBackend(engine storage.StorageEngine, cfg *config.Config) *ObaBackend {
 	b := &ObaBackend{
-		engine: engine,
+		engine:       engine,
+		changeStream: stream.NewBroker(),
 	}
 
 	if cfg != nil {
@@ -264,6 +267,9 @@ func (b *ObaBackend) AddWithBindDN(entry *Entry, bindDN string) error {
 		return wrapStorageError(err)
 	}
 
+	// Emit change event after successful commit
+	b.emitChange(stream.OpInsert, normalizedDN, storageEntry)
+
 	return nil
 }
 
@@ -298,6 +304,9 @@ func (b *ObaBackend) Delete(dn string) error {
 	if err := b.engine.Commit(txn); err != nil {
 		return wrapStorageError(err)
 	}
+
+	// Emit change event after successful commit
+	b.emitChange(stream.OpDelete, normalizedDN, nil)
 
 	return nil
 }
@@ -411,6 +420,9 @@ func (b *ObaBackend) ModifyWithBindDN(dn string, changes []Modification, bindDN 
 	if err := b.engine.Commit(txn); err != nil {
 		return wrapStorageError(err)
 	}
+
+	// Emit change event after successful commit
+	b.emitChange(stream.OpUpdate, normalizedDN, modifiedStorageEntry)
 
 	return nil
 }
@@ -532,6 +544,47 @@ func wrapStorageError(err error) error {
 		return nil
 	}
 	return errors.New("backend: " + err.Error())
+}
+
+// Watch creates a new change stream subscription with the given filter.
+// Returns a Subscriber that receives matching events on its Channel.
+func (b *ObaBackend) Watch(filter stream.WatchFilter) *stream.Subscriber {
+	return b.changeStream.Subscribe(filter)
+}
+
+// WatchWithResume creates a subscription and replays events from the given token.
+// Returns stream.ErrTokenTooOld if the token is older than the oldest event in the replay buffer.
+func (b *ObaBackend) WatchWithResume(filter stream.WatchFilter, resumeToken uint64) (*stream.Subscriber, error) {
+	return b.changeStream.SubscribeWithResume(filter, resumeToken)
+}
+
+// Unwatch removes a subscription by ID.
+func (b *ObaBackend) Unwatch(id stream.SubscriberID) {
+	b.changeStream.Unsubscribe(id)
+}
+
+// ChangeStreamStats returns statistics about the change stream broker.
+func (b *ObaBackend) ChangeStreamStats() stream.BrokerStats {
+	return b.changeStream.Stats()
+}
+
+// emitChange publishes a change event to all matching subscribers.
+func (b *ObaBackend) emitChange(op stream.OperationType, dn string, entry *storage.Entry) {
+	if !b.changeStream.HasSubscribers() {
+		return
+	}
+	b.changeStream.Publish(stream.ChangeEvent{
+		Operation: op,
+		DN:        dn,
+		Entry:     entry,
+	})
+}
+
+// Close closes the backend and releases resources.
+func (b *ObaBackend) Close() {
+	if b.changeStream != nil {
+		b.changeStream.Close()
+	}
 }
 
 // Ensure ObaBackend implements Backend interface.
