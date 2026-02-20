@@ -15,8 +15,6 @@ import (
 var (
 	// ErrNewSuperiorNotFound is returned when the new superior DN does not exist.
 	ErrNewSuperiorNotFound = errors.New("backend: new superior not found")
-	// ErrNotAllowedOnNonLeaf is returned when trying to rename/move an entry with children.
-	ErrNotAllowedOnNonLeaf = errors.New("backend: operation not allowed on non-leaf entry")
 	// ErrAffectsMultipleDSAs is returned when the operation would affect multiple DSAs.
 	ErrAffectsMultipleDSAs = errors.New("backend: operation affects multiple DSAs")
 )
