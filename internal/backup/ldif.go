@@ -18,9 +18,6 @@ var (
 	ErrMissingDN       = errors.New("missing DN in LDIF entry")
 	ErrInvalidBase64   = errors.New("invalid base64 encoding")
 	ErrEmptyReader     = errors.New("empty reader")
-	ErrNilEngine       = errors.New("nil storage engine")
-	ErrImportFailed    = errors.New("import failed")
-	ErrExportFailed    = errors.New("export failed")
 	ErrTransactionFail = errors.New("transaction failed")
 )
 
