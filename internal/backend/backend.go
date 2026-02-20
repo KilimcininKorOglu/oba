@@ -55,6 +55,11 @@ type Backend interface {
 	// Returns an error if the entry already exists or is invalid.
 	Add(entry *Entry) error
 
+	// AddWithBindDN adds a new entry to the directory with operational attributes.
+	// The bindDN is used to set creatorsName and modifiersName.
+	// Returns an error if the entry already exists or is invalid.
+	AddWithBindDN(entry *Entry, bindDN string) error
+
 	// Delete removes an entry from the directory.
 	// Returns an error if the entry does not exist.
 	Delete(dn string) error
@@ -65,6 +70,11 @@ type Backend interface {
 	// Modify modifies an existing entry.
 	// Returns an error if the entry does not exist or the modifications are invalid.
 	Modify(dn string, changes []Modification) error
+
+	// ModifyWithBindDN modifies an existing entry with operational attributes.
+	// The bindDN is used to set modifiersName.
+	// Returns an error if the entry does not exist or the modifications are invalid.
+	ModifyWithBindDN(dn string, changes []Modification, bindDN string) error
 }
 
 // ObaBackend implements the Backend interface using the ObaDB storage engine.
@@ -202,13 +212,23 @@ func (b *ObaBackend) Search(baseDN string, scope int, f *filter.Filter) ([]*Entr
 }
 
 // Add adds a new entry to the directory.
+// This is a convenience method that calls AddWithBindDN with an empty bindDN.
 func (b *ObaBackend) Add(entry *Entry) error {
+	return b.AddWithBindDN(entry, "")
+}
+
+// AddWithBindDN adds a new entry to the directory with operational attributes.
+// The bindDN is used to set creatorsName and modifiersName.
+func (b *ObaBackend) AddWithBindDN(entry *Entry, bindDN string) error {
 	if entry == nil || entry.DN == "" {
 		return ErrInvalidEntry
 	}
 
 	normalizedDN := normalizeDN(entry.DN)
 	entry.DN = normalizedDN
+
+	// Set operational attributes for add operation
+	SetOperationalAttrs(entry, OpAdd, bindDN)
 
 	// Validate entry against schema if available
 	if b.schema != nil {
@@ -302,7 +322,14 @@ func (b *ObaBackend) HasChildren(dn string) (bool, error) {
 }
 
 // Modify modifies an existing entry.
+// This is a convenience method that calls ModifyWithBindDN with an empty bindDN.
 func (b *ObaBackend) Modify(dn string, changes []Modification) error {
+	return b.ModifyWithBindDN(dn, changes, "")
+}
+
+// ModifyWithBindDN modifies an existing entry with operational attributes.
+// The bindDN is used to set modifiersName.
+func (b *ObaBackend) ModifyWithBindDN(dn string, changes []Modification, bindDN string) error {
 	if dn == "" {
 		return ErrInvalidDN
 	}
@@ -359,6 +386,9 @@ func (b *ObaBackend) Modify(dn string, changes []Modification) error {
 			}
 		}
 	}
+
+	// Set operational attributes for modify operation
+	SetOperationalAttrs(entry, OpModify, bindDN)
 
 	// Validate modified entry against schema if available
 	if b.schema != nil {
