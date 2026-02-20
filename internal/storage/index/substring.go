@@ -13,7 +13,6 @@ import (
 // SubstringIndex errors.
 var (
 	ErrIndexNotInitialized = errors.New("substring index not initialized")
-	ErrInvalidPageManager  = errors.New("invalid page manager")
 	ErrEmptyValue          = errors.New("value cannot be empty")
 	ErrEmptyPattern        = errors.New("pattern cannot be empty")
 )
