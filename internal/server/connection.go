@@ -200,6 +200,8 @@ func (c *Connection) dispatchMessage(msg *ldap.LDAPMessage) *ldap.LDAPMessage {
 		return c.handleModify(msg)
 	case ldap.OperationType(ldap.ApplicationModifyDNRequest):
 		return c.handleModifyDN(msg)
+	case ldap.OperationType(ldap.ApplicationCompareRequest):
+		return c.handleCompare(msg)
 	case ldap.OperationType(ldap.ApplicationAbandonRequest):
 		// Abandon requests don't get a response
 		return nil
@@ -448,6 +450,49 @@ func (c *Connection) handleModifyDN(msg *ldap.LDAPMessage) *ldap.LDAPMessage {
 	}
 
 	return c.createModifyDNResponse(msg.MessageID, result.ResultCode, result.MatchedDN, result.DiagnosticMessage)
+}
+
+// handleCompare handles a compare request.
+func (c *Connection) handleCompare(msg *ldap.LDAPMessage) *ldap.LDAPMessage {
+	start := time.Now()
+
+	req, err := ldap.ParseCompareRequest(msg.Operation.Data)
+	if err != nil {
+		c.logger.Warn("compare request parse error",
+			"error", err.Error(),
+			"message_id", msg.MessageID)
+		return c.createCompareResponse(msg.MessageID, ldap.ResultProtocolError, "", "invalid compare request")
+	}
+
+	c.logger.Debug("compare request",
+		"dn", req.DN,
+		"attribute", req.Attribute,
+		"message_id", msg.MessageID)
+
+	// Call the handler
+	result := c.handler.HandleCompare(c, req)
+
+	// Log result
+	if result.ResultCode == ldap.ResultCompareTrue {
+		c.logger.Info("compare result: true",
+			"dn", req.DN,
+			"attribute", req.Attribute,
+			"duration_ms", time.Since(start).Milliseconds())
+	} else if result.ResultCode == ldap.ResultCompareFalse {
+		c.logger.Info("compare result: false",
+			"dn", req.DN,
+			"attribute", req.Attribute,
+			"duration_ms", time.Since(start).Milliseconds())
+	} else {
+		c.logger.Warn("compare failed",
+			"dn", req.DN,
+			"attribute", req.Attribute,
+			"result_code", result.ResultCode.String(),
+			"error", result.DiagnosticMessage,
+			"duration_ms", time.Since(start).Milliseconds())
+	}
+
+	return c.createCompareResponse(msg.MessageID, result.ResultCode, result.MatchedDN, result.DiagnosticMessage)
 }
 
 // ReadMessage reads the next LDAP message from the connection.
@@ -842,6 +887,35 @@ func (c *Connection) createModifyDNResponse(messageID int, resultCode ldap.Resul
 		MessageID: messageID,
 		Operation: &ldap.RawOperation{
 			Tag:  ldap.ApplicationModifyDNResponse,
+			Data: encoder.Bytes(),
+		},
+	}
+}
+
+// createCompareResponse creates a CompareResponse message.
+// CompareResponse ::= [APPLICATION 15] LDAPResult
+func (c *Connection) createCompareResponse(messageID int, resultCode ldap.ResultCode, matchedDN, diagnosticMessage string) *ldap.LDAPMessage {
+	encoder := ber.NewBEREncoder(128)
+
+	// Write resultCode (ENUMERATED)
+	if err := encoder.WriteEnumerated(int64(resultCode)); err != nil {
+		return nil
+	}
+
+	// Write matchedDN (LDAPDN - OCTET STRING)
+	if err := encoder.WriteOctetString([]byte(matchedDN)); err != nil {
+		return nil
+	}
+
+	// Write diagnosticMessage (LDAPString - OCTET STRING)
+	if err := encoder.WriteOctetString([]byte(diagnosticMessage)); err != nil {
+		return nil
+	}
+
+	return &ldap.LDAPMessage{
+		MessageID: messageID,
+		Operation: &ldap.RawOperation{
+			Tag:  ldap.ApplicationCompareResponse,
 			Data: encoder.Bytes(),
 		},
 	}
