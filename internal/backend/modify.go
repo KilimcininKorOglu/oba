@@ -96,26 +96,3 @@ func (b *ObaBackend) ModifyEntry(dn string, changes []server.Modification) error
 
 	return nil
 }
-
-// GetEntry retrieves an entry by DN for external use.
-// Returns nil if the entry does not exist.
-func (b *ObaBackend) GetEntry(dn string) (*Entry, error) {
-	if dn == "" {
-		return nil, ErrInvalidDN
-	}
-
-	normalizedDN := normalizeDN(dn)
-
-	txn, err := b.engine.Begin()
-	if err != nil {
-		return nil, wrapStorageError(err)
-	}
-	defer b.engine.Rollback(txn)
-
-	storageEntry, err := b.engine.Get(txn, normalizedDN)
-	if err != nil {
-		return nil, nil // Entry not found, return nil without error
-	}
-
-	return convertFromStorageEntry(storageEntry), nil
-}

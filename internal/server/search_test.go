@@ -2,6 +2,7 @@
 package server
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/oba-ldap/oba/internal/ldap"
@@ -9,6 +10,128 @@ import (
 )
 
 // Note: mockBackend is defined in bind_test.go and reused here.
+
+// mockSearchBackend implements the SearchBackend interface for testing.
+type mockSearchBackend struct {
+	entries map[string]*storage.Entry
+	err     error
+}
+
+func newMockSearchBackend() *mockSearchBackend {
+	return &mockSearchBackend{
+		entries: make(map[string]*storage.Entry),
+	}
+}
+
+func (m *mockSearchBackend) GetEntry(dn string) (*storage.Entry, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	normalizedDN := normalizeDN(dn)
+	for storedDN, entry := range m.entries {
+		if normalizeDN(storedDN) == normalizedDN {
+			return entry, nil
+		}
+	}
+	return nil, nil
+}
+
+func (m *mockSearchBackend) addEntry(entry *storage.Entry) {
+	m.entries[entry.DN] = entry
+}
+
+// SearchByDN implements SearchBackend.SearchByDN for testing.
+func (m *mockSearchBackend) SearchByDN(baseDN string, scope storage.Scope) storage.Iterator {
+	normalizedBaseDN := normalizeDN(baseDN)
+	
+	var entries []*storage.Entry
+	
+	switch scope {
+	case storage.ScopeBase:
+		// Return only the base entry
+		for storedDN, entry := range m.entries {
+			if normalizeDN(storedDN) == normalizedBaseDN {
+				entries = append(entries, entry)
+				break
+			}
+		}
+	case storage.ScopeOneLevel:
+		// Return immediate children of the base DN
+		for storedDN, entry := range m.entries {
+			if isImmediateChild(normalizedBaseDN, normalizeDN(storedDN)) {
+				entries = append(entries, entry)
+			}
+		}
+	case storage.ScopeSubtree:
+		// Return base and all descendants
+		for storedDN, entry := range m.entries {
+			normalizedStoredDN := normalizeDN(storedDN)
+			if normalizedStoredDN == normalizedBaseDN || isDescendant(normalizedBaseDN, normalizedStoredDN) {
+				entries = append(entries, entry)
+			}
+		}
+	}
+	
+	return &mockIterator{entries: entries, index: -1}
+}
+
+// isImmediateChild checks if childDN is an immediate child of parentDN.
+func isImmediateChild(parentDN, childDN string) bool {
+	if parentDN == "" {
+		// Root - check if childDN has only one component
+		parts := strings.Split(childDN, ",")
+		return len(parts) == 1 && childDN != ""
+	}
+	
+	// childDN should end with ",parentDN" and have exactly one more component
+	suffix := "," + parentDN
+	if !strings.HasSuffix(childDN, suffix) {
+		return false
+	}
+	
+	// Get the prefix (the part before the parent DN)
+	prefix := strings.TrimSuffix(childDN, suffix)
+	
+	// The prefix should not contain any commas (single component)
+	return prefix != "" && !strings.Contains(prefix, ",")
+}
+
+// isDescendant checks if childDN is a descendant of parentDN.
+func isDescendant(parentDN, childDN string) bool {
+	if parentDN == "" {
+		return childDN != ""
+	}
+	
+	suffix := "," + parentDN
+	return strings.HasSuffix(childDN, suffix)
+}
+
+// mockIterator implements storage.Iterator for testing.
+type mockIterator struct {
+	entries []*storage.Entry
+	index   int
+	err     error
+}
+
+func (it *mockIterator) Next() bool {
+	it.index++
+	return it.index < len(it.entries)
+}
+
+func (it *mockIterator) Entry() *storage.Entry {
+	if it.index < 0 || it.index >= len(it.entries) {
+		return nil
+	}
+	return it.entries[it.index]
+}
+
+func (it *mockIterator) Error() error {
+	return it.err
+}
+
+func (it *mockIterator) Close() {
+	// No-op for mock
+}
 
 // TestSearchHandlerImpl_Handle_BaseScope tests base scope search.
 func TestSearchHandlerImpl_Handle_BaseScope(t *testing.T) {
@@ -189,10 +312,12 @@ func TestSearchHandlerImpl_Handle_NoBackend(t *testing.T) {
 }
 
 // TestSearchHandlerImpl_Handle_UnsupportedScope tests unsupported search scopes.
+// When SearchBackend is not configured, OneLevel and Subtree should return UnwillingToPerform.
 func TestSearchHandlerImpl_Handle_UnsupportedScope(t *testing.T) {
 	backend := newMockBackend()
 	config := &SearchConfig{
 		Backend: backend,
+		// SearchBackend is nil, so OneLevel and Subtree are not supported
 	}
 	handler := NewSearchHandler(config)
 
@@ -217,6 +342,418 @@ func TestSearchHandlerImpl_Handle_UnsupportedScope(t *testing.T) {
 				t.Errorf("Expected ResultUnwillingToPerform, got %v", result.ResultCode)
 			}
 		})
+	}
+}
+
+// TestSearchHandlerImpl_Handle_OneLevelScope tests one-level scope search.
+func TestSearchHandlerImpl_Handle_OneLevelScope(t *testing.T) {
+	backend := newMockSearchBackend()
+
+	// Create a directory structure:
+	// dc=example,dc=com (base)
+	//   ou=users,dc=example,dc=com (child)
+	//     uid=alice,ou=users,dc=example,dc=com (grandchild)
+	//     uid=bob,ou=users,dc=example,dc=com (grandchild)
+	//   ou=groups,dc=example,dc=com (child)
+	//     cn=admins,ou=groups,dc=example,dc=com (grandchild)
+
+	baseEntry := storage.NewEntry("dc=example,dc=com")
+	baseEntry.SetStringAttribute("dc", "example")
+	baseEntry.SetStringAttribute("objectClass", "domain")
+	backend.addEntry(baseEntry)
+
+	usersOU := storage.NewEntry("ou=users,dc=example,dc=com")
+	usersOU.SetStringAttribute("ou", "users")
+	usersOU.SetStringAttribute("objectClass", "organizationalUnit")
+	backend.addEntry(usersOU)
+
+	groupsOU := storage.NewEntry("ou=groups,dc=example,dc=com")
+	groupsOU.SetStringAttribute("ou", "groups")
+	groupsOU.SetStringAttribute("objectClass", "organizationalUnit")
+	backend.addEntry(groupsOU)
+
+	alice := storage.NewEntry("uid=alice,ou=users,dc=example,dc=com")
+	alice.SetStringAttribute("uid", "alice")
+	alice.SetStringAttribute("cn", "Alice Smith")
+	alice.SetStringAttribute("objectClass", "inetOrgPerson")
+	backend.addEntry(alice)
+
+	bob := storage.NewEntry("uid=bob,ou=users,dc=example,dc=com")
+	bob.SetStringAttribute("uid", "bob")
+	bob.SetStringAttribute("cn", "Bob Jones")
+	bob.SetStringAttribute("objectClass", "inetOrgPerson")
+	backend.addEntry(bob)
+
+	admins := storage.NewEntry("cn=admins,ou=groups,dc=example,dc=com")
+	admins.SetStringAttribute("cn", "admins")
+	admins.SetStringAttribute("objectClass", "groupOfNames")
+	backend.addEntry(admins)
+
+	config := &SearchConfig{
+		Backend:       backend,
+		SearchBackend: backend,
+	}
+	handler := NewSearchHandler(config)
+
+	tests := []struct {
+		name          string
+		baseDN        string
+		filter        *ldap.SearchFilter
+		expectedCode  ldap.ResultCode
+		expectedCount int
+		checkEntries  func(t *testing.T, entries []*SearchEntry)
+	}{
+		{
+			name:          "one level from root - returns immediate children",
+			baseDN:        "dc=example,dc=com",
+			filter:        nil,
+			expectedCode:  ldap.ResultSuccess,
+			expectedCount: 2, // ou=users and ou=groups
+			checkEntries: func(t *testing.T, entries []*SearchEntry) {
+				dns := make(map[string]bool)
+				for _, e := range entries {
+					dns[normalizeDN(e.DN)] = true
+				}
+				if !dns["ou=users,dc=example,dc=com"] {
+					t.Error("Expected ou=users,dc=example,dc=com in results")
+				}
+				if !dns["ou=groups,dc=example,dc=com"] {
+					t.Error("Expected ou=groups,dc=example,dc=com in results")
+				}
+			},
+		},
+		{
+			name:          "one level from ou=users - returns users",
+			baseDN:        "ou=users,dc=example,dc=com",
+			filter:        nil,
+			expectedCode:  ldap.ResultSuccess,
+			expectedCount: 2, // uid=alice and uid=bob
+			checkEntries: func(t *testing.T, entries []*SearchEntry) {
+				dns := make(map[string]bool)
+				for _, e := range entries {
+					dns[normalizeDN(e.DN)] = true
+				}
+				if !dns["uid=alice,ou=users,dc=example,dc=com"] {
+					t.Error("Expected uid=alice,ou=users,dc=example,dc=com in results")
+				}
+				if !dns["uid=bob,ou=users,dc=example,dc=com"] {
+					t.Error("Expected uid=bob,ou=users,dc=example,dc=com in results")
+				}
+			},
+		},
+		{
+			name:   "one level with filter - returns matching children",
+			baseDN: "ou=users,dc=example,dc=com",
+			filter: &ldap.SearchFilter{
+				Type:      ldap.FilterTagEquality,
+				Attribute: "uid",
+				Value:     []byte("alice"),
+			},
+			expectedCode:  ldap.ResultSuccess,
+			expectedCount: 1,
+			checkEntries: func(t *testing.T, entries []*SearchEntry) {
+				if normalizeDN(entries[0].DN) != "uid=alice,ou=users,dc=example,dc=com" {
+					t.Errorf("Expected uid=alice,ou=users,dc=example,dc=com, got %s", entries[0].DN)
+				}
+			},
+		},
+		{
+			name:          "one level from leaf - returns no entries",
+			baseDN:        "uid=alice,ou=users,dc=example,dc=com",
+			filter:        nil,
+			expectedCode:  ldap.ResultSuccess,
+			expectedCount: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &ldap.SearchRequest{
+				BaseObject: tt.baseDN,
+				Scope:      ldap.ScopeSingleLevel,
+				Filter:     tt.filter,
+			}
+
+			result := handler.Handle(nil, req)
+
+			if result.ResultCode != tt.expectedCode {
+				t.Errorf("Expected result code %v, got %v", tt.expectedCode, result.ResultCode)
+			}
+
+			if len(result.Entries) != tt.expectedCount {
+				t.Errorf("Expected %d entries, got %d", tt.expectedCount, len(result.Entries))
+			}
+
+			if tt.checkEntries != nil && len(result.Entries) > 0 {
+				tt.checkEntries(t, result.Entries)
+			}
+		})
+	}
+}
+
+// TestSearchHandlerImpl_Handle_SubtreeScope tests subtree scope search.
+func TestSearchHandlerImpl_Handle_SubtreeScope(t *testing.T) {
+	backend := newMockSearchBackend()
+
+	// Create a directory structure (same as OneLevel test)
+	baseEntry := storage.NewEntry("dc=example,dc=com")
+	baseEntry.SetStringAttribute("dc", "example")
+	baseEntry.SetStringAttribute("objectClass", "domain")
+	backend.addEntry(baseEntry)
+
+	usersOU := storage.NewEntry("ou=users,dc=example,dc=com")
+	usersOU.SetStringAttribute("ou", "users")
+	usersOU.SetStringAttribute("objectClass", "organizationalUnit")
+	backend.addEntry(usersOU)
+
+	groupsOU := storage.NewEntry("ou=groups,dc=example,dc=com")
+	groupsOU.SetStringAttribute("ou", "groups")
+	groupsOU.SetStringAttribute("objectClass", "organizationalUnit")
+	backend.addEntry(groupsOU)
+
+	alice := storage.NewEntry("uid=alice,ou=users,dc=example,dc=com")
+	alice.SetStringAttribute("uid", "alice")
+	alice.SetStringAttribute("cn", "Alice Smith")
+	alice.SetStringAttribute("objectClass", "inetOrgPerson")
+	backend.addEntry(alice)
+
+	bob := storage.NewEntry("uid=bob,ou=users,dc=example,dc=com")
+	bob.SetStringAttribute("uid", "bob")
+	bob.SetStringAttribute("cn", "Bob Jones")
+	bob.SetStringAttribute("objectClass", "inetOrgPerson")
+	backend.addEntry(bob)
+
+	admins := storage.NewEntry("cn=admins,ou=groups,dc=example,dc=com")
+	admins.SetStringAttribute("cn", "admins")
+	admins.SetStringAttribute("objectClass", "groupOfNames")
+	backend.addEntry(admins)
+
+	config := &SearchConfig{
+		Backend:       backend,
+		SearchBackend: backend,
+	}
+	handler := NewSearchHandler(config)
+
+	tests := []struct {
+		name          string
+		baseDN        string
+		filter        *ldap.SearchFilter
+		expectedCode  ldap.ResultCode
+		expectedCount int
+		checkEntries  func(t *testing.T, entries []*SearchEntry)
+	}{
+		{
+			name:          "subtree from root - returns all entries",
+			baseDN:        "dc=example,dc=com",
+			filter:        nil,
+			expectedCode:  ldap.ResultSuccess,
+			expectedCount: 6, // base + 2 OUs + 2 users + 1 group
+		},
+		{
+			name:          "subtree from ou=users - returns OU and users",
+			baseDN:        "ou=users,dc=example,dc=com",
+			filter:        nil,
+			expectedCode:  ldap.ResultSuccess,
+			expectedCount: 3, // ou=users + alice + bob
+			checkEntries: func(t *testing.T, entries []*SearchEntry) {
+				dns := make(map[string]bool)
+				for _, e := range entries {
+					dns[normalizeDN(e.DN)] = true
+				}
+				if !dns["ou=users,dc=example,dc=com"] {
+					t.Error("Expected ou=users,dc=example,dc=com in results")
+				}
+				if !dns["uid=alice,ou=users,dc=example,dc=com"] {
+					t.Error("Expected uid=alice,ou=users,dc=example,dc=com in results")
+				}
+				if !dns["uid=bob,ou=users,dc=example,dc=com"] {
+					t.Error("Expected uid=bob,ou=users,dc=example,dc=com in results")
+				}
+			},
+		},
+		{
+			name:   "subtree with filter - returns matching entries",
+			baseDN: "dc=example,dc=com",
+			filter: &ldap.SearchFilter{
+				Type:      ldap.FilterTagEquality,
+				Attribute: "objectClass",
+				Value:     []byte("inetOrgPerson"),
+			},
+			expectedCode:  ldap.ResultSuccess,
+			expectedCount: 2, // alice and bob
+		},
+		{
+			name:          "subtree from leaf - returns only the leaf",
+			baseDN:        "uid=alice,ou=users,dc=example,dc=com",
+			filter:        nil,
+			expectedCode:  ldap.ResultSuccess,
+			expectedCount: 1,
+			checkEntries: func(t *testing.T, entries []*SearchEntry) {
+				if normalizeDN(entries[0].DN) != "uid=alice,ou=users,dc=example,dc=com" {
+					t.Errorf("Expected uid=alice,ou=users,dc=example,dc=com, got %s", entries[0].DN)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &ldap.SearchRequest{
+				BaseObject: tt.baseDN,
+				Scope:      ldap.ScopeWholeSubtree,
+				Filter:     tt.filter,
+			}
+
+			result := handler.Handle(nil, req)
+
+			if result.ResultCode != tt.expectedCode {
+				t.Errorf("Expected result code %v, got %v", tt.expectedCode, result.ResultCode)
+			}
+
+			if len(result.Entries) != tt.expectedCount {
+				t.Errorf("Expected %d entries, got %d", tt.expectedCount, len(result.Entries))
+			}
+
+			if tt.checkEntries != nil && len(result.Entries) > 0 {
+				tt.checkEntries(t, result.Entries)
+			}
+		})
+	}
+}
+
+// TestSearchHandlerImpl_Handle_SizeLimit tests size limit enforcement.
+func TestSearchHandlerImpl_Handle_SizeLimit(t *testing.T) {
+	backend := newMockSearchBackend()
+
+	// Create multiple entries
+	for i := 0; i < 10; i++ {
+		entry := storage.NewEntry("uid=user" + string(rune('0'+i)) + ",ou=users,dc=example,dc=com")
+		entry.SetStringAttribute("uid", "user"+string(rune('0'+i)))
+		entry.SetStringAttribute("objectClass", "inetOrgPerson")
+		backend.addEntry(entry)
+	}
+
+	config := &SearchConfig{
+		Backend:       backend,
+		SearchBackend: backend,
+		MaxSizeLimit:  100,
+	}
+	handler := NewSearchHandler(config)
+
+	tests := []struct {
+		name          string
+		sizeLimit     int
+		expectedCode  ldap.ResultCode
+		expectedCount int
+	}{
+		{
+			name:          "size limit 3 - returns 3 entries with SizeLimitExceeded",
+			sizeLimit:     3,
+			expectedCode:  ldap.ResultSizeLimitExceeded,
+			expectedCount: 3,
+		},
+		{
+			name:          "size limit 0 (unlimited) - returns all entries",
+			sizeLimit:     0,
+			expectedCode:  ldap.ResultSuccess,
+			expectedCount: 10,
+		},
+		{
+			name:          "size limit larger than results - returns all entries",
+			sizeLimit:     100,
+			expectedCode:  ldap.ResultSuccess,
+			expectedCount: 10,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &ldap.SearchRequest{
+				BaseObject: "ou=users,dc=example,dc=com",
+				Scope:      ldap.ScopeSingleLevel,
+				SizeLimit:  tt.sizeLimit,
+			}
+
+			result := handler.Handle(nil, req)
+
+			if result.ResultCode != tt.expectedCode {
+				t.Errorf("Expected result code %v, got %v", tt.expectedCode, result.ResultCode)
+			}
+
+			if len(result.Entries) != tt.expectedCount {
+				t.Errorf("Expected %d entries, got %d", tt.expectedCount, len(result.Entries))
+			}
+		})
+	}
+}
+
+// TestOneLevelSearcher_Search tests the OneLevelSearcher directly.
+func TestOneLevelSearcher_Search(t *testing.T) {
+	backend := newMockSearchBackend()
+
+	// Add test entries
+	parent := storage.NewEntry("dc=example,dc=com")
+	parent.SetStringAttribute("dc", "example")
+	backend.addEntry(parent)
+
+	child1 := storage.NewEntry("ou=users,dc=example,dc=com")
+	child1.SetStringAttribute("ou", "users")
+	backend.addEntry(child1)
+
+	child2 := storage.NewEntry("ou=groups,dc=example,dc=com")
+	child2.SetStringAttribute("ou", "groups")
+	backend.addEntry(child2)
+
+	searcher := NewOneLevelSearcher(backend)
+
+	req := &ldap.SearchRequest{
+		BaseObject: "dc=example,dc=com",
+		Scope:      ldap.ScopeSingleLevel,
+	}
+
+	result := searcher.Search(req, nil)
+
+	if result.ResultCode != ldap.ResultSuccess {
+		t.Errorf("Expected ResultSuccess, got %v", result.ResultCode)
+	}
+
+	if len(result.Entries) != 2 {
+		t.Errorf("Expected 2 entries, got %d", len(result.Entries))
+	}
+}
+
+// TestSubtreeSearcher_Search tests the SubtreeSearcher directly.
+func TestSubtreeSearcher_Search(t *testing.T) {
+	backend := newMockSearchBackend()
+
+	// Add test entries
+	parent := storage.NewEntry("dc=example,dc=com")
+	parent.SetStringAttribute("dc", "example")
+	backend.addEntry(parent)
+
+	child := storage.NewEntry("ou=users,dc=example,dc=com")
+	child.SetStringAttribute("ou", "users")
+	backend.addEntry(child)
+
+	grandchild := storage.NewEntry("uid=alice,ou=users,dc=example,dc=com")
+	grandchild.SetStringAttribute("uid", "alice")
+	backend.addEntry(grandchild)
+
+	searcher := NewSubtreeSearcher(backend)
+
+	req := &ldap.SearchRequest{
+		BaseObject: "dc=example,dc=com",
+		Scope:      ldap.ScopeWholeSubtree,
+	}
+
+	result := searcher.Search(req, nil)
+
+	if result.ResultCode != ldap.ResultSuccess {
+		t.Errorf("Expected ResultSuccess, got %v", result.ResultCode)
+	}
+
+	if len(result.Entries) != 3 {
+		t.Errorf("Expected 3 entries, got %d", len(result.Entries))
 	}
 }
 

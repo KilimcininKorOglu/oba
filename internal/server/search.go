@@ -9,10 +9,22 @@ import (
 	"github.com/oba-ldap/oba/internal/storage"
 )
 
+// SearchBackend defines the interface for search operations.
+// It extends the basic Backend interface with search capabilities.
+type SearchBackend interface {
+	Backend
+	// SearchByDN searches for entries by DN with the given scope.
+	// Returns an iterator over matching entries.
+	SearchByDN(baseDN string, scope storage.Scope) storage.Iterator
+}
+
 // SearchConfig holds configuration for the search handler.
 type SearchConfig struct {
 	// Backend is the directory backend for entry lookups.
 	Backend Backend
+	// SearchBackend is the directory backend for search operations.
+	// If nil, Backend is used (if it implements SearchBackend).
+	SearchBackend SearchBackend
 	// MaxSizeLimit is the maximum number of entries to return (0 = unlimited).
 	MaxSizeLimit int
 	// MaxTimeLimit is the maximum time limit in seconds (0 = unlimited).
@@ -35,8 +47,10 @@ func NewSearchConfig() *SearchConfig {
 
 // SearchHandlerImpl implements the search operation handler.
 type SearchHandlerImpl struct {
-	config    *SearchConfig
-	evaluator *filter.Evaluator
+	config          *SearchConfig
+	evaluator       *filter.Evaluator
+	oneLevelSearcher *OneLevelSearcher
+	subtreeSearcher  *SubtreeSearcher
 }
 
 // NewSearchHandler creates a new search handler with the given configuration.
@@ -44,10 +58,22 @@ func NewSearchHandler(config *SearchConfig) *SearchHandlerImpl {
 	if config == nil {
 		config = NewSearchConfig()
 	}
-	return &SearchHandlerImpl{
+	
+	handler := &SearchHandlerImpl{
 		config:    config,
 		evaluator: filter.NewEvaluator(nil),
 	}
+	
+	// Initialize searchers if SearchBackend is available
+	if config.SearchBackend != nil {
+		handler.oneLevelSearcher = NewOneLevelSearcher(config.SearchBackend)
+		handler.subtreeSearcher = NewSubtreeSearcher(config.SearchBackend)
+	} else if sb, ok := config.Backend.(SearchBackend); ok {
+		handler.oneLevelSearcher = NewOneLevelSearcher(sb)
+		handler.subtreeSearcher = NewSubtreeSearcher(sb)
+	}
+	
+	return handler
 }
 
 // Handle processes a search request and returns the result.
@@ -78,21 +104,9 @@ func (h *SearchHandlerImpl) Handle(conn *Connection, req *ldap.SearchRequest) *S
 	case ldap.ScopeBaseObject:
 		return h.searchBase(conn, req)
 	case ldap.ScopeSingleLevel:
-		// Single level search - not implemented in this task
-		return &SearchResult{
-			OperationResult: OperationResult{
-				ResultCode:        ldap.ResultUnwillingToPerform,
-				DiagnosticMessage: "single level search not implemented",
-			},
-		}
+		return h.searchOneLevel(conn, req)
 	case ldap.ScopeWholeSubtree:
-		// Subtree search - not implemented in this task
-		return &SearchResult{
-			OperationResult: OperationResult{
-				ResultCode:        ldap.ResultUnwillingToPerform,
-				DiagnosticMessage: "subtree search not implemented",
-			},
-		}
+		return h.searchSubtree(conn, req)
 	default:
 		return &SearchResult{
 			OperationResult: OperationResult{
@@ -101,6 +115,32 @@ func (h *SearchHandlerImpl) Handle(conn *Connection, req *ldap.SearchRequest) *S
 			},
 		}
 	}
+}
+
+// searchOneLevel performs a one-level scope search (returns immediate children).
+func (h *SearchHandlerImpl) searchOneLevel(conn *Connection, req *ldap.SearchRequest) *SearchResult {
+	if h.oneLevelSearcher == nil {
+		return &SearchResult{
+			OperationResult: OperationResult{
+				ResultCode:        ldap.ResultUnwillingToPerform,
+				DiagnosticMessage: "single level search not configured",
+			},
+		}
+	}
+	return h.oneLevelSearcher.Search(req, h.config)
+}
+
+// searchSubtree performs a subtree scope search (returns base and all descendants).
+func (h *SearchHandlerImpl) searchSubtree(conn *Connection, req *ldap.SearchRequest) *SearchResult {
+	if h.subtreeSearcher == nil {
+		return &SearchResult{
+			OperationResult: OperationResult{
+				ResultCode:        ldap.ResultUnwillingToPerform,
+				DiagnosticMessage: "subtree search not configured",
+			},
+		}
+	}
+	return h.subtreeSearcher.Search(req, h.config)
 }
 
 // validateRequest validates the search request parameters.
