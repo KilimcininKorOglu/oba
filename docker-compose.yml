@@ -4,12 +4,12 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "389:389"
-      - "636:636"
+      - "1389:1389"
     volumes:
       - ./docker-data:/var/lib/oba
     environment:
       - OBA_LOG_LEVEL=debug
+    command: ["./bin/oba", "serve", "--config", "/var/lib/oba/config.yaml"]
     restart: unless-stopped
 
   oba-dev:
@@ -17,13 +17,12 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "1389:389"
-      - "1636:636"
+      - "2389:1389"
     volumes:
       - .:/app
       - ./docker-data:/var/lib/oba
     environment:
       - OBA_LOG_LEVEL=debug
-    command: ["go", "run", "./cmd/oba", "serve"]
+    command: ["go", "run", "./cmd/oba", "serve", "--config", "/var/lib/oba/config.yaml"]
     profiles:
       - dev
