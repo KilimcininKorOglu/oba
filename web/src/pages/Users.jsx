@@ -26,7 +26,7 @@ export default function Users() {
       const data = await api.searchEntries({
         baseDN: base,
         scope: 'sub',
-        filter: '(objectClass=person)',
+        filter: '(|(objectClass=person)(objectClass=inetOrgPerson)(objectClass=organizationalPerson)(objectClass=user))',
         limit: 1000
       });
       setUsers(data.entries || []);

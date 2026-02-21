@@ -14,6 +14,7 @@ import (
 	"github.com/KilimcininKorOglu/oba/internal/acl"
 	"github.com/KilimcininKorOglu/oba/internal/backend"
 	"github.com/KilimcininKorOglu/oba/internal/config"
+	"github.com/KilimcininKorOglu/oba/internal/filter"
 	"github.com/KilimcininKorOglu/oba/internal/ldap"
 	"github.com/KilimcininKorOglu/oba/internal/logging"
 )
@@ -141,8 +142,17 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Note: filter parameter is accepted but not yet implemented
-	// filterStr := query.Get("filter")
+	// Parse filter if provided
+	var searchFilter *filter.Filter
+	filterStr := query.Get("filter")
+	if filterStr != "" {
+		var err error
+		searchFilter, err = filter.Parse(filterStr)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_filter", "invalid filter syntax: "+err.Error())
+			return
+		}
+	}
 
 	offset := 0
 	if o := query.Get("offset"); o != "" {
@@ -185,7 +195,7 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 	var searchErr error
 
 	go func() {
-		entries, searchErr = h.backend.Search(baseDN, int(scope), nil)
+		entries, searchErr = h.backend.Search(baseDN, int(scope), searchFilter)
 		close(searchDone)
 	}()
 
@@ -590,8 +600,17 @@ func (h *Handlers) HandleStreamSearch(w http.ResponseWriter, r *http.Request) {
 		scope = ldap.ScopeSingleLevel
 	}
 
-	// Note: filter parameter is accepted but not yet implemented
-	// filterStr := query.Get("filter")
+	// Parse filter if provided
+	var searchFilter *filter.Filter
+	filterStr := query.Get("filter")
+	if filterStr != "" {
+		var err error
+		searchFilter, err = filter.Parse(filterStr)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_filter", "invalid filter syntax: "+err.Error())
+			return
+		}
+	}
 
 	w.Header().Set("Content-Type", "application/x-ndjson")
 	w.Header().Set("Transfer-Encoding", "chunked")
@@ -602,7 +621,7 @@ func (h *Handlers) HandleStreamSearch(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 	}
 
-	entries, err := h.backend.Search(baseDN, int(scope), nil)
+	entries, err := h.backend.Search(baseDN, int(scope), searchFilter)
 	if err != nil {
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return

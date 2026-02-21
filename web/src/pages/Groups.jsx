@@ -26,7 +26,7 @@ export default function Groups() {
       const data = await api.searchEntries({
         baseDN: base,
         scope: 'sub',
-        filter: '(|(objectClass=groupOfNames)(objectClass=groupOfUniqueNames)(objectClass=posixGroup))',
+        filter: '(|(objectClass=groupOfNames)(objectClass=groupOfUniqueNames)(objectClass=posixGroup)(objectClass=group))',
         limit: 1000
       });
       setGroups(data.entries || []);
