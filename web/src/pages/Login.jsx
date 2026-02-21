@@ -1,22 +1,40 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import LoadingSpinner from '../components/LoadingSpinner';
+import api from '../api/client';
 
 export default function Login() {
-  const [dn, setDn] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [baseDN, setBaseDN] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { login } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
+  useEffect(() => {
+    const fetchBaseDN = async () => {
+      try {
+        const config = await api.getConfig();
+        if (config?.directory?.baseDN) {
+          setBaseDN(config.directory.baseDN);
+        }
+      } catch {
+        setBaseDN('dc=example,dc=com');
+      }
+    };
+    fetchBaseDN();
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
+
+    const dn = `cn=${username},${baseDN}`;
 
     try {
       const result = await login(dn, password);
@@ -50,13 +68,13 @@ export default function Login() {
 
           <div className="mb-4">
             <label className="block text-sm font-medium text-zinc-300 mb-2">
-              Distinguished Name (DN)
+              Username
             </label>
             <input
               type="text"
-              value={dn}
-              onChange={(e) => setDn(e.target.value)}
-              placeholder="cn=admin,dc=example,dc=com"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="admin"
               className="w-full px-4 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-blue-500"
               required
             />

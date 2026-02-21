@@ -18,6 +18,12 @@ const adminItems = [
 export default function Sidebar() {
   const { user, logout } = useAuth();
 
+  const extractUsername = (dn) => {
+    if (!dn) return '';
+    const match = dn.match(/^cn=([^,]+)/i);
+    return match ? match[1] : dn;
+  };
+
   const linkClass = ({ isActive }) =>
     `flex items-center gap-3 px-4 py-2 text-sm rounded-lg transition-colors ${
       isActive ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50'
@@ -50,7 +56,7 @@ export default function Sidebar() {
       <div className="px-3 py-4 border-t border-zinc-800">
         <div className="px-4 py-2 mb-2">
           <p className="text-xs text-zinc-500">Logged in as</p>
-          <p className="text-sm text-zinc-300 truncate">{user?.dn}</p>
+          <p className="text-sm text-zinc-300 truncate">{extractUsername(user?.dn)}</p>
         </div>
         <button
           onClick={logout}
