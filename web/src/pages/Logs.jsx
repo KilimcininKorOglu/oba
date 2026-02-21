@@ -140,9 +140,26 @@ export default function Logs() {
     },
     {
       header: 'Message',
-      render: (row) => (
-        <span className="text-sm text-zinc-100">{row.message}</span>
-      )
+      render: (row) => {
+        const fields = row.fields || {};
+        const details = [];
+        if (fields.dn) details.push(`dn=${fields.dn}`);
+        if (fields.baseDN) details.push(`baseDN=${fields.baseDN}`);
+        if (fields.filter) details.push(`filter=${fields.filter}`);
+        if (fields.results !== undefined) details.push(`results=${fields.results}`);
+        if (fields.changes !== undefined) details.push(`changes=${fields.changes}`);
+        
+        return (
+          <div>
+            <span className="text-sm text-zinc-100">{row.message}</span>
+            {details.length > 0 && (
+              <div className="text-xs text-zinc-500 mt-0.5 font-mono">
+                {details.join(' | ')}
+              </div>
+            )}
+          </div>
+        );
+      }
     },
     {
       header: 'Request ID',

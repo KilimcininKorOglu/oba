@@ -60,6 +60,18 @@ func (h *Handlers) DecrementConnections() {
 	atomic.AddInt64(&h.activeConns, -1)
 }
 
+// auditLog logs an audit message with user context
+func (h *Handlers) auditLog(r *http.Request, msg string, keyvals ...interface{}) {
+	if h.logger == nil {
+		return
+	}
+	logger := h.logger.WithSource("rest")
+	if user := BindDN(r); user != "" {
+		logger = logger.WithUser(user)
+	}
+	logger.Info(msg, keyvals...)
+}
+
 // HandleBind handles POST /api/v1/auth/bind
 func (h *Handlers) HandleBind(w http.ResponseWriter, r *http.Request) {
 	atomic.AddInt64(&h.requestCount, 1)
@@ -73,17 +85,21 @@ func (h *Handlers) HandleBind(w http.ResponseWriter, r *http.Request) {
 	token, err := h.auth.Authenticate(req.DN, req.Password)
 	if err != nil {
 		if err == backend.ErrInvalidCredentials {
+			h.auditLog(r, "login failed: invalid credentials", "dn", req.DN)
 			writeError(w, http.StatusUnauthorized, "invalid_credentials", "invalid DN or password")
 			return
 		}
 		if err == backend.ErrAccountLocked {
+			h.auditLog(r, "login failed: account locked", "dn", req.DN)
 			writeError(w, http.StatusUnauthorized, "account_locked", "account is locked due to too many failed attempts")
 			return
 		}
+		h.auditLog(r, "login failed: "+err.Error(), "dn", req.DN)
 		writeError(w, http.StatusInternalServerError, "auth_error", err.Error())
 		return
 	}
 
+	h.auditLog(r, "login successful", "dn", req.DN)
 	writeJSON(w, http.StatusOK, BindResponse{
 		Success: true,
 		Token:   token,
@@ -235,6 +251,8 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		result[i] = convertEntryWithAttrs(e, requestedAttrs)
 	}
 
+	h.auditLog(r, "search", "baseDN", baseDN, "scope", scopeStr, "filter", filterStr, "results", len(result))
+
 	writeJSON(w, http.StatusOK, SearchResponse{
 		Entries:    result,
 		TotalCount: totalCount,
@@ -272,6 +290,7 @@ func (h *Handlers) HandleAddEntry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.auditLog(r, "entry added", "dn", req.DN)
 	w.Header().Set("Location", "/api/v1/entries/"+url.PathEscape(req.DN))
 	writeJSON(w, http.StatusCreated, convertEntry(entry))
 }
@@ -328,6 +347,8 @@ func (h *Handlers) HandleModifyEntry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.auditLog(r, "entry modified", "dn", decodedDN, "changes", len(changes))
+
 	entries, _ := h.backend.Search(decodedDN, int(ldap.ScopeBaseObject), nil)
 	if len(entries) > 0 {
 		writeJSON(w, http.StatusOK, convertEntry(entries[0]))
@@ -359,6 +380,7 @@ func (h *Handlers) HandleDeleteEntry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.auditLog(r, "entry deleted", "dn", decodedDN)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -390,6 +412,7 @@ func (h *Handlers) HandleDisableEntry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.auditLog(r, "user disabled", "dn", decodedDN)
 	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "disabled": true})
 }
 
@@ -424,6 +447,7 @@ func (h *Handlers) HandleEnableEntry(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	h.auditLog(r, "user enabled", "dn", decodedDN)
 	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "disabled": false})
 }
 

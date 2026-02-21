@@ -36,36 +36,27 @@ func (w *loggingResponseWriter) SetUser(user string) {
 }
 
 // LoggingMiddleware logs HTTP requests.
+// Note: Detailed audit logs are written by handlers. This middleware only logs errors.
 func LoggingMiddleware(logger logging.Logger) Middleware {
 	restLogger := logger.WithSource("rest")
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			start := time.Now()
-
 			wrapped := &loggingResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
-
 			next.ServeHTTP(wrapped, r)
 
-			reqLogger := restLogger
-			if wrapped.user != "" {
-				reqLogger = reqLogger.WithUser(wrapped.user)
+			// Only log errors (4xx, 5xx) - successful operations are logged by handlers
+			if wrapped.statusCode >= 400 {
+				reqLogger := restLogger
+				if wrapped.user != "" {
+					reqLogger = reqLogger.WithUser(wrapped.user)
+				}
+				reqLogger.Warn("request failed",
+					"method", r.Method,
+					"path", r.URL.Path,
+					"status", wrapped.statusCode,
+					"remoteAddr", r.RemoteAddr,
+				)
 			}
-
-			// Generate meaningful message based on path and method
-			msg := getAuditMessage(r.Method, r.URL.Path)
-
-			// Skip logging for health checks
-			if msg == "" {
-				return
-			}
-
-			reqLogger.Info(msg,
-				"method", r.Method,
-				"path", r.URL.Path,
-				"status", wrapped.statusCode,
-				"duration", time.Since(start).String(),
-				"remoteAddr", r.RemoteAddr,
-			)
 		})
 	}
 }
