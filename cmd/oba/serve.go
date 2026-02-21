@@ -22,6 +22,7 @@ import (
 	"github.com/KilimcininKorOglu/oba/internal/ldap"
 	"github.com/KilimcininKorOglu/oba/internal/logging"
 	"github.com/KilimcininKorOglu/oba/internal/password"
+	"github.com/KilimcininKorOglu/oba/internal/raft"
 	"github.com/KilimcininKorOglu/oba/internal/rest"
 	"github.com/KilimcininKorOglu/oba/internal/server"
 	"github.com/KilimcininKorOglu/oba/internal/storage"
@@ -44,6 +45,7 @@ type LDAPServer struct {
 	handler                 *server.Handler
 	backend                 *backend.ObaBackend
 	engine                  *engine.ObaDB
+	clusterBackend          *raft.ClusterBackend
 	listener                net.Listener
 	tlsListener             net.Listener
 	tlsConfig               *tls.Config
@@ -210,12 +212,46 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 		sysLogger.Info("REST API enabled", "address", cfg.REST.Address)
 	}
 
+	// Create cluster backend if cluster mode is enabled
+	var clusterBackend *raft.ClusterBackend
+	if cfg.Cluster.Enabled {
+		sysLogger.Info("cluster mode enabled", "nodeID", cfg.Cluster.NodeID, "raftAddr", cfg.Cluster.RaftAddr)
+
+		clusterCfg := &raft.ClusterBackendConfig{
+			Engine:        db,
+			ClusterConfig: &cfg.Cluster,
+			OnLeaderChange: func(isLeader bool) {
+				if isLeader {
+					sysLogger.Info("this node became the leader")
+				} else {
+					sysLogger.Info("this node is now a follower")
+				}
+			},
+		}
+
+		var err error
+		clusterBackend, err = raft.NewClusterBackend(clusterCfg)
+		if err != nil {
+			db.Close()
+			cancel()
+			return nil, fmt.Errorf("failed to create cluster backend: %w", err)
+		}
+
+		// Set cluster backend on REST server
+		if restServer != nil {
+			restServer.SetClusterBackend(clusterBackend)
+		}
+
+		sysLogger.Info("cluster backend created", "peers", len(cfg.Cluster.Peers))
+	}
+
 	return &LDAPServer{
 		config:                  cfg,
 		logger:                  logger,
 		handler:                 handler,
 		backend:                 be,
 		engine:                  db,
+		clusterBackend:          clusterBackend,
 		tlsConfig:               tlsConfig,
 		tlsCertFile:             cfg.Server.TLSCert,
 		tlsKeyFile:              cfg.Server.TLSKey,
@@ -448,6 +484,16 @@ func (s *LDAPServer) Start() error {
 	s.running = true
 	s.mu.Unlock()
 
+	// Start cluster backend if enabled
+	if s.clusterBackend != nil {
+		if err := s.clusterBackend.Start(); err != nil {
+			return fmt.Errorf("failed to start cluster backend: %w", err)
+		}
+		s.logger.WithSource("system").Info("cluster backend started",
+			"nodeID", s.config.Cluster.NodeID,
+			"raftAddr", s.config.Cluster.RaftAddr)
+	}
+
 	// Start plain LDAP listener
 	if s.config.Server.Address != "" {
 		listener, err := net.Listen("tcp", s.config.Server.Address)
@@ -524,10 +570,17 @@ func (s *LDAPServer) Stop(ctx context.Context) error {
 	tlsListener := s.tlsListener
 	restServer := s.restServer
 	aclWatcher := s.aclWatcher
+	clusterBackend := s.clusterBackend
 	s.mu.Unlock()
 
 	// Cancel the server context
 	s.cancel()
+
+	// Stop cluster backend
+	if clusterBackend != nil {
+		clusterBackend.Stop()
+		s.logger.WithSource("system").Info("cluster backend stopped")
+	}
 
 	// Stop ACL file watcher
 	if aclWatcher != nil {

@@ -13,6 +13,7 @@ import (
 	"github.com/KilimcininKorOglu/oba/internal/backend"
 	"github.com/KilimcininKorOglu/oba/internal/config"
 	"github.com/KilimcininKorOglu/oba/internal/logging"
+	"github.com/KilimcininKorOglu/oba/internal/raft"
 )
 
 // ServerConfig holds REST server configuration.
@@ -295,6 +296,11 @@ func (s *Server) SetACLManager(m *acl.Manager) {
 // SetConfigManager sets the config manager for config-related endpoints.
 func (s *Server) SetConfigManager(m *config.ConfigManager) {
 	s.handlers.SetConfigManager(m)
+}
+
+// SetClusterBackend sets the cluster backend for cluster-related endpoints.
+func (s *Server) SetClusterBackend(cb *raft.ClusterBackend) {
+	s.handlers.SetClusterBackend(cb)
 }
 
 // SetLogger sets the logger for log-related endpoints.
