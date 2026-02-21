@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Pencil } from 'lucide-react';
 import api from '../api/client';
 import Header from '../components/Header';
 import Modal from '../components/Modal';
@@ -11,6 +11,7 @@ export default function Users() {
   const [loading, setLoading] = useState(true);
   const [baseDN, setBaseDN] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [editUser, setEditUser] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
   const [form, setForm] = useState({ uid: '', cn: '', sn: '', mail: '', password: '' });
 
@@ -50,27 +51,68 @@ export default function Users() {
     }
   };
 
+  const openAddModal = () => {
+    setEditUser(null);
+    setForm({ uid: '', cn: '', sn: '', mail: '', password: '' });
+    setShowModal(true);
+  };
+
+  const openEditModal = (user) => {
+    const getAttrVal = (name) => {
+      const attrs = user.attributes || {};
+      const val = attrs[name] || attrs[name.toLowerCase()];
+      return Array.isArray(val) ? val[0] : val || '';
+    };
+    setEditUser(user);
+    setForm({
+      uid: getAttrVal('uid'),
+      cn: getAttrVal('cn'),
+      sn: getAttrVal('sn'),
+      mail: getAttrVal('mail'),
+      password: ''
+    });
+    setShowModal(true);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.uid || !form.cn || !form.sn) {
-      showToast('UID, CN and SN are required', 'error');
+    if (!form.cn || !form.sn) {
+      showToast('CN and SN are required', 'error');
       return;
     }
 
     setFormLoading(true);
     try {
-      const dn = `uid=${form.uid},ou=users,${baseDN}`;
-      await api.addEntry(dn, {
-        objectClass: ['inetOrgPerson', 'organizationalPerson', 'person', 'top'],
-        uid: [form.uid],
-        cn: [form.cn],
-        sn: [form.sn],
-        ...(form.mail && { mail: [form.mail] }),
-        ...(form.password && { userPassword: [form.password] })
-      });
-      showToast('User created', 'success');
+      if (editUser) {
+        const modifications = [];
+        if (form.cn) modifications.push({ operation: 'replace', attribute: 'cn', values: [form.cn] });
+        if (form.sn) modifications.push({ operation: 'replace', attribute: 'sn', values: [form.sn] });
+        if (form.mail) modifications.push({ operation: 'replace', attribute: 'mail', values: [form.mail] });
+        else modifications.push({ operation: 'delete', attribute: 'mail' });
+        if (form.password) modifications.push({ operation: 'replace', attribute: 'userPassword', values: [form.password] });
+
+        await api.modifyEntry(editUser.dn, modifications);
+        showToast('User updated', 'success');
+      } else {
+        if (!form.uid) {
+          showToast('UID is required', 'error');
+          setFormLoading(false);
+          return;
+        }
+        const dn = `uid=${form.uid},ou=users,${baseDN}`;
+        await api.addEntry(dn, {
+          objectClass: ['inetOrgPerson', 'organizationalPerson', 'person', 'top'],
+          uid: [form.uid],
+          cn: [form.cn],
+          sn: [form.sn],
+          ...(form.mail && { mail: [form.mail] }),
+          ...(form.password && { userPassword: [form.password] })
+        });
+        showToast('User created', 'success');
+      }
       setShowModal(false);
       setForm({ uid: '', cn: '', sn: '', mail: '', password: '' });
+      setEditUser(null);
       fetchUsers();
     } catch (err) {
       showToast(err.message, 'error');
@@ -89,9 +131,9 @@ export default function Users() {
     <div>
       <Header 
         title="Users" 
-        action={
+        actions={
           <button
-            onClick={() => setShowModal(true)}
+            onClick={openAddModal}
             className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg"
           >
             <Plus className="w-4 h-4" />
@@ -129,12 +171,22 @@ export default function Users() {
                     {user.dn}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <button
-                      onClick={() => handleDelete(user.dn)}
-                      className="text-red-400 hover:text-red-300"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => openEditModal(user)}
+                        className="text-zinc-400 hover:text-zinc-200"
+                        title="Edit"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(user.dn)}
+                        className="text-red-400 hover:text-red-300"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -143,7 +195,7 @@ export default function Users() {
         </div>
       )}
 
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Add User">
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editUser ? 'Edit User' : 'Add User'}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-zinc-300 mb-1">User ID (uid) *</label>
@@ -151,7 +203,8 @@ export default function Users() {
               type="text"
               value={form.uid}
               onChange={(e) => setForm({ ...form, uid: e.target.value })}
-              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-md text-zinc-100 focus:outline-none focus:border-blue-500"
+              disabled={!!editUser}
+              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-md text-zinc-100 focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               placeholder="jdoe"
             />
           </div>
@@ -186,7 +239,9 @@ export default function Users() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-zinc-300 mb-1">Password</label>
+            <label className="block text-sm font-medium text-zinc-300 mb-1">
+              {editUser ? 'New Password (leave empty to keep current)' : 'Password'}
+            </label>
             <input
               type="password"
               value={form.password}
@@ -194,16 +249,18 @@ export default function Users() {
               className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-md text-zinc-100 focus:outline-none focus:border-blue-500"
             />
           </div>
-          <div className="text-sm text-zinc-500">
-            DN: <span className="font-mono text-zinc-400">uid={form.uid || '...'},ou=users,{baseDN}</span>
-          </div>
+          {!editUser && (
+            <div className="text-sm text-zinc-500">
+              DN: <span className="font-mono text-zinc-400">uid={form.uid || '...'},ou=users,{baseDN}</span>
+            </div>
+          )}
           <div className="flex gap-3 pt-2">
             <button
               type="submit"
               disabled={formLoading}
               className="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md disabled:opacity-50"
             >
-              {formLoading ? 'Creating...' : 'Create User'}
+              {formLoading ? (editUser ? 'Updating...' : 'Creating...') : (editUser ? 'Update User' : 'Create User')}
             </button>
             <button
               type="button"
