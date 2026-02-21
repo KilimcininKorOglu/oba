@@ -267,9 +267,18 @@ func AuthMiddleware(auth *Authenticator, excludePaths []string) Middleware {
 
 // AdminOnlyMiddleware restricts access to admin users only.
 // adminDNs is a list of DNs that are considered admins.
-func AdminOnlyMiddleware(adminDNs []string, adminPaths []string) Middleware {
+// excludePaths are paths that should not require admin access even if they match adminPaths prefix.
+func AdminOnlyMiddleware(adminDNs []string, adminPaths []string, excludePaths []string) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Check if path is excluded
+			for _, path := range excludePaths {
+				if r.URL.Path == path || strings.HasPrefix(r.URL.Path, path+"/") {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+
 			// Check if this path requires admin access
 			requiresAdmin := false
 			for _, path := range adminPaths {

@@ -1,4 +1,4 @@
-.PHONY: build clean test test-race test-cover bench run help docker docker-run docker-stop
+.PHONY: build clean test test-race test-cover bench run help docker docker-run docker-stop up down restart logs
 
 BINARY_NAME=oba
 BUILD_DIR=bin
@@ -54,6 +54,18 @@ docker-stop:
 docker-logs:
 	docker logs -f oba-server
 
+up:
+	docker compose up -d --build
+
+down:
+	docker compose down
+
+restart:
+	docker compose restart
+
+logs:
+	docker compose logs -f oba
+
 help:
 	@echo "Available targets:"
 	@echo "  build        - Build the binary to bin/"
@@ -71,3 +83,7 @@ help:
 	@echo "  docker-run   - Run server in Docker container"
 	@echo "  docker-stop  - Stop Docker container"
 	@echo "  docker-logs  - View Docker container logs"
+	@echo "  up           - Build and start all services (docker compose)"
+	@echo "  down         - Stop all services (docker compose)"
+	@echo "  restart      - Restart all services (docker compose)"
+	@echo "  logs         - View server logs (docker compose)"

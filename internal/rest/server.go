@@ -89,6 +89,7 @@ func NewServer(cfg *ServerConfig, be *backend.ObaBackend, logger logging.Logger)
 
 func (s *Server) setupRoutes() {
 	s.router.GET("/api/v1/health", s.handlers.HandleHealth)
+	s.router.GET("/api/v1/config/public", s.handlers.HandleGetPublicConfig)
 
 	s.router.POST("/api/v1/auth/bind", s.handlers.HandleBind)
 
@@ -151,6 +152,7 @@ func (s *Server) setupMiddleware() {
 	s.router.Use(AuthMiddleware(s.auth, []string{
 		"/api/v1/health",
 		"/api/v1/auth/bind",
+		"/api/v1/config/public",
 	}))
 
 	// Admin-only endpoints
@@ -158,6 +160,8 @@ func (s *Server) setupMiddleware() {
 		s.router.Use(AdminOnlyMiddleware(s.config.AdminDNs, []string{
 			"/api/v1/acl",
 			"/api/v1/config",
+		}, []string{
+			"/api/v1/config/public",
 		}))
 	}
 }

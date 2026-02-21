@@ -9,6 +9,23 @@ import (
 	"github.com/KilimcininKorOglu/oba/internal/config"
 )
 
+// HandleGetPublicConfig handles GET /api/v1/config/public (no auth required)
+func (h *Handlers) HandleGetPublicConfig(w http.ResponseWriter, r *http.Request) {
+	atomic.AddInt64(&h.requestCount, 1)
+
+	if h.configManager == nil {
+		writeError(w, http.StatusServiceUnavailable, "config_not_configured", "config manager not configured")
+		return
+	}
+
+	cfg := h.configManager.GetConfig()
+	publicConfig := map[string]interface{}{
+		"baseDN": cfg.Directory.BaseDN,
+	}
+
+	writeJSON(w, http.StatusOK, publicConfig)
+}
+
 // HandleGetConfig handles GET /api/v1/config
 func (h *Handlers) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
 	atomic.AddInt64(&h.requestCount, 1)
