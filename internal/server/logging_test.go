@@ -4,6 +4,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -91,6 +92,12 @@ func (l *testLogger) log(level, msg string, keysAndValues ...interface{}) {
 	l.buf.Write(data)
 	l.buf.WriteByte('\n')
 }
+
+func (l *testLogger) SetLevel(_ logging.Level)    {}
+func (l *testLogger) SetFormat(_ logging.Format)  {}
+func (l *testLogger) SetOutput(_ io.Writer)       {}
+func (l *testLogger) GetLevel() logging.Level     { return logging.LevelInfo }
+func (l *testLogger) GetFormat() logging.Format   { return logging.FormatJSON }
 
 func (l *testLogger) getOutput() string {
 	return l.buf.String()

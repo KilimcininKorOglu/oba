@@ -21,6 +21,7 @@ import (
 	"github.com/oba-ldap/oba/internal/filter"
 	"github.com/oba-ldap/oba/internal/ldap"
 	"github.com/oba-ldap/oba/internal/logging"
+	"github.com/oba-ldap/oba/internal/password"
 	"github.com/oba-ldap/oba/internal/rest"
 	"github.com/oba-ldap/oba/internal/server"
 	"github.com/oba-ldap/oba/internal/storage"
@@ -37,6 +38,7 @@ var (
 // LDAPServer represents the LDAP server instance.
 type LDAPServer struct {
 	config                  *config.Config
+	configFile              string
 	logger                  logging.Logger
 	handler                 *server.Handler
 	backend                 *backend.ObaBackend
@@ -44,16 +46,25 @@ type LDAPServer struct {
 	listener                net.Listener
 	tlsListener             net.Listener
 	tlsConfig               *tls.Config
+	tlsCertFile             string
+	tlsKeyFile              string
 	persistentSearchHandler *server.PersistentSearchHandler
 	restServer              *rest.Server
 	aclManager              *acl.Manager
 	aclWatcher              *acl.FileWatcher
+	configWatcher           *config.ConfigWatcher
 	pidFile                 string
 	running                 bool
 	mu                      sync.Mutex
 	wg                      sync.WaitGroup
 	ctx                     context.Context
 	cancel                  context.CancelFunc
+
+	// Hot-reloadable settings
+	maxConnections int
+	readTimeout    time.Duration
+	writeTimeout   time.Duration
+	settingsMu     sync.RWMutex
 }
 
 // NewServer creates a new LDAP server with the given configuration.
@@ -174,10 +185,15 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 		backend:                 be,
 		engine:                  db,
 		tlsConfig:               tlsConfig,
+		tlsCertFile:             cfg.Server.TLSCert,
+		tlsKeyFile:              cfg.Server.TLSKey,
 		persistentSearchHandler: psHandler,
 		restServer:              restServer,
 		aclManager:              aclManager,
 		aclWatcher:              aclWatcher,
+		maxConnections:          cfg.Server.MaxConnections,
+		readTimeout:             cfg.Server.ReadTimeout,
+		writeTimeout:            cfg.Server.WriteTimeout,
 		ctx:                     ctx,
 		cancel:                  cancel,
 	}, nil
@@ -651,6 +667,9 @@ func serveCmd(args []string) int {
 		return 1
 	}
 
+	// Store config file path for watcher
+	srv.configFile = *configFile
+
 	// Write PID file
 	if cfg.Server.PIDFile != "" {
 		if err := srv.writePIDFile(); err != nil {
@@ -658,6 +677,22 @@ func serveCmd(args []string) int {
 			return 1
 		}
 		defer srv.removePIDFile()
+	}
+
+	// Start config file watcher if config file is specified
+	if *configFile != "" {
+		configWatcher, err := config.NewConfigWatcher(&config.WatcherConfig{
+			FilePath: *configFile,
+			OnChange: srv.handleConfigReload,
+		})
+		if err != nil {
+			srv.logger.Warn("failed to create config watcher", "error", err)
+		} else {
+			srv.configWatcher = configWatcher
+			configWatcher.Start()
+			srv.logger.Info("config file watcher started", "file", *configFile)
+			defer configWatcher.Stop()
+		}
 	}
 
 	// Handle signals for graceful shutdown and reload
@@ -770,4 +805,190 @@ func convertACLConfig(cfg *config.ACLConfig) *acl.Config {
 	}
 
 	return aclConfig
+}
+
+// SetMaxConnections updates the maximum connections limit at runtime.
+func (s *LDAPServer) SetMaxConnections(max int) {
+	s.settingsMu.Lock()
+	defer s.settingsMu.Unlock()
+	s.maxConnections = max
+}
+
+// GetMaxConnections returns the current maximum connections limit.
+func (s *LDAPServer) GetMaxConnections() int {
+	s.settingsMu.RLock()
+	defer s.settingsMu.RUnlock()
+	return s.maxConnections
+}
+
+// SetReadTimeout updates the read timeout for new connections.
+func (s *LDAPServer) SetReadTimeout(timeout time.Duration) {
+	s.settingsMu.Lock()
+	defer s.settingsMu.Unlock()
+	s.readTimeout = timeout
+}
+
+// GetReadTimeout returns the current read timeout.
+func (s *LDAPServer) GetReadTimeout() time.Duration {
+	s.settingsMu.RLock()
+	defer s.settingsMu.RUnlock()
+	return s.readTimeout
+}
+
+// SetWriteTimeout updates the write timeout for new connections.
+func (s *LDAPServer) SetWriteTimeout(timeout time.Duration) {
+	s.settingsMu.Lock()
+	defer s.settingsMu.Unlock()
+	s.writeTimeout = timeout
+}
+
+// GetWriteTimeout returns the current write timeout.
+func (s *LDAPServer) GetWriteTimeout() time.Duration {
+	s.settingsMu.RLock()
+	defer s.settingsMu.RUnlock()
+	return s.writeTimeout
+}
+
+// ReloadTLSCert reloads TLS certificate and key from files.
+func (s *LDAPServer) ReloadTLSCert(certFile, keyFile string) error {
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return fmt.Errorf("failed to load TLS certificate: %w", err)
+	}
+
+	s.settingsMu.Lock()
+	defer s.settingsMu.Unlock()
+
+	// Update TLS config with new certificate
+	if s.tlsConfig != nil {
+		s.tlsConfig.Certificates = []tls.Certificate{cert}
+	}
+	s.tlsCertFile = certFile
+	s.tlsKeyFile = keyFile
+
+	return nil
+}
+
+// handleConfigReload handles config file changes and applies hot-reloadable settings.
+func (s *LDAPServer) handleConfigReload(oldCfg, newCfg *config.Config) {
+	s.logger.Info("config file changed, applying hot-reloadable settings")
+
+	// Logging settings
+	if oldCfg.Logging.Level != newCfg.Logging.Level {
+		s.logger.SetLevel(logging.ParseLevel(newCfg.Logging.Level))
+		s.logger.Info("log level changed", "old", oldCfg.Logging.Level, "new", newCfg.Logging.Level)
+	}
+	if oldCfg.Logging.Format != newCfg.Logging.Format {
+		s.logger.SetFormat(logging.ParseFormat(newCfg.Logging.Format))
+		s.logger.Info("log format changed", "old", oldCfg.Logging.Format, "new", newCfg.Logging.Format)
+	}
+
+	// Server settings
+	if oldCfg.Server.MaxConnections != newCfg.Server.MaxConnections {
+		s.SetMaxConnections(newCfg.Server.MaxConnections)
+		s.logger.Info("max connections changed", "old", oldCfg.Server.MaxConnections, "new", newCfg.Server.MaxConnections)
+	}
+	if oldCfg.Server.ReadTimeout != newCfg.Server.ReadTimeout {
+		s.SetReadTimeout(newCfg.Server.ReadTimeout)
+		s.logger.Info("read timeout changed", "old", oldCfg.Server.ReadTimeout, "new", newCfg.Server.ReadTimeout)
+	}
+	if oldCfg.Server.WriteTimeout != newCfg.Server.WriteTimeout {
+		s.SetWriteTimeout(newCfg.Server.WriteTimeout)
+		s.logger.Info("write timeout changed", "old", oldCfg.Server.WriteTimeout, "new", newCfg.Server.WriteTimeout)
+	}
+
+	// TLS certificate reload
+	if oldCfg.Server.TLSCert != newCfg.Server.TLSCert || oldCfg.Server.TLSKey != newCfg.Server.TLSKey {
+		if newCfg.Server.TLSCert != "" && newCfg.Server.TLSKey != "" {
+			if err := s.ReloadTLSCert(newCfg.Server.TLSCert, newCfg.Server.TLSKey); err != nil {
+				s.logger.Error("failed to reload TLS certificate", "error", err)
+			} else {
+				s.logger.Info("TLS certificate reloaded")
+			}
+		}
+	}
+
+	// Security rate limit settings
+	if oldCfg.Security.RateLimit.Enabled != newCfg.Security.RateLimit.Enabled ||
+		oldCfg.Security.RateLimit.MaxAttempts != newCfg.Security.RateLimit.MaxAttempts ||
+		oldCfg.Security.RateLimit.LockoutDuration != newCfg.Security.RateLimit.LockoutDuration {
+		s.backend.SetRateLimitConfig(
+			newCfg.Security.RateLimit.Enabled,
+			newCfg.Security.RateLimit.MaxAttempts,
+			newCfg.Security.RateLimit.LockoutDuration,
+		)
+		s.logger.Info("rate limit config changed",
+			"enabled", newCfg.Security.RateLimit.Enabled,
+			"maxAttempts", newCfg.Security.RateLimit.MaxAttempts,
+			"lockoutDuration", newCfg.Security.RateLimit.LockoutDuration,
+		)
+	}
+
+	// Password policy settings
+	if s.passwordPolicyChanged(oldCfg, newCfg) {
+		policy := s.convertPasswordPolicy(&newCfg.Security.PasswordPolicy)
+		s.backend.SetPasswordPolicy(policy)
+		s.logger.Info("password policy changed", "enabled", newCfg.Security.PasswordPolicy.Enabled)
+	}
+
+	// REST API settings
+	if s.restServer != nil {
+		if oldCfg.REST.RateLimit != newCfg.REST.RateLimit {
+			s.restServer.SetRateLimit(newCfg.REST.RateLimit)
+			s.logger.Info("REST rate limit changed", "old", oldCfg.REST.RateLimit, "new", newCfg.REST.RateLimit)
+		}
+		if oldCfg.REST.TokenTTL != newCfg.REST.TokenTTL {
+			s.restServer.SetTokenTTL(newCfg.REST.TokenTTL)
+			s.logger.Info("REST token TTL changed", "old", oldCfg.REST.TokenTTL, "new", newCfg.REST.TokenTTL)
+		}
+		if !stringSliceEqual(oldCfg.REST.CORSOrigins, newCfg.REST.CORSOrigins) {
+			s.restServer.SetCORSOrigins(newCfg.REST.CORSOrigins)
+			s.logger.Info("REST CORS origins changed")
+		}
+	}
+
+	// Update stored config
+	s.config = newCfg
+	s.logger.Info("config reload completed")
+}
+
+// passwordPolicyChanged checks if password policy settings changed.
+func (s *LDAPServer) passwordPolicyChanged(oldCfg, newCfg *config.Config) bool {
+	old := &oldCfg.Security.PasswordPolicy
+	new := &newCfg.Security.PasswordPolicy
+	return old.Enabled != new.Enabled ||
+		old.MinLength != new.MinLength ||
+		old.RequireUppercase != new.RequireUppercase ||
+		old.RequireLowercase != new.RequireLowercase ||
+		old.RequireDigit != new.RequireDigit ||
+		old.RequireSpecial != new.RequireSpecial ||
+		old.MaxAge != new.MaxAge ||
+		old.HistoryCount != new.HistoryCount
+}
+
+// convertPasswordPolicy converts config password policy to password.Policy.
+func (s *LDAPServer) convertPasswordPolicy(cfg *config.PasswordPolicyConfig) *password.Policy {
+	return &password.Policy{
+		Enabled:          cfg.Enabled,
+		MinLength:        cfg.MinLength,
+		RequireUppercase: cfg.RequireUppercase,
+		RequireLowercase: cfg.RequireLowercase,
+		RequireDigit:     cfg.RequireDigit,
+		RequireSpecial:   cfg.RequireSpecial,
+		MaxAge:           cfg.MaxAge,
+		HistoryCount:     cfg.HistoryCount,
+	}
+}
+
+// stringSliceEqual compares two string slices for equality.
+func stringSliceEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/oba-ldap/oba/internal/backend"
@@ -29,6 +30,7 @@ type Authenticator struct {
 	backend   *backend.ObaBackend
 	jwtSecret []byte
 	tokenTTL  time.Duration
+	mu        sync.RWMutex
 }
 
 // NewAuthenticator creates a new authenticator.
@@ -38,6 +40,20 @@ func NewAuthenticator(be *backend.ObaBackend, jwtSecret string, tokenTTL time.Du
 		jwtSecret: []byte(jwtSecret),
 		tokenTTL:  tokenTTL,
 	}
+}
+
+// SetTokenTTL updates the token TTL at runtime.
+func (a *Authenticator) SetTokenTTL(ttl time.Duration) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.tokenTTL = ttl
+}
+
+// GetTokenTTL returns the current token TTL.
+func (a *Authenticator) GetTokenTTL() time.Duration {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.tokenTTL
 }
 
 // Authenticate validates credentials and returns a JWT token.
@@ -52,10 +68,11 @@ func (a *Authenticator) Authenticate(dn, password string) (string, error) {
 // generateToken creates a JWT token for the given DN.
 func (a *Authenticator) generateToken(dn string) (string, error) {
 	now := time.Now()
+	ttl := a.GetTokenTTL()
 	claims := JWTClaims{
 		DN:        dn,
 		IssuedAt:  now.Unix(),
-		ExpiresAt: now.Add(a.tokenTTL).Unix(),
+		ExpiresAt: now.Add(ttl).Unix(),
 	}
 
 	header := map[string]string{

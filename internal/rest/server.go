@@ -5,6 +5,8 @@ import (
 	"crypto/tls"
 	"net"
 	"net/http"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/oba-ldap/oba/internal/backend"
@@ -49,6 +51,12 @@ type Server struct {
 	router    *Router
 	server    *http.Server
 	tlsServer *http.Server
+
+	// Hot-reloadable settings
+	rateLimit   int32 // atomic
+	tokenTTL    int64 // atomic (nanoseconds)
+	corsOrigins []string
+	corsMu      sync.RWMutex
 }
 
 // NewServer creates a new REST server.
@@ -59,12 +67,15 @@ func NewServer(cfg *ServerConfig, be *backend.ObaBackend, logger logging.Logger)
 	router := NewRouter()
 
 	s := &Server{
-		config:   cfg,
-		backend:  be,
-		logger:   logger,
-		auth:     auth,
-		handlers: handlers,
-		router:   router,
+		config:      cfg,
+		backend:     be,
+		logger:      logger,
+		auth:        auth,
+		handlers:    handlers,
+		router:      router,
+		rateLimit:   int32(cfg.RateLimit),
+		tokenTTL:    int64(cfg.TokenTTL),
+		corsOrigins: cfg.CORSOrigins,
 	}
 
 	s.setupRoutes()
@@ -180,4 +191,43 @@ func (s *Server) Stop(ctx context.Context) error {
 
 	s.logger.Info("REST server stopped")
 	return nil
+}
+
+// SetRateLimit updates the rate limit at runtime.
+func (s *Server) SetRateLimit(requestsPerSecond int) {
+	atomic.StoreInt32(&s.rateLimit, int32(requestsPerSecond))
+}
+
+// GetRateLimit returns the current rate limit.
+func (s *Server) GetRateLimit() int {
+	return int(atomic.LoadInt32(&s.rateLimit))
+}
+
+// SetTokenTTL updates the JWT token TTL at runtime.
+func (s *Server) SetTokenTTL(ttl time.Duration) {
+	atomic.StoreInt64(&s.tokenTTL, int64(ttl))
+	if s.auth != nil {
+		s.auth.SetTokenTTL(ttl)
+	}
+}
+
+// GetTokenTTL returns the current token TTL.
+func (s *Server) GetTokenTTL() time.Duration {
+	return time.Duration(atomic.LoadInt64(&s.tokenTTL))
+}
+
+// SetCORSOrigins updates the allowed CORS origins at runtime.
+func (s *Server) SetCORSOrigins(origins []string) {
+	s.corsMu.Lock()
+	defer s.corsMu.Unlock()
+	s.corsOrigins = origins
+}
+
+// GetCORSOrigins returns the current CORS origins.
+func (s *Server) GetCORSOrigins() []string {
+	s.corsMu.RLock()
+	defer s.corsMu.RUnlock()
+	result := make([]string, len(s.corsOrigins))
+	copy(result, s.corsOrigins)
+	return result
 }

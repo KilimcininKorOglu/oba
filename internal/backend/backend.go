@@ -6,9 +6,12 @@ package backend
 import (
 	"errors"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/oba-ldap/oba/internal/config"
 	"github.com/oba-ldap/oba/internal/filter"
+	"github.com/oba-ldap/oba/internal/password"
 	"github.com/oba-ldap/oba/internal/schema"
 	"github.com/oba-ldap/oba/internal/server"
 	"github.com/oba-ldap/oba/internal/storage"
@@ -85,18 +88,45 @@ type ObaBackend struct {
 	rootDN       string
 	rootPW       string
 	changeStream *stream.Broker
+
+	// Security settings (hot-reloadable)
+	rateLimitEnabled  bool
+	rateLimitAttempts int
+	rateLimitDuration time.Duration
+	passwordPolicy    *password.Policy
+	accountLockouts   map[string]*password.AccountLockout
+	securityMu        sync.RWMutex
 }
 
 // NewBackend creates a new ObaBackend with the given storage engine and configuration.
 func NewBackend(engine storage.StorageEngine, cfg *config.Config) *ObaBackend {
 	b := &ObaBackend{
-		engine:       engine,
-		changeStream: stream.NewBroker(),
+		engine:          engine,
+		changeStream:    stream.NewBroker(),
+		accountLockouts: make(map[string]*password.AccountLockout),
 	}
 
 	if cfg != nil {
 		b.rootDN = normalizeDN(cfg.Directory.RootDN)
 		b.rootPW = cfg.Directory.RootPassword
+
+		// Initialize security settings
+		b.rateLimitEnabled = cfg.Security.RateLimit.Enabled
+		b.rateLimitAttempts = cfg.Security.RateLimit.MaxAttempts
+		b.rateLimitDuration = cfg.Security.RateLimit.LockoutDuration
+
+		if cfg.Security.PasswordPolicy.Enabled {
+			b.passwordPolicy = &password.Policy{
+				Enabled:          cfg.Security.PasswordPolicy.Enabled,
+				MinLength:        cfg.Security.PasswordPolicy.MinLength,
+				RequireUppercase: cfg.Security.PasswordPolicy.RequireUppercase,
+				RequireLowercase: cfg.Security.PasswordPolicy.RequireLowercase,
+				RequireDigit:     cfg.Security.PasswordPolicy.RequireDigit,
+				RequireSpecial:   cfg.Security.PasswordPolicy.RequireSpecial,
+				MaxAge:           cfg.Security.PasswordPolicy.MaxAge,
+				HistoryCount:     cfg.Security.PasswordPolicy.HistoryCount,
+			}
+		}
 	}
 
 	return b
@@ -640,3 +670,92 @@ func (it *errorIterator) Close()                {}
 
 // Ensure ObaBackend implements Backend interface.
 var _ Backend = (*ObaBackend)(nil)
+
+// SetRateLimitConfig updates rate limit settings at runtime.
+func (b *ObaBackend) SetRateLimitConfig(enabled bool, maxAttempts int, lockoutDuration time.Duration) {
+	b.securityMu.Lock()
+	defer b.securityMu.Unlock()
+
+	b.rateLimitEnabled = enabled
+	b.rateLimitAttempts = maxAttempts
+	b.rateLimitDuration = lockoutDuration
+
+	// Update existing lockouts with new settings
+	for _, lockout := range b.accountLockouts {
+		lockout.SetMaxFailures(maxAttempts)
+		lockout.SetLockoutDuration(lockoutDuration)
+	}
+}
+
+// GetRateLimitConfig returns the current rate limit configuration.
+func (b *ObaBackend) GetRateLimitConfig() (enabled bool, maxAttempts int, lockoutDuration time.Duration) {
+	b.securityMu.RLock()
+	defer b.securityMu.RUnlock()
+	return b.rateLimitEnabled, b.rateLimitAttempts, b.rateLimitDuration
+}
+
+// SetPasswordPolicy updates password policy settings at runtime.
+func (b *ObaBackend) SetPasswordPolicy(policy *password.Policy) {
+	b.securityMu.Lock()
+	defer b.securityMu.Unlock()
+	b.passwordPolicy = policy
+}
+
+// GetPasswordPolicy returns the current password policy.
+func (b *ObaBackend) GetPasswordPolicy() *password.Policy {
+	b.securityMu.RLock()
+	defer b.securityMu.RUnlock()
+	return b.passwordPolicy
+}
+
+// GetAccountLockout returns the lockout state for a DN.
+func (b *ObaBackend) GetAccountLockout(dn string) *password.AccountLockout {
+	b.securityMu.Lock()
+	defer b.securityMu.Unlock()
+
+	normalizedDN := normalizeDN(dn)
+	lockout, exists := b.accountLockouts[normalizedDN]
+	if !exists {
+		lockout = password.NewAccountLockout(b.rateLimitAttempts, b.rateLimitDuration, 0)
+		b.accountLockouts[normalizedDN] = lockout
+	}
+	return lockout
+}
+
+// IsAccountLocked checks if an account is locked.
+func (b *ObaBackend) IsAccountLocked(dn string) bool {
+	if !b.rateLimitEnabled {
+		return false
+	}
+	lockout := b.GetAccountLockout(dn)
+	return lockout.IsLocked()
+}
+
+// RecordAuthFailure records a failed authentication attempt.
+func (b *ObaBackend) RecordAuthFailure(dn string) {
+	if !b.rateLimitEnabled {
+		return
+	}
+	lockout := b.GetAccountLockout(dn)
+	lockout.RecordFailure()
+}
+
+// RecordAuthSuccess records a successful authentication.
+func (b *ObaBackend) RecordAuthSuccess(dn string) {
+	if !b.rateLimitEnabled {
+		return
+	}
+	lockout := b.GetAccountLockout(dn)
+	lockout.RecordSuccess()
+}
+
+// UnlockAccount manually unlocks an account.
+func (b *ObaBackend) UnlockAccount(dn string) {
+	b.securityMu.Lock()
+	defer b.securityMu.Unlock()
+
+	normalizedDN := normalizeDN(dn)
+	if lockout, exists := b.accountLockouts[normalizedDN]; exists {
+		lockout.Unlock()
+	}
+}

@@ -19,6 +19,8 @@ var (
 	ErrInvalidNumber     = errors.New("invalid number format")
 	ErrFileNotFound      = errors.New("configuration file not found")
 	ErrInvalidListItem   = errors.New("invalid list item format")
+	ErrMissingConfigFile = errors.New("config file path is required")
+	ErrMissingOnChange   = errors.New("onChange callback is required")
 )
 
 // LoadConfig loads configuration from a file path.

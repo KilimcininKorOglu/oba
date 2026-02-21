@@ -92,6 +92,16 @@ type Logger interface {
 	WithRequestID(requestID string) Logger
 	// WithFields returns a new logger with the given fields.
 	WithFields(keysAndValues ...interface{}) Logger
+	// SetLevel changes the log level at runtime.
+	SetLevel(level Level)
+	// SetFormat changes the log format at runtime.
+	SetFormat(format Format)
+	// SetOutput changes the log output at runtime.
+	SetOutput(output io.Writer)
+	// GetLevel returns the current log level.
+	GetLevel() Level
+	// GetFormat returns the current log format.
+	GetFormat() Format
 }
 
 // logger is the default implementation of Logger.
@@ -190,6 +200,41 @@ func (l *logger) WithFields(keysAndValues ...interface{}) Logger {
 	return newLogger
 }
 
+// SetLevel changes the log level at runtime.
+func (l *logger) SetLevel(level Level) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.level = level
+}
+
+// SetFormat changes the log format at runtime.
+func (l *logger) SetFormat(format Format) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.format = format
+}
+
+// SetOutput changes the log output at runtime.
+func (l *logger) SetOutput(output io.Writer) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.output = output
+}
+
+// GetLevel returns the current log level.
+func (l *logger) GetLevel() Level {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.level
+}
+
+// GetFormat returns the current log format.
+func (l *logger) GetFormat() Format {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.format
+}
+
 // clone creates a copy of the logger.
 func (l *logger) clone() *logger {
 	newFields := make(map[string]interface{}, len(l.fields))
@@ -280,9 +325,14 @@ func (l *logger) formatText(entry map[string]interface{}) string {
 // nopLogger is a no-op logger that discards all output.
 type nopLogger struct{}
 
-func (n *nopLogger) Debug(_ string, _ ...interface{})          {}
-func (n *nopLogger) Info(_ string, _ ...interface{})           {}
-func (n *nopLogger) Warn(_ string, _ ...interface{})           {}
-func (n *nopLogger) Error(_ string, _ ...interface{})          {}
-func (n *nopLogger) WithRequestID(_ string) Logger             { return n }
-func (n *nopLogger) WithFields(_ ...interface{}) Logger        { return n }
+func (n *nopLogger) Debug(_ string, _ ...interface{})   {}
+func (n *nopLogger) Info(_ string, _ ...interface{})    {}
+func (n *nopLogger) Warn(_ string, _ ...interface{})    {}
+func (n *nopLogger) Error(_ string, _ ...interface{})   {}
+func (n *nopLogger) WithRequestID(_ string) Logger      { return n }
+func (n *nopLogger) WithFields(_ ...interface{}) Logger { return n }
+func (n *nopLogger) SetLevel(_ Level)                   {}
+func (n *nopLogger) SetFormat(_ Format)                 {}
+func (n *nopLogger) SetOutput(_ io.Writer)              {}
+func (n *nopLogger) GetLevel() Level                    { return LevelInfo }
+func (n *nopLogger) GetFormat() Format                  { return FormatText }
