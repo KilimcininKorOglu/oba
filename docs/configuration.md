@@ -34,6 +34,7 @@ Examples:
 | server.maxConnections  | int      | 10000    | Maximum concurrent connections       |
 | server.readTimeout     | duration | 30s      | Read timeout per operation           |
 | server.writeTimeout    | duration | 30s      | Write timeout per operation          |
+| server.pidFile         | string   | ""       | PID file path (for reload command)   |
 
 Example:
 
@@ -46,6 +47,7 @@ server:
   maxConnections: 10000
   readTimeout: 30s
   writeTimeout: 30s
+  pidFile: "/var/run/oba.pid"
 ```
 
 ## Directory Configuration
@@ -193,7 +195,72 @@ security:
     lockoutDuration: 15m
 ```
 
+### Encryption at Rest
+
+| Parameter                      | Type   | Default | Description                          |
+|--------------------------------|--------|---------|--------------------------------------|
+| security.encryption.enabled    | bool   | false   | Enable encryption for stored data    |
+| security.encryption.keyFile    | string | ""      | Path to encryption key file          |
+
+Oba uses AES-256-GCM for encryption at rest. The key file must contain exactly 32 bytes (raw binary) or 64 hexadecimal characters.
+
+Example:
+
+```yaml
+security:
+  encryption:
+    enabled: true
+    keyFile: "/etc/oba/encryption.key"
+```
+
+Generate an encryption key:
+
+```bash
+openssl rand -hex 32 > /etc/oba/encryption.key
+chmod 600 /etc/oba/encryption.key
+```
+
 ## ACL Configuration
+
+Oba supports two ACL configuration methods:
+
+### Option 1: External ACL File (Recommended)
+
+Use an external YAML file for ACL rules. This enables hot reload without server restart.
+
+| Parameter | Type   | Default | Description                          |
+|-----------|--------|---------|--------------------------------------|
+| aclFile   | string | ""      | Path to external ACL file            |
+
+```yaml
+aclFile: "/etc/oba/acl.yaml"
+```
+
+The external ACL file format:
+
+```yaml
+version: 1
+defaultPolicy: "deny"
+rules:
+  - target: "*"
+    subject: "cn=admin,dc=example,dc=com"
+    rights: ["read", "write", "add", "delete", "search", "compare"]
+  - target: "ou=users,dc=example,dc=com"
+    subject: "authenticated"
+    rights: ["read", "search"]
+```
+
+Hot reload ACL without restart:
+
+```bash
+# Automatic: Changes detected within ~300ms
+# Manual: Send SIGHUP signal
+kill -SIGHUP $(cat /var/run/oba.pid)
+# Or use CLI
+oba reload acl
+```
+
+### Option 2: Inline ACL (No Hot Reload)
 
 | Parameter          | Type   | Default | Description                          |
 |--------------------|--------|---------|--------------------------------------|
@@ -297,6 +364,40 @@ Duration values support the following units:
 | d    | Days        |
 
 Examples: `30s`, `5m`, `1h`, `90d`
+
+## REST API Configuration
+
+| Parameter          | Type     | Default  | Description                          |
+|--------------------|----------|----------|--------------------------------------|
+| rest.enabled       | bool     | false    | Enable REST API                      |
+| rest.address       | string   | ":8080"  | HTTP listen address                  |
+| rest.tlsAddress    | string   | ""       | HTTPS listen address                 |
+| rest.jwtSecret     | string   | ""       | JWT secret for token signing         |
+| rest.tokenTTL      | duration | 24h      | JWT token validity period            |
+| rest.rateLimit     | int      | 100      | Requests per second per IP           |
+| rest.corsOrigins   | []string | ["*"]    | Allowed CORS origins                 |
+
+Example:
+
+```yaml
+rest:
+  enabled: true
+  address: ":8080"
+  tlsAddress: ":8443"
+  jwtSecret: "your-secret-key-at-least-32-characters"
+  tokenTTL: 24h
+  rateLimit: 100
+  corsOrigins:
+    - "https://app.example.com"
+```
+
+Generate a JWT secret:
+
+```bash
+openssl rand -hex 32
+```
+
+See [REST API Documentation](REST_API.md) for endpoint details.
 
 ## Validating Configuration
 

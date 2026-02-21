@@ -222,6 +222,29 @@ oba config validate --config /etc/oba/config.yaml
 sudo systemctl restart oba
 ```
 
+### Reloading ACL Without Restart
+
+If using an external ACL file (`aclFile` config option), ACL rules can be reloaded without restarting the server:
+
+```bash
+# Automatic reload: Edit the ACL file
+# Changes are detected automatically within ~300ms
+
+# Manual reload via CLI
+oba reload acl
+
+# Manual reload via signal
+kill -SIGHUP $(cat /var/run/oba.pid)
+```
+
+Check reload status in logs:
+
+```bash
+grep "ACL" /var/log/oba/oba.log | tail -5
+# {"level":"info","msg":"ACL file changed, reloading",...}
+# {"level":"info","msg":"ACL reloaded successfully","rules":5,...}
+```
+
 ## Monitoring
 
 ### Log Analysis

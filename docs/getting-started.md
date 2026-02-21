@@ -136,6 +136,18 @@ EOF
 | `make clean`      | Remove build artifacts         |
 | `make run`        | Build and run the server       |
 
+## CLI Commands
+
+| Command           | Description                              |
+|-------------------|------------------------------------------|
+| `oba serve`       | Start the LDAP server                    |
+| `oba backup`      | Create database backup                   |
+| `oba restore`     | Restore from backup                      |
+| `oba user`        | User management                          |
+| `oba config`      | Configuration management                 |
+| `oba reload acl`  | Reload ACL without restart               |
+| `oba version`     | Show version information                 |
+
 ## Directory Structure
 
 After installation, Oba uses the following directory structure:
@@ -151,5 +163,6 @@ After installation, Oba uses the following directory structure:
 
 - [Installation Guide](installation.md) - Detailed installation instructions
 - [Configuration Reference](configuration.md) - Complete configuration options
+- [REST API Documentation](REST_API.md) - HTTP/JSON API reference
 - [Security Guide](security.md) - Security best practices
 - [Operations Guide](operations.md) - Day-to-day operations

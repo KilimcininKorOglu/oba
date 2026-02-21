@@ -102,6 +102,67 @@ security:
     historyCount: 5
 ```
 
+## Encryption at Rest
+
+Oba supports encryption at rest using AES-256-GCM to protect stored data.
+
+### Configuration
+
+```yaml
+security:
+  encryption:
+    enabled: true
+    keyFile: "/etc/oba/encryption.key"
+```
+
+### Key Generation
+
+Generate a 256-bit encryption key:
+
+```bash
+# Generate key file (hex format)
+openssl rand -hex 32 > /etc/oba/encryption.key
+
+# Set secure permissions
+chmod 600 /etc/oba/encryption.key
+chown oba:oba /etc/oba/encryption.key
+```
+
+### Key Format
+
+The key file must contain exactly:
+- 32 bytes of raw binary data, OR
+- 64 hexadecimal characters
+
+### Key Rotation
+
+To rotate the encryption key:
+
+1. Stop the server
+2. Export data to LDIF (unencrypted)
+3. Replace the key file
+4. Re-import data
+5. Start the server
+
+```bash
+# Export current data
+oba backup --format ldif --output /backup/data.ldif
+
+# Replace key
+openssl rand -hex 32 > /etc/oba/encryption.key
+
+# Clear and re-import
+rm -rf /var/lib/oba/*
+oba restore --format ldif --input /backup/data.ldif
+```
+
+### Security Considerations
+
+- Store the key file on a separate, encrypted filesystem
+- Never commit the key file to version control
+- Back up the key file securely (without it, data is unrecoverable)
+- Use environment variables for key path in containerized deployments
+
 ### Password Policy Parameters
 
 | Parameter        | Recommended Value | Description                          |

@@ -122,6 +122,7 @@ Type=simple
 User=oba
 Group=oba
 ExecStart=/usr/local/bin/oba serve --config /etc/oba/config.yaml
+ExecReload=/bin/kill -SIGHUP $MAINPID
 Restart=on-failure
 RestartSec=5
 LimitNOFILE=65536
@@ -142,6 +143,14 @@ sudo systemctl start oba
 
 ```bash
 sudo systemctl status oba
+```
+
+7. Reload ACL without restart (if using external ACL file):
+
+```bash
+sudo systemctl reload oba
+# or
+oba reload acl
 ```
 
 ### Docker Installation
