@@ -467,6 +467,28 @@ func applyLogStoreConfig(node *yamlNode, config *LogStoreConfig) error {
 				}
 				config.MaxEntries = n
 			}
+		case "maxAge":
+			if child.value != "" {
+				dur, err := parseDuration(child.value)
+				if err != nil {
+					return err
+				}
+				config.MaxAge = dur
+			}
+		case "archiveDir":
+			if child.value != "" {
+				config.ArchiveDir = child.value
+			}
+		case "compress":
+			config.Compress = parseBool(child.value)
+		case "retainDays":
+			if child.value != "" {
+				n, err := strconv.Atoi(child.value)
+				if err != nil {
+					return err
+				}
+				config.RetainDays = n
+			}
 		}
 	}
 	return nil

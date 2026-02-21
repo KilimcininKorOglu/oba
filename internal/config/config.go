@@ -121,9 +121,13 @@ type LogConfig struct {
 
 // LogStoreConfig holds log storage configuration.
 type LogStoreConfig struct {
-	Enabled    bool   `yaml:"enabled"`
-	DBPath     string `yaml:"dbPath"`
-	MaxEntries int    `yaml:"maxEntries"`
+	Enabled    bool          `yaml:"enabled"`
+	DBPath     string        `yaml:"dbPath"`
+	MaxEntries int           `yaml:"maxEntries"`
+	MaxAge     time.Duration `yaml:"maxAge"`     // Max age before archiving
+	ArchiveDir string        `yaml:"archiveDir"` // Directory for archives
+	Compress   bool          `yaml:"compress"`   // Compress archives
+	RetainDays int           `yaml:"retainDays"` // Days to retain archives (0 = forever)
 }
 
 // SecurityConfig holds security-related configuration.

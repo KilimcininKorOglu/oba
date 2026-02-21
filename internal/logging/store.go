@@ -3,6 +3,7 @@ package logging
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,9 +30,12 @@ type LogStore struct {
 	mu            sync.RWMutex
 	db            *engine.ObaDB
 	clusterWriter ClusterWriter
+	archive       *LogArchive
 	nextID        uint64
 	maxEntries    int
+	maxAge        time.Duration
 	dbPath        string
+	archiveDir    string
 }
 
 // ClusterWriter interface for cluster-aware write operations.
@@ -46,6 +50,10 @@ type LogStoreConfig struct {
 	Enabled    bool
 	DBPath     string
 	MaxEntries int
+	MaxAge     time.Duration // Max age before archiving
+	ArchiveDir string        // Directory for archives (empty = no archiving)
+	Compress   bool          // Compress archives
+	RetainDays int           // Days to retain archives (0 = forever)
 }
 
 // NewLogStore creates a new log store with the given configuration.
@@ -75,8 +83,26 @@ func NewLogStore(cfg LogStoreConfig) (*LogStore, error) {
 	store := &LogStore{
 		db:         db,
 		maxEntries: maxEntries,
+		maxAge:     cfg.MaxAge,
 		dbPath:     cfg.DBPath,
+		archiveDir: cfg.ArchiveDir,
 		nextID:     1,
+	}
+
+	// Create archive manager if archive directory is configured
+	if cfg.ArchiveDir != "" {
+		archive, err := NewLogArchive(ArchiveConfig{
+			Enabled:    true,
+			ArchiveDir: cfg.ArchiveDir,
+			MaxAge:     cfg.MaxAge,
+			Compress:   cfg.Compress,
+			RetainDays: cfg.RetainDays,
+		})
+		if err != nil {
+			db.Close()
+			return nil, fmt.Errorf("failed to create archive: %w", err)
+		}
+		store.archive = archive
 	}
 
 	// Load next ID from existing entries
@@ -232,7 +258,7 @@ func (s *LogStore) Write(level, msg, source, user, requestID string, fields map[
 	return nil
 }
 
-// trimOldEntries removes oldest entries if we exceed max.
+// trimOldEntries archives and removes oldest entries if we exceed max.
 func (s *LogStore) trimOldEntries() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -247,26 +273,27 @@ func (s *LogStore) trimOldEntries() {
 	}
 	defer s.db.Rollback(tx)
 
-	// Count entries
+	// Get all entries with their data
 	iter := s.db.SearchByDN(tx, "ou=logs", storage.ScopeOneLevel)
-	var entries []struct {
-		dn string
-		id uint64
+	type entryData struct {
+		dn       string
+		id       uint64
+		logEntry LogEntry
 	}
+	var entries []entryData
 
 	for iter.Next() {
 		entry := iter.Entry()
 		if entry.DN == "ou=logs" {
 			continue
 		}
-		var id uint64
+		
+		ed := entryData{dn: entry.DN}
 		if idVals := entry.GetAttribute("logid"); len(idVals) > 0 {
-			id, _ = strconv.ParseUint(string(idVals[0]), 10, 64)
+			ed.id, _ = strconv.ParseUint(string(idVals[0]), 10, 64)
 		}
-		entries = append(entries, struct {
-			dn string
-			id uint64
-		}{entry.DN, id})
+		ed.logEntry = s.entryToLogEntry(entry)
+		entries = append(entries, ed)
 	}
 	iter.Close()
 
@@ -274,20 +301,24 @@ func (s *LogStore) trimOldEntries() {
 		return
 	}
 
-	// Sort by ID and delete oldest
-	deleteCount := len(entries) - s.maxEntries
-	if deleteCount > 0 {
-		// Simple bubble sort for small deletions
-		for i := 0; i < deleteCount; i++ {
-			minIdx := i
-			for j := i + 1; j < len(entries); j++ {
-				if entries[j].id < entries[minIdx].id {
-					minIdx = j
-				}
-			}
-			entries[i], entries[minIdx] = entries[minIdx], entries[i]
-		}
+	// Sort by ID (oldest first)
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].id < entries[j].id
+	})
 
+	deleteCount := len(entries) - s.maxEntries
+
+	// Archive entries before deleting (if archive is enabled)
+	if s.archive != nil && deleteCount > 0 {
+		toArchive := make([]LogEntry, deleteCount)
+		for i := 0; i < deleteCount; i++ {
+			toArchive[i] = entries[i].logEntry
+		}
+		s.archive.Archive(toArchive)
+	}
+
+	// Delete oldest entries
+	if deleteCount > 0 {
 		// If cluster writer is set, delete through Raft
 		if s.clusterWriter != nil {
 			for i := 0; i < deleteCount; i++ {
@@ -319,6 +350,9 @@ func (s *LogStore) Query(opts QueryOptions) ([]LogEntry, int, error) {
 		return nil, 0, nil
 	}
 
+	var allEntries []LogEntry
+
+	// Query active logs from database
 	tx, err := s.db.Begin()
 	if err != nil {
 		return nil, 0, err
@@ -327,8 +361,6 @@ func (s *LogStore) Query(opts QueryOptions) ([]LogEntry, int, error) {
 
 	iter := s.db.SearchByDN(tx, "ou=logs", storage.ScopeOneLevel)
 	defer iter.Close()
-
-	var allEntries []LogEntry
 
 	for iter.Next() {
 		entry := iter.Entry()
@@ -364,14 +396,45 @@ func (s *LogStore) Query(opts QueryOptions) ([]LogEntry, int, error) {
 		allEntries = append(allEntries, logEntry)
 	}
 
-	// Sort by ID descending (newest first)
-	for i := 0; i < len(allEntries)-1; i++ {
-		for j := i + 1; j < len(allEntries); j++ {
-			if allEntries[j].ID > allEntries[i].ID {
-				allEntries[i], allEntries[j] = allEntries[j], allEntries[i]
-			}
+	// Query archived logs if requested
+	if opts.IncludeArchive && s.archive != nil {
+		archiveOpts := opts
+		archiveOpts.Offset = 0 // We'll handle pagination after merging
+		archiveOpts.Limit = 0
+		
+		var startTime, endTime *time.Time
+		if !opts.StartTime.IsZero() {
+			startTime = &opts.StartTime
 		}
+		if !opts.EndTime.IsZero() {
+			endTime = &opts.EndTime
+		}
+		archiveOpts.StartTime = time.Time{}
+		archiveOpts.EndTime = time.Time{}
+		
+		// Create archive query options
+		archiveQueryOpts := QueryOptions{
+			Level:     opts.Level,
+			Source:    opts.Source,
+			User:      opts.User,
+			RequestID: opts.RequestID,
+			Search:    opts.Search,
+		}
+		if startTime != nil {
+			archiveQueryOpts.StartTime = *startTime
+		}
+		if endTime != nil {
+			archiveQueryOpts.EndTime = *endTime
+		}
+		
+		archivedEntries, _, _ := s.archive.QueryAllArchives(archiveQueryOpts)
+		allEntries = append(allEntries, archivedEntries...)
 	}
+
+	// Sort by timestamp descending (newest first)
+	sort.Slice(allEntries, func(i, j int) bool {
+		return allEntries[i].Timestamp.After(allEntries[j].Timestamp)
+	})
 
 	total := len(allEntries)
 
@@ -452,15 +515,16 @@ func (s *LogStore) entryToLogEntry(entry *storage.Entry) LogEntry {
 
 // QueryOptions defines filters for querying logs.
 type QueryOptions struct {
-	Level     string
-	Source    string
-	User      string
-	RequestID string
-	StartTime time.Time
-	EndTime   time.Time
-	Search    string
-	Offset    int
-	Limit     int
+	Level          string
+	Source         string
+	User           string
+	RequestID      string
+	StartTime      time.Time
+	EndTime        time.Time
+	Search         string
+	Offset         int
+	Limit          int
+	IncludeArchive bool // Include archived logs in search
 }
 
 // GetStats returns statistics about the log store.
@@ -598,6 +662,94 @@ func (s *LogStore) Engine() storage.StorageEngine {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.db
+}
+
+// ListArchives returns all archive files.
+func (s *LogStore) ListArchives() ([]ArchiveFile, error) {
+	if s.archive == nil {
+		return nil, nil
+	}
+	return s.archive.ListArchives()
+}
+
+// GetArchiveStats returns statistics about archives.
+func (s *LogStore) GetArchiveStats() *ArchiveStats {
+	if s.archive == nil {
+		return nil
+	}
+	stats := s.archive.GetArchiveStats()
+	return &stats
+}
+
+// ArchiveNow forces immediate archiving of old entries.
+func (s *LogStore) ArchiveNow() (*ArchiveFile, error) {
+	if s.archive == nil {
+		return nil, fmt.Errorf("archiving not enabled")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.db == nil {
+		return nil, nil
+	}
+
+	// Get all entries
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer s.db.Rollback(tx)
+
+	iter := s.db.SearchByDN(tx, "ou=logs", storage.ScopeOneLevel)
+	var entries []LogEntry
+	var dns []string
+
+	for iter.Next() {
+		entry := iter.Entry()
+		if entry.DN == "ou=logs" {
+			continue
+		}
+		entries = append(entries, s.entryToLogEntry(entry))
+		dns = append(dns, entry.DN)
+	}
+	iter.Close()
+
+	if len(entries) == 0 {
+		return nil, nil
+	}
+
+	// Archive all entries
+	archiveFile, err := s.archive.Archive(entries)
+	if err != nil {
+		return nil, err
+	}
+
+	// Delete archived entries from active database
+	if s.clusterWriter != nil {
+		for _, dn := range dns {
+			s.clusterWriter.DeleteLog(dn)
+		}
+	} else {
+		tx2, err := s.db.Begin()
+		if err != nil {
+			return archiveFile, err
+		}
+		for _, dn := range dns {
+			s.db.Delete(tx2, dn)
+		}
+		s.db.Commit(tx2)
+	}
+
+	return archiveFile, nil
+}
+
+// CleanupOldArchives removes archives older than retention period.
+func (s *LogStore) CleanupOldArchives() (int, error) {
+	if s.archive == nil {
+		return 0, nil
+	}
+	return s.archive.CleanupOldArchives()
 }
 
 // Export exports logs in the specified format.

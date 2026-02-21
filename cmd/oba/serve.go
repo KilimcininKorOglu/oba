@@ -88,12 +88,20 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 			Enabled:    true,
 			DBPath:     cfg.Logging.Store.DBPath,
 			MaxEntries: cfg.Logging.Store.MaxEntries,
+			MaxAge:     cfg.Logging.Store.MaxAge,
+			ArchiveDir: cfg.Logging.Store.ArchiveDir,
+			Compress:   cfg.Logging.Store.Compress,
+			RetainDays: cfg.Logging.Store.RetainDays,
 		})
 		if err != nil {
 			sysLogger.Warn("failed to create log store", "error", err)
 		} else {
 			logger.SetStore(logStore)
-			sysLogger.Info("log store enabled", "path", cfg.Logging.Store.DBPath)
+			if cfg.Logging.Store.ArchiveDir != "" {
+				sysLogger.Info("log store enabled with archiving", "path", cfg.Logging.Store.DBPath, "archiveDir", cfg.Logging.Store.ArchiveDir)
+			} else {
+				sysLogger.Info("log store enabled", "path", cfg.Logging.Store.DBPath)
+			}
 		}
 	}
 

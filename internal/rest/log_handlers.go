@@ -53,6 +53,11 @@ func (h *Handlers) HandleGetLogs(w http.ResponseWriter, r *http.Request) {
 		Search:    r.URL.Query().Get("search"),
 	}
 
+	// Include archived logs if requested
+	if includeArchive := r.URL.Query().Get("include_archive"); includeArchive == "true" || includeArchive == "1" {
+		opts.IncludeArchive = true
+	}
+
 	if startTime := r.URL.Query().Get("start_time"); startTime != "" {
 		if t, err := time.Parse(time.RFC3339, startTime); err == nil {
 			opts.StartTime = t
@@ -202,6 +207,108 @@ func (h *Handlers) getLogStore() *logging.LogStore {
 		return nil
 	}
 	return h.logger.GetStore()
+}
+
+// HandleGetLogArchives handles GET /api/v1/logs/archives
+func (h *Handlers) HandleGetLogArchives(w http.ResponseWriter, r *http.Request) {
+	store := h.getLogStore()
+	if store == nil {
+		writeError(w, http.StatusServiceUnavailable, "log_store_disabled", "log storage is not enabled")
+		return
+	}
+
+	archives, err := store.ListArchives()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "list_failed", err.Error())
+		return
+	}
+
+	if archives == nil {
+		archives = []logging.ArchiveFile{}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"archives": archives,
+		"count":    len(archives),
+	})
+}
+
+// HandleGetLogArchiveStats handles GET /api/v1/logs/archives/stats
+func (h *Handlers) HandleGetLogArchiveStats(w http.ResponseWriter, r *http.Request) {
+	store := h.getLogStore()
+	if store == nil {
+		writeError(w, http.StatusServiceUnavailable, "log_store_disabled", "log storage is not enabled")
+		return
+	}
+
+	stats := store.GetArchiveStats()
+	if stats == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"enabled": false,
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"enabled":        true,
+		"archive_count":  stats.ArchiveCount,
+		"total_size":     stats.TotalSize,
+		"total_entries":  stats.TotalEntries,
+		"oldest_archive": stats.OldestArchive,
+		"newest_archive": stats.NewestArchive,
+	})
+}
+
+// HandleArchiveLogsNow handles POST /api/v1/logs/archive
+func (h *Handlers) HandleArchiveLogsNow(w http.ResponseWriter, r *http.Request) {
+	store := h.getLogStore()
+	if store == nil {
+		writeError(w, http.StatusServiceUnavailable, "log_store_disabled", "log storage is not enabled")
+		return
+	}
+
+	archiveFile, err := store.ArchiveNow()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "archive_failed", err.Error())
+		return
+	}
+
+	h.auditLog(r, "logs archived manually")
+
+	if archiveFile == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"message": "no logs to archive",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"archive": archiveFile,
+	})
+}
+
+// HandleCleanupArchives handles POST /api/v1/logs/archives/cleanup
+func (h *Handlers) HandleCleanupArchives(w http.ResponseWriter, r *http.Request) {
+	store := h.getLogStore()
+	if store == nil {
+		writeError(w, http.StatusServiceUnavailable, "log_store_disabled", "log storage is not enabled")
+		return
+	}
+
+	deleted, err := store.CleanupOldArchives()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "cleanup_failed", err.Error())
+		return
+	}
+
+	h.auditLog(r, "old archives cleaned up", "deleted", deleted)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"deleted": deleted,
+	})
 }
 
 // SetLogger sets the logger for log-related endpoints.

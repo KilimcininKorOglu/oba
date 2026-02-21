@@ -139,6 +139,10 @@ func (s *Server) setupRoutes() {
 	s.router.GET("/api/v1/logs/stats", s.handlers.HandleGetLogStats)
 	s.router.DELETE("/api/v1/logs", s.handlers.HandleClearLogs)
 	s.router.GET("/api/v1/logs/export", s.handlers.HandleExportLogs)
+	s.router.GET("/api/v1/logs/archives", s.handlers.HandleGetLogArchives)
+	s.router.GET("/api/v1/logs/archives/stats", s.handlers.HandleGetLogArchiveStats)
+	s.router.POST("/api/v1/logs/archive", s.handlers.HandleArchiveLogsNow)
+	s.router.POST("/api/v1/logs/archives/cleanup", s.handlers.HandleCleanupArchives)
 
 	// Cluster management endpoints
 	s.router.GET("/api/v1/cluster/status", s.handlers.HandleClusterStatus)

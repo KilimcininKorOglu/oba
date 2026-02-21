@@ -58,8 +58,16 @@ logging:
     enabled: false
     # Path to log database directory
     dbPath: "./data/log"
-    # Maximum number of log entries to keep
+    # Maximum number of log entries to keep in active database
     maxEntries: 100000
+    # Maximum age of logs before archiving (e.g., 7d, 24h)
+    maxAge: 7d
+    # Directory for archived logs (empty = no archiving)
+    archiveDir: "./data/log/archive"
+    # Compress archive files with gzip
+    compress: true
+    # Days to retain archives (0 = keep forever)
+    retainDays: 0
 
 # Security configuration
 security:
