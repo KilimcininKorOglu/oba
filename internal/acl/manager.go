@@ -625,9 +625,9 @@ func (m *Manager) SetDefaultPolicyFromRaft(policy string) error {
 
 // ACLSnapshot represents ACL data for Raft snapshot.
 type ACLSnapshot struct {
-	Version       uint64              `json:"version"`
-	DefaultPolicy string              `json:"defaultPolicy"`
-	Rules         []raft.ACLRuleData  `json:"rules"`
+	Version       uint64             `json:"version"`
+	DefaultPolicy string             `json:"defaultPolicy"`
+	Rules         []raft.ACLRuleData `json:"rules"`
 }
 
 // GetACLSnapshot returns the current ACL config as a snapshot for Raft.

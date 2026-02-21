@@ -11,6 +11,8 @@ The cluster mode provides:
 - Automatic failover when leader fails
 - Data replication across all nodes
 - Log database replication for audit trails
+- Configuration synchronization across nodes
+- ACL rule synchronization across nodes
 
 ## Architecture
 
@@ -300,3 +302,95 @@ docker compose -f docker-compose.cluster.yml logs oba-node1 | grep "entry commit
 5. Set up alerting for leader changes
 6. Regular backup of Raft snapshots
 7. Use TLS for Raft RPC in production (configure `raftTLSCert`, `raftTLSKey`)
+
+## Configuration and ACL Synchronization
+
+In cluster mode, configuration and ACL changes are automatically synchronized across all nodes via Raft consensus.
+
+### What Gets Synchronized
+
+| Data Type     | Synchronized | Method                    |
+|---------------|--------------|---------------------------|
+| LDAP entries  | Yes          | Raft log replication      |
+| Log database  | Yes          | Raft log replication      |
+| Config changes| Yes          | Raft config commands      |
+| ACL rules     | Yes          | Raft ACL commands         |
+| Local files   | No           | Manual sync required      |
+
+### Configuration Sync
+
+When you update configuration via REST API on the leader, changes are automatically replicated to all followers:
+
+```bash
+# Get auth token
+TOKEN=$(curl -s -X POST http://localhost:8081/api/v1/auth/bind \
+  -H "Content-Type: application/json" \
+  -d '{"dn":"cn=admin,dc=example,dc=com","password":"admin"}' \
+  | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+
+# Update logging level on leader (port 8081)
+curl -X PATCH http://localhost:8081/api/v1/config/logging \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"level": "debug"}'
+
+# Verify on all nodes
+for port in 8081 8082 8083; do
+  echo "Node $port:"
+  curl -s -H "Authorization: Bearer $TOKEN" http://localhost:$port/api/v1/config/logging
+done
+```
+
+Response from leader includes replication status:
+
+```json
+{
+  "message": "config section updated and replicated",
+  "replicated": true,
+  "section": "logging"
+}
+```
+
+### ACL Sync
+
+ACL rule changes made via REST API are also synchronized:
+
+```bash
+# Add ACL rule on leader
+curl -X POST http://localhost:8081/api/v1/acl/rules \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "rule": {
+      "target": "ou=users,dc=example,dc=com",
+      "subject": "cn=readonly,dc=example,dc=com",
+      "scope": "subtree",
+      "rights": ["read", "search"]
+    },
+    "index": -1
+  }'
+
+# Verify on all nodes
+for port in 8081 8082 8083; do
+  echo "Node $port:"
+  curl -s -H "Authorization: Bearer $TOKEN" http://localhost:$port/api/v1/acl/rules | grep -o '"count":[0-9]*'
+done
+```
+
+### Synchronized ACL Operations
+
+| Operation          | Endpoint                      | Replicated |
+|--------------------|-------------------------------|------------|
+| Add rule           | POST /api/v1/acl/rules        | Yes        |
+| Update rule        | PUT /api/v1/acl/rules/{index} | Yes        |
+| Delete rule        | DELETE /api/v1/acl/rules/{index} | Yes     |
+| Set default policy | PUT /api/v1/acl/default       | Yes        |
+| Reload from file   | POST /api/v1/acl/reload       | No (local) |
+| Save to file       | POST /api/v1/acl/save         | No (local) |
+
+### Important Notes
+
+1. Changes must be made on the leader node. Followers will reject write operations.
+2. File-based operations (reload, save) only affect the local node.
+3. Initial ACL configuration is loaded from local `aclFile` on each node startup.
+4. For consistent initial state, ensure all nodes have identical `acl.yaml` files.

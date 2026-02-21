@@ -1586,6 +1586,16 @@ Response:
 }
 ```
 
+In cluster mode, the response includes replication status:
+
+```json
+{
+  "message": "rule added and replicated",
+  "replicated": true,
+  "rule": {...}
+}
+```
+
 #### Update ACL Rule
 
 ```
@@ -1716,6 +1726,19 @@ Response (invalid):
 | `attributes` | []string | No       | Specific attributes (empty = all)                                           |
 | `deny`       | bool     | No       | `true` for deny rule, `false` for allow                                     |
 
+#### Cluster Mode ACL Replication
+
+In cluster mode, ACL changes (add, update, delete rules, set default policy) are automatically replicated to all nodes via Raft consensus. File-based operations (reload, save) only affect the local node.
+
+| Operation          | Replicated in Cluster |
+|--------------------|-----------------------|
+| Add rule           | Yes                   |
+| Update rule        | Yes                   |
+| Delete rule        | Yes                   |
+| Set default policy | Yes                   |
+| Reload from file   | No (local only)       |
+| Save to file       | No (local only)       |
+
 ---
 
 ### Config Management
@@ -1842,6 +1865,16 @@ Response:
     "format": "json",
     "output": "stdout"
   }
+}
+```
+
+In cluster mode, the response includes replication status:
+
+```json
+{
+  "message": "config section updated and replicated",
+  "replicated": true,
+  "section": "logging"
 }
 ```
 
