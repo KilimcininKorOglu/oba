@@ -113,3 +113,21 @@ acl:
       subject: "anonymous"
       rights: ["search"]
       attributes: ["cn", "uid"]
+
+# REST API configuration
+rest:
+  # Enable REST API
+  enabled: false
+  # HTTP listen address
+  address: ":8080"
+  # HTTPS listen address (uses server.tlsCert and server.tlsKey)
+  tlsAddress: ""
+  # JWT secret for token signing (generate with: openssl rand -hex 32)
+  jwtSecret: ""
+  # Token TTL (time-to-live)
+  tokenTTL: 24h
+  # Rate limit (requests per second per IP, 0 = disabled)
+  rateLimit: 100
+  # CORS allowed origins
+  corsOrigins:
+    - "*"

@@ -54,5 +54,14 @@ func DefaultConfig() *Config {
 			DefaultPolicy: "deny",
 			Rules:         nil,
 		},
+		REST: RESTConfig{
+			Enabled:     false,
+			Address:     ":8080",
+			TLSAddress:  "",
+			JWTSecret:   "",
+			TokenTTL:    24 * time.Hour,
+			RateLimit:   100,
+			CORSOrigins: []string{"*"},
+		},
 	}
 }

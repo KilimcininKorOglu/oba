@@ -19,6 +19,7 @@ import (
 	"github.com/oba-ldap/oba/internal/filter"
 	"github.com/oba-ldap/oba/internal/ldap"
 	"github.com/oba-ldap/oba/internal/logging"
+	"github.com/oba-ldap/oba/internal/rest"
 	"github.com/oba-ldap/oba/internal/server"
 	"github.com/oba-ldap/oba/internal/storage"
 	"github.com/oba-ldap/oba/internal/storage/engine"
@@ -42,6 +43,7 @@ type LDAPServer struct {
 	tlsListener             net.Listener
 	tlsConfig               *tls.Config
 	persistentSearchHandler *server.PersistentSearchHandler
+	restServer              *rest.Server
 	running                 bool
 	mu                      sync.Mutex
 	wg                      sync.WaitGroup
@@ -99,6 +101,26 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 	// Create persistent search handler
 	psHandler := server.NewPersistentSearchHandler(be)
 
+	// Create REST server if enabled
+	var restServer *rest.Server
+	if cfg.REST.Enabled {
+		restCfg := &rest.ServerConfig{
+			Address:      cfg.REST.Address,
+			TLSAddress:   cfg.REST.TLSAddress,
+			TLSCert:      cfg.Server.TLSCert,
+			TLSKey:       cfg.Server.TLSKey,
+			JWTSecret:    cfg.REST.JWTSecret,
+			TokenTTL:     cfg.REST.TokenTTL,
+			RateLimit:    cfg.REST.RateLimit,
+			CORSOrigins:  cfg.REST.CORSOrigins,
+			ReadTimeout:  30 * time.Second,
+			WriteTimeout: 30 * time.Second,
+			IdleTimeout:  120 * time.Second,
+		}
+		restServer = rest.NewServer(restCfg, be, logger)
+		logger.Info("REST API enabled", "address", cfg.REST.Address)
+	}
+
 	return &LDAPServer{
 		config:                  cfg,
 		logger:                  logger,
@@ -107,6 +129,7 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 		engine:                  db,
 		tlsConfig:               tlsConfig,
 		persistentSearchHandler: psHandler,
+		restServer:              restServer,
 		ctx:                     ctx,
 		cancel:                  cancel,
 	}, nil
@@ -356,6 +379,20 @@ func (s *LDAPServer) Start() error {
 		go s.acceptConnections(listener, true)
 	}
 
+	// Start REST server if enabled
+	if s.restServer != nil {
+		if err := s.restServer.Start(); err != nil {
+			// Close LDAP listeners if REST fails
+			if s.listener != nil {
+				s.listener.Close()
+			}
+			if s.tlsListener != nil {
+				s.tlsListener.Close()
+			}
+			return fmt.Errorf("failed to start REST server: %w", err)
+		}
+	}
+
 	// Wait for all connections to finish
 	s.wg.Wait()
 	return nil
@@ -373,6 +410,11 @@ func (s *LDAPServer) Stop(ctx context.Context) error {
 
 	// Cancel the server context
 	s.cancel()
+
+	// Stop REST server
+	if s.restServer != nil {
+		s.restServer.Stop(ctx)
+	}
 
 	// Close listeners
 	if s.listener != nil {

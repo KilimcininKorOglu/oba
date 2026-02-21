@@ -294,6 +294,10 @@ func applyConfig(root *yamlNode, config *Config) error {
 			if err := applyACLConfig(node, &config.ACL); err != nil {
 				return err
 			}
+		case "rest":
+			if err := applyRESTConfig(node, &config.REST); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -586,6 +590,51 @@ func parseACLRules(node *yamlNode) ([]ACLRuleConfig, error) {
 	}
 
 	return rules, nil
+}
+
+// applyRESTConfig applies REST API configuration.
+func applyRESTConfig(node *yamlNode, config *RESTConfig) error {
+	for _, child := range node.children {
+		switch child.key {
+		case "enabled":
+			config.Enabled = parseBool(child.value)
+		case "address":
+			if child.value != "" {
+				config.Address = child.value
+			}
+		case "tlsAddress":
+			if child.value != "" {
+				config.TLSAddress = child.value
+			}
+		case "jwtSecret":
+			if child.value != "" {
+				config.JWTSecret = child.value
+			}
+		case "tokenTTL":
+			if child.value != "" {
+				dur, err := parseDuration(child.value)
+				if err != nil {
+					return err
+				}
+				config.TokenTTL = dur
+			}
+		case "rateLimit":
+			if child.value != "" {
+				val, err := strconv.Atoi(child.value)
+				if err != nil {
+					return ErrInvalidNumber
+				}
+				config.RateLimit = val
+			}
+		case "corsOrigins":
+			if inlineArr := parseInlineArray(child.value); inlineArr != nil {
+				config.CORSOrigins = inlineArr
+			} else if len(child.listItems) > 0 {
+				config.CORSOrigins = child.listItems
+			}
+		}
+	}
+	return nil
 }
 
 // parseDuration parses a duration string supporting formats like "30s", "5m", "1h", "90d".

@@ -9,6 +9,6 @@ COPY . .
 
 RUN make build
 
-EXPOSE 389 636
+EXPOSE 389 636 8080
 
 CMD ["./bin/oba", "serve"]

@@ -14,6 +14,7 @@ type Config struct {
 	Logging   LogConfig       `yaml:"logging"`
 	Security  SecurityConfig  `yaml:"security"`
 	ACL       ACLConfig       `yaml:"acl"`
+	REST      RESTConfig      `yaml:"rest"`
 }
 
 // ResolvePaths resolves relative paths in the configuration to absolute paths.
@@ -142,4 +143,15 @@ type ACLRuleConfig struct {
 	Subject    string   `yaml:"subject"`
 	Rights     []string `yaml:"rights"`
 	Attributes []string `yaml:"attributes"`
+}
+
+// RESTConfig holds REST API configuration.
+type RESTConfig struct {
+	Enabled     bool          `yaml:"enabled"`
+	Address     string        `yaml:"address"`
+	TLSAddress  string        `yaml:"tlsAddress"`
+	JWTSecret   string        `yaml:"jwtSecret"`
+	TokenTTL    time.Duration `yaml:"tokenTTL"`
+	RateLimit   int           `yaml:"rateLimit"`
+	CORSOrigins []string      `yaml:"corsOrigins"`
 }
