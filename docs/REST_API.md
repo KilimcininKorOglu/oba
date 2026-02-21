@@ -19,6 +19,8 @@ This document provides comprehensive documentation for the Oba LDAP Server REST 
    - [Modify DN (Move/Rename)](#modify-dn-moverename)
    - [Compare](#compare)
    - [Bulk Operations](#bulk-operations)
+   - [ACL Management](#acl-management)
+   - [Config Management](#config-management)
 5. [Error Handling](#error-handling)
 6. [Rate Limiting](#rate-limiting)
 7. [CORS Configuration](#cors-configuration)
@@ -1088,6 +1090,420 @@ When `stopOnError` is `true`, processing stops at the first error and remaining 
 
 ---
 
+### ACL Management
+
+Manage Access Control List (ACL) rules via REST API. These endpoints require admin authentication (rootDN).
+
+#### Get ACL Configuration
+
+Retrieve the complete ACL configuration including rules and statistics.
+
+```
+GET /api/v1/acl
+```
+
+Response:
+
+```json
+{
+  "defaultPolicy": "deny",
+  "rules": [
+    {
+      "target": "*",
+      "subject": "cn=admin,dc=example,dc=com",
+      "scope": "subtree",
+      "rights": ["all"],
+      "deny": false
+    },
+    {
+      "target": "dc=example,dc=com",
+      "subject": "authenticated",
+      "scope": "subtree",
+      "rights": ["read", "search"],
+      "deny": false
+    }
+  ],
+  "stats": {
+    "ruleCount": 2,
+    "lastReload": "2026-02-21T10:00:00Z",
+    "reloadCount": 5,
+    "filePath": "/var/lib/oba/acl.yaml"
+  }
+}
+```
+
+#### List ACL Rules
+
+```
+GET /api/v1/acl/rules
+```
+
+Response:
+
+```json
+{
+  "rules": [...],
+  "count": 3
+}
+```
+
+#### Get Single Rule
+
+```
+GET /api/v1/acl/rules/{index}
+```
+
+Response:
+
+```json
+{
+  "target": "dc=example,dc=com",
+  "subject": "authenticated",
+  "scope": "subtree",
+  "rights": ["read", "search"],
+  "deny": false
+}
+```
+
+#### Add ACL Rule
+
+```
+POST /api/v1/acl/rules
+```
+
+Request:
+
+```json
+{
+  "rule": {
+    "target": "ou=users,dc=example,dc=com",
+    "subject": "cn=readonly,dc=example,dc=com",
+    "scope": "subtree",
+    "rights": ["read", "search"],
+    "deny": false
+  },
+  "index": -1
+}
+```
+
+The `index` field is optional. Use `-1` or omit to append at the end.
+
+Response:
+
+```json
+{
+  "message": "rule added",
+  "rule": {...}
+}
+```
+
+#### Update ACL Rule
+
+```
+PUT /api/v1/acl/rules/{index}
+```
+
+Request:
+
+```json
+{
+  "target": "ou=users,dc=example,dc=com",
+  "subject": "authenticated",
+  "scope": "subtree",
+  "rights": ["read", "write", "search"],
+  "deny": false
+}
+```
+
+#### Delete ACL Rule
+
+```
+DELETE /api/v1/acl/rules/{index}
+```
+
+Response:
+
+```json
+{
+  "message": "rule deleted"
+}
+```
+
+#### Set Default Policy
+
+```
+PUT /api/v1/acl/default
+```
+
+Request:
+
+```json
+{
+  "policy": "deny"
+}
+```
+
+Valid values: `allow`, `deny`
+
+#### Reload ACL from File
+
+```
+POST /api/v1/acl/reload
+```
+
+Response:
+
+```json
+{
+  "message": "ACL reloaded",
+  "ruleCount": 3,
+  "reloadCount": 6
+}
+```
+
+#### Save ACL to File
+
+```
+POST /api/v1/acl/save
+```
+
+Response:
+
+```json
+{
+  "message": "ACL saved",
+  "filePath": "/var/lib/oba/acl.yaml"
+}
+```
+
+#### Validate ACL Configuration
+
+```
+POST /api/v1/acl/validate
+```
+
+Request:
+
+```json
+{
+  "defaultPolicy": "deny",
+  "rules": [
+    {
+      "target": "dc=example,dc=com",
+      "subject": "authenticated",
+      "scope": "subtree",
+      "rights": ["read"]
+    }
+  ]
+}
+```
+
+Response (valid):
+
+```json
+{
+  "valid": true,
+  "message": "ACL configuration is valid"
+}
+```
+
+Response (invalid):
+
+```json
+{
+  "valid": false,
+  "errors": ["rule 0: missing subject"]
+}
+```
+
+#### ACL Rule Fields
+
+| Field        | Type     | Required | Description                                      |
+|--------------|----------|----------|--------------------------------------------------|
+| `target`     | string   | Yes      | DN pattern this rule applies to (`*` for all)    |
+| `subject`    | string   | Yes      | Who this rule applies to (DN, `authenticated`, `anonymous`, `self`) |
+| `scope`      | string   | No       | `base`, `one`, or `subtree` (default: `subtree`) |
+| `rights`     | []string | Yes      | Access rights: `read`, `write`, `add`, `delete`, `search`, `compare`, `all` |
+| `attributes` | []string | No       | Specific attributes (empty = all)                |
+| `deny`       | bool     | No       | `true` for deny rule, `false` for allow          |
+
+---
+
+### Config Management
+
+Manage server configuration via REST API. These endpoints require admin authentication (rootDN). Sensitive data (passwords, secrets) are masked in responses.
+
+#### Get Full Configuration
+
+```
+GET /api/v1/config
+```
+
+Response:
+
+```json
+{
+  "server": {
+    "address": ":1389",
+    "maxConnections": 1000,
+    "readTimeout": "30s",
+    "writeTimeout": "30s"
+  },
+  "logging": {
+    "level": "info",
+    "format": "json",
+    "output": "stdout"
+  },
+  "security": {
+    "rateLimit": {
+      "enabled": true,
+      "maxAttempts": 5,
+      "lockoutDuration": "15m"
+    },
+    "passwordPolicy": {
+      "enabled": true,
+      "minLength": 8,
+      "requireUppercase": true,
+      "requireLowercase": true,
+      "requireDigit": true,
+      "requireSpecial": false
+    },
+    "encryption": {
+      "enabled": true,
+      "keyFile": "/var/lib/oba/encryption.key"
+    }
+  },
+  "rest": {
+    "enabled": true,
+    "address": ":8080",
+    "rateLimit": 100,
+    "tokenTTL": "24h",
+    "corsOrigins": ["*"],
+    "jwtSecret": "********"
+  },
+  "storage": {
+    "dataDir": "/var/lib/oba",
+    "pageSize": 4096,
+    "bufferPoolSize": "256MB",
+    "checkpointInterval": "5m"
+  }
+}
+```
+
+#### Get Config Section
+
+```
+GET /api/v1/config/{section}
+```
+
+Available sections: `server`, `logging`, `security`, `rest`, `storage`
+
+Example:
+
+```bash
+curl http://localhost:8080/api/v1/config/logging \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Response:
+
+```json
+{
+  "level": "info",
+  "format": "json",
+  "output": "stdout"
+}
+```
+
+#### Update Config Section
+
+Update a config section with hot-reload support. Changes are applied immediately without server restart.
+
+```
+PATCH /api/v1/config/{section}
+```
+
+Hot-reloadable sections and fields:
+
+| Section                   | Fields                                                    |
+|---------------------------|-----------------------------------------------------------|
+| `logging`                 | `level`, `format`                                         |
+| `server`                  | `maxConnections`, `readTimeout`, `writeTimeout`, `tlsCert`, `tlsKey` |
+| `security.ratelimit`      | `enabled`, `maxAttempts`, `lockoutDuration`               |
+| `security.passwordpolicy` | All fields                                                |
+| `rest`                    | `rateLimit`, `tokenTTL`, `corsOrigins`                    |
+
+Example - Update log level:
+
+```bash
+curl -X PATCH http://localhost:8080/api/v1/config/logging \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"level": "debug"}'
+```
+
+Response:
+
+```json
+{
+  "message": "config section updated",
+  "section": "logging",
+  "config": {
+    "level": "debug",
+    "format": "json",
+    "output": "stdout"
+  }
+}
+```
+
+#### Reload Config from File
+
+```
+POST /api/v1/config/reload
+```
+
+Response:
+
+```json
+{
+  "message": "config reloaded"
+}
+```
+
+#### Save Config to File
+
+```
+POST /api/v1/config/save
+```
+
+Response:
+
+```json
+{
+  "message": "config saved",
+  "filePath": "/var/lib/oba/config.yaml"
+}
+```
+
+#### Validate Config
+
+```
+POST /api/v1/config/validate
+```
+
+Request: Full config JSON structure
+
+Response:
+
+```json
+{
+  "valid": true,
+  "message": "config structure is valid"
+}
+```
+
+---
+
 ## Error Handling
 
 All errors are returned as JSON with consistent structure.
@@ -1434,17 +1850,33 @@ curl -X POST http://localhost:8080/api/v1/compare \
 
 ## API Reference Summary
 
-| Method | Endpoint                    | Description                    | Auth Required |
-|--------|-----------------------------|--------------------------------|---------------|
-| GET    | `/api/v1/health`            | Health check                   | No            |
-| POST   | `/api/v1/auth/bind`         | Authenticate and get JWT       | No            |
-| GET    | `/api/v1/entries/{dn}`      | Get single entry               | Yes           |
-| GET    | `/api/v1/search`            | Search entries with pagination | Yes           |
-| GET    | `/api/v1/search/stream`     | Stream search results (NDJSON) | Yes           |
-| POST   | `/api/v1/entries`           | Create new entry               | Yes           |
-| PUT    | `/api/v1/entries/{dn}`      | Modify entry                   | Yes           |
-| PATCH  | `/api/v1/entries/{dn}`      | Modify entry                   | Yes           |
-| DELETE | `/api/v1/entries/{dn}`      | Delete entry                   | Yes           |
-| POST   | `/api/v1/entries/{dn}/move` | Rename/move entry              | Yes           |
-| POST   | `/api/v1/compare`           | Compare attribute value        | Yes           |
-| POST   | `/api/v1/bulk`              | Bulk operations                | Yes           |
+| Method | Endpoint                      | Description                    | Auth Required |
+|--------|-------------------------------|--------------------------------|---------------|
+| GET    | `/api/v1/health`              | Health check                   | No            |
+| POST   | `/api/v1/auth/bind`           | Authenticate and get JWT       | No            |
+| GET    | `/api/v1/entries/{dn}`        | Get single entry               | Yes           |
+| GET    | `/api/v1/search`              | Search entries with pagination | Yes           |
+| GET    | `/api/v1/search/stream`       | Stream search results (NDJSON) | Yes           |
+| POST   | `/api/v1/entries`             | Create new entry               | Yes           |
+| PUT    | `/api/v1/entries/{dn}`        | Modify entry                   | Yes           |
+| PATCH  | `/api/v1/entries/{dn}`        | Modify entry                   | Yes           |
+| DELETE | `/api/v1/entries/{dn}`        | Delete entry                   | Yes           |
+| POST   | `/api/v1/entries/{dn}/move`   | Rename/move entry              | Yes           |
+| POST   | `/api/v1/compare`             | Compare attribute value        | Yes           |
+| POST   | `/api/v1/bulk`                | Bulk operations                | Yes           |
+| GET    | `/api/v1/acl`                 | Get ACL configuration          | Admin         |
+| GET    | `/api/v1/acl/rules`           | List ACL rules                 | Admin         |
+| GET    | `/api/v1/acl/rules/{index}`   | Get single ACL rule            | Admin         |
+| POST   | `/api/v1/acl/rules`           | Add ACL rule                   | Admin         |
+| PUT    | `/api/v1/acl/rules/{index}`   | Update ACL rule                | Admin         |
+| DELETE | `/api/v1/acl/rules/{index}`   | Delete ACL rule                | Admin         |
+| PUT    | `/api/v1/acl/default`         | Set default ACL policy         | Admin         |
+| POST   | `/api/v1/acl/reload`          | Reload ACL from file           | Admin         |
+| POST   | `/api/v1/acl/save`            | Save ACL to file               | Admin         |
+| POST   | `/api/v1/acl/validate`        | Validate ACL configuration     | Admin         |
+| GET    | `/api/v1/config`              | Get full configuration         | Admin         |
+| GET    | `/api/v1/config/{section}`    | Get config section             | Admin         |
+| PATCH  | `/api/v1/config/{section}`    | Update config section          | Admin         |
+| POST   | `/api/v1/config/reload`       | Reload config from file        | Admin         |
+| POST   | `/api/v1/config/save`         | Save config to file            | Admin         |
+| POST   | `/api/v1/config/validate`     | Validate configuration         | Admin         |
