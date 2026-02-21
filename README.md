@@ -84,7 +84,7 @@ rest:
   jwtSecret: "your-secret-key"
 ```
 
-See `examples/acl.example.yaml` for ACL configuration format.
+See `acl.example.yaml` for ACL configuration format.
 
 ## Supported Operations
 
@@ -151,7 +151,12 @@ make test       # Run tests
 make test-race  # Run tests with race detector
 make bench      # Run benchmarks
 make build      # Build binary
-make docker     # Build Docker image
+```
+
+Docker build:
+
+```bash
+docker build -t oba:latest .
 ```
 
 ## License
