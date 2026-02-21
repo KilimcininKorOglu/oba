@@ -13,11 +13,13 @@ import (
 // Write operations are routed through Raft for replication.
 // Read operations can be served locally or from leader based on consistency requirements.
 type ClusterBackend struct {
-	engine    storage.StorageEngine
-	node      *Node
-	config    *config.ClusterConfig
-	transport Transport
-	snapStore *SnapshotStore
+	engine       storage.StorageEngine
+	logEngine    storage.StorageEngine
+	stateMachine *ObaDBStateMachine
+	node         *Node
+	config       *config.ClusterConfig
+	transport    Transport
+	snapStore    *SnapshotStore
 
 	// Callbacks
 	onLeaderChange func(isLeader bool)
@@ -96,6 +98,7 @@ func NewClusterBackend(cfg *ClusterBackendConfig) (*ClusterBackend, error) {
 
 	cb := &ClusterBackend{
 		engine:         cfg.Engine,
+		stateMachine:   stateMachine,
 		node:           node,
 		config:         cc,
 		transport:      transport,
@@ -104,6 +107,14 @@ func NewClusterBackend(cfg *ClusterBackendConfig) (*ClusterBackend, error) {
 	}
 
 	return cb, nil
+}
+
+// SetLogEngine sets the log database engine for multi-database replication.
+func (cb *ClusterBackend) SetLogEngine(engine storage.StorageEngine) {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	cb.logEngine = engine
+	cb.stateMachine.SetLogEngine(engine)
 }
 
 // Start starts the cluster backend and Raft node.
@@ -192,6 +203,28 @@ func (cb *ClusterBackend) ModifyDN(oldDN string, newEntry *storage.Entry) error 
 	}
 
 	cmd := CreateModifyDNCommand(oldDN, newEntry)
+	return cb.node.Propose(cmd)
+}
+
+// PutLog stores a log entry through Raft consensus.
+// Only the leader can accept writes.
+func (cb *ClusterBackend) PutLog(entry *storage.Entry) error {
+	if !cb.IsLeader() {
+		return ErrNotLeader
+	}
+
+	cmd := CreatePutCommandForDB(entry, DBLog)
+	return cb.node.Propose(cmd)
+}
+
+// DeleteLog removes a log entry through Raft consensus.
+// Only the leader can accept writes.
+func (cb *ClusterBackend) DeleteLog(dn string) error {
+	if !cb.IsLeader() {
+		return ErrNotLeader
+	}
+
+	cmd := CreateDeleteCommandForDB(dn, DBLog)
 	return cb.node.Propose(cmd)
 }
 

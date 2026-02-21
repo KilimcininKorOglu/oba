@@ -245,6 +245,14 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 		// Set cluster writer on backend for cluster-aware writes
 		be.SetClusterWriter(clusterBackend)
 
+		// Set cluster writer on log store for log replication
+		if logStore := logger.GetStore(); logStore != nil {
+			logStore.SetClusterWriter(clusterBackend)
+			// Set log engine on cluster backend for multi-database replication
+			clusterBackend.SetLogEngine(logStore.Engine())
+			sysLogger.Info("log store cluster replication enabled")
+		}
+
 		sysLogger.Info("cluster backend created", "peers", len(cfg.Cluster.Peers))
 	}
 

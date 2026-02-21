@@ -62,12 +62,19 @@ const (
 	CmdModifyDN              // Rename/move entry
 )
 
+// Database IDs for multi-database support.
+const (
+	DBMain uint8 = iota // Main LDAP database
+	DBLog               // Log database
+)
+
 // Command represents an LDAP operation to be replicated.
 type Command struct {
-	Type     uint8  // CmdPut, CmdDelete, CmdModifyDN
-	DN       string // Target DN
-	OldDN    string // Previous DN (for CmdModifyDN)
-	EntryDN  string // Entry DN
+	Type      uint8  // CmdPut, CmdDelete, CmdModifyDN
+	DatabaseID uint8 // Target database (DBMain, DBLog)
+	DN        string // Target DN
+	OldDN     string // Previous DN (for CmdModifyDN)
+	EntryDN   string // Entry DN
 	EntryData []byte // Serialized entry data (for CmdPut)
 }
 
@@ -77,6 +84,9 @@ func (c *Command) Serialize() ([]byte, error) {
 
 	// Type
 	buf.WriteByte(c.Type)
+
+	// DatabaseID
+	buf.WriteByte(c.DatabaseID)
 
 	// DN
 	if err := writeString(&buf, c.DN); err != nil {
@@ -103,7 +113,7 @@ func (c *Command) Serialize() ([]byte, error) {
 
 // DeserializeCommand decodes a command from bytes.
 func DeserializeCommand(data []byte) (*Command, error) {
-	if len(data) < 1 {
+	if len(data) < 2 {
 		return nil, ErrLogCorrupted
 	}
 
@@ -113,6 +123,12 @@ func DeserializeCommand(data []byte) (*Command, error) {
 	// Type
 	var err error
 	cmd.Type, err = buf.ReadByte()
+	if err != nil {
+		return nil, ErrLogCorrupted
+	}
+
+	// DatabaseID
+	cmd.DatabaseID, err = buf.ReadByte()
 	if err != nil {
 		return nil, ErrLogCorrupted
 	}

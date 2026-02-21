@@ -26,11 +26,19 @@ type LogEntry struct {
 
 // LogStore provides persistent storage for log entries using ObaDB.
 type LogStore struct {
-	mu         sync.RWMutex
-	db         *engine.ObaDB
-	nextID     uint64
-	maxEntries int
-	dbPath     string
+	mu            sync.RWMutex
+	db            *engine.ObaDB
+	clusterWriter ClusterWriter
+	nextID        uint64
+	maxEntries    int
+	dbPath        string
+}
+
+// ClusterWriter interface for cluster-aware write operations.
+type ClusterWriter interface {
+	PutLog(entry *storage.Entry) error
+	DeleteLog(dn string) error
+	IsLeader() bool
 }
 
 // LogStoreConfig holds configuration for the log store.
@@ -78,6 +86,13 @@ func NewLogStore(cfg LogStoreConfig) (*LogStore, error) {
 	}
 
 	return store, nil
+}
+
+// SetClusterWriter sets the cluster writer for cluster-aware write operations.
+func (s *LogStore) SetClusterWriter(cw ClusterWriter) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.clusterWriter = cw
 }
 
 // loadNextID finds the highest existing ID to continue from.
@@ -148,6 +163,40 @@ func (s *LogStore) Write(level, msg, source, user, requestID string, fields map[
 		entry.SetStringAttribute("fields", string(fieldsJSON))
 	}
 
+	// If cluster writer is set, route through Raft consensus
+	if s.clusterWriter != nil {
+		// Ensure parent exists first (local check)
+		tx, err := s.db.Begin()
+		if err != nil {
+			return err
+		}
+		parentDN := "ou=logs"
+		if _, err := s.db.Get(tx, parentDN); err != nil {
+			parent := &storage.Entry{
+				DN:         parentDN,
+				Attributes: make(map[string][][]byte),
+			}
+			parent.SetStringAttribute("objectclass", "organizationalUnit")
+			parent.SetStringAttribute("ou", "logs")
+			// Create parent through cluster
+			if err := s.clusterWriter.PutLog(parent); err != nil {
+				s.db.Rollback(tx)
+				return err
+			}
+		}
+		s.db.Rollback(tx)
+
+		// Write log entry through cluster
+		if err := s.clusterWriter.PutLog(entry); err != nil {
+			return err
+		}
+
+		// Trim old entries if needed (async)
+		go s.trimOldEntries()
+		return nil
+	}
+
+	// Standalone mode: direct write
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -239,6 +288,15 @@ func (s *LogStore) trimOldEntries() {
 			entries[i], entries[minIdx] = entries[minIdx], entries[i]
 		}
 
+		// If cluster writer is set, delete through Raft
+		if s.clusterWriter != nil {
+			for i := 0; i < deleteCount; i++ {
+				s.clusterWriter.DeleteLog(entries[i].dn)
+			}
+			return
+		}
+
+		// Standalone mode: direct delete
 		tx2, err := s.db.Begin()
 		if err != nil {
 			return
@@ -493,6 +551,18 @@ func (s *LogStore) Clear() error {
 	iter.Close()
 	s.db.Rollback(tx)
 
+	// If cluster writer is set, delete through Raft
+	if s.clusterWriter != nil {
+		for _, dn := range dns {
+			if err := s.clusterWriter.DeleteLog(dn); err != nil {
+				return err
+			}
+		}
+		s.nextID = 1
+		return nil
+	}
+
+	// Standalone mode: direct delete
 	tx2, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -521,6 +591,13 @@ func (s *LogStore) Close() error {
 		return err
 	}
 	return nil
+}
+
+// Engine returns the underlying storage engine for cluster replication.
+func (s *LogStore) Engine() storage.StorageEngine {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.db
 }
 
 // Export exports logs in the specified format.
