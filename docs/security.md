@@ -214,10 +214,30 @@ security:
 
 ### Unlocking Accounts
 
+Using CLI:
+
 ```bash
 # Unlock a locked account
 oba user unlock --dn "uid=alice,ou=users,dc=example,dc=com"
 ```
+
+Using REST API:
+
+```bash
+# Unlock via REST API
+curl -X POST "http://localhost:8080/api/v1/entries/uid%3Dalice%2Cou%3Dusers%2Cdc%3Dexample%2Cdc%3Dcom/unlock" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Check lock status
+curl "http://localhost:8080/api/v1/entries/uid%3Dalice%2Cou%3Dusers%2Cdc%3Dexample%2Cdc%3Dcom/lock-status" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Using Web UI:
+
+1. Navigate to Users page
+2. Find the locked user (indicated by lock icon)
+3. Click the unlock button
 
 ## Access Control Lists (ACL)
 

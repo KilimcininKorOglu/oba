@@ -26,6 +26,15 @@ docker compose up -d
 ldapsearch -x -H ldap://localhost:1389 -b "dc=example,dc=com" "(objectClass=*)"
 ```
 
+Services available:
+- LDAP Server: `ldap://localhost:1389`
+- REST API: `http://localhost:8080`
+- Web Admin Panel: `http://localhost:3000`
+
+Default credentials:
+- DN: `cn=admin,dc=example,dc=com`
+- Password: `admin`
+
 ### Option 2: Build from Source
 
 ```bash

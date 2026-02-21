@@ -9,6 +9,8 @@ This document provides comprehensive documentation for the Oba LDAP Server REST 
 3. [Authentication](#authentication)
 4. [Endpoints](#endpoints)
    - [Health Check](#health-check)
+   - [Server Statistics](#server-statistics)
+   - [Recent Activities](#recent-activities)
    - [Bind (Authentication)](#bind-authentication)
    - [Get Entry](#get-entry)
    - [Search](#search)
@@ -17,6 +19,10 @@ This document provides comprehensive documentation for the Oba LDAP Server REST 
    - [Modify Entry](#modify-entry)
    - [Delete Entry](#delete-entry)
    - [Modify DN (Move/Rename)](#modify-dn-moverename)
+   - [Disable Entry](#disable-entry)
+   - [Enable Entry](#enable-entry)
+   - [Unlock Account](#unlock-account)
+   - [Get Lock Status](#get-lock-status)
    - [Compare](#compare)
    - [Bulk Operations](#bulk-operations)
    - [ACL Management](#acl-management)
@@ -221,6 +227,171 @@ No authentication required.
 
 ```bash
 curl http://localhost:8080/api/v1/health
+```
+
+---
+
+### Server Statistics
+
+Get comprehensive server statistics including storage, security, system, and operation metrics.
+
+#### Request
+
+```
+GET /api/v1/stats
+```
+
+Requires authentication.
+
+#### Response
+
+```json
+{
+  "status": "ok",
+  "version": "1.0.1",
+  "uptime": "2h30m15s",
+  "uptimeSecs": 9015,
+  "startTime": "2024-01-15T10:30:00Z",
+  "connections": 5,
+  "requests": 1234,
+  "timezone": "Europe/Istanbul",
+  "storage": {
+    "entryCount": 150,
+    "indexCount": 5,
+    "totalPages": 1024,
+    "usedPages": 256,
+    "freePages": 768,
+    "bufferPoolSize": 128,
+    "dirtyPages": 4,
+    "activeTransactions": 1,
+    "walSize": 4096,
+    "databaseSizeBytes": 4194304
+  },
+  "security": {
+    "lockedAccounts": 0,
+    "disabledAccounts": 2,
+    "failedLogins24h": 5
+  },
+  "system": {
+    "goRoutines": 15,
+    "memoryAlloc": 8388608,
+    "memoryTotal": 16777216,
+    "memorySys": 20971520,
+    "numGC": 10,
+    "numCPU": 4
+  },
+  "operations": {
+    "binds": 100,
+    "searches": 500,
+    "adds": 25,
+    "modifies": 50,
+    "deletes": 10,
+    "compares": 5
+  }
+}
+```
+
+#### Response Fields
+
+| Field                        | Type   | Description                              |
+|------------------------------|--------|------------------------------------------|
+| `status`                     | string | Server status                            |
+| `version`                    | string | Server version                           |
+| `uptime`                     | string | Human-readable uptime                    |
+| `uptimeSecs`                 | int    | Uptime in seconds                        |
+| `startTime`                  | string | Server start time (ISO 8601)             |
+| `connections`                | int    | Current active connections               |
+| `requests`                   | int    | Total requests processed                 |
+| `timezone`                   | string | Server timezone                          |
+| `storage.entryCount`         | int    | Total LDAP entries                       |
+| `storage.indexCount`         | int    | Number of indexes                        |
+| `storage.totalPages`         | int    | Total database pages                     |
+| `storage.usedPages`          | int    | Used database pages                      |
+| `storage.freePages`          | int    | Free database pages                      |
+| `storage.bufferPoolSize`     | int    | Buffer pool size (pages)                 |
+| `storage.dirtyPages`         | int    | Dirty pages in buffer                    |
+| `storage.activeTransactions` | int    | Active transactions                      |
+| `security.lockedAccounts`    | int    | Accounts locked due to failed logins     |
+| `security.disabledAccounts`  | int    | Manually disabled accounts               |
+| `security.failedLogins24h`   | int    | Failed login attempts in last 24 hours   |
+| `system.goRoutines`          | int    | Active goroutines                        |
+| `system.memoryAlloc`         | int    | Allocated memory (bytes)                 |
+| `system.memorySys`           | int    | System memory (bytes)                    |
+| `system.numGC`               | int    | Garbage collection cycles                |
+| `system.numCPU`              | int    | Number of CPUs                           |
+| `operations.binds`           | int    | Total bind operations                    |
+| `operations.searches`        | int    | Total search operations                  |
+| `operations.adds`            | int    | Total add operations                     |
+| `operations.modifies`        | int    | Total modify operations                  |
+| `operations.deletes`         | int    | Total delete operations                  |
+| `operations.compares`        | int    | Total compare operations                 |
+
+#### Example
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/stats
+```
+
+---
+
+### Recent Activities
+
+Get recent activity log entries.
+
+#### Request
+
+```
+GET /api/v1/activities
+```
+
+Requires authentication.
+
+#### Query Parameters
+
+| Parameter | Type | Default | Description                    |
+|-----------|------|---------|--------------------------------|
+| `limit`   | int  | 10      | Number of entries (max 100)    |
+
+#### Response
+
+```json
+{
+  "activities": [
+    {
+      "timestamp": "2024-01-15T12:30:00Z",
+      "type": "info",
+      "user": "cn=admin,dc=example,dc=com",
+      "message": "login successful",
+      "source": "rest"
+    },
+    {
+      "timestamp": "2024-01-15T12:29:00Z",
+      "type": "info",
+      "user": "uid=john,ou=users,dc=example,dc=com",
+      "message": "entry modified",
+      "source": "rest"
+    }
+  ],
+  "count": 2
+}
+```
+
+#### Response Fields
+
+| Field                  | Type   | Description                    |
+|------------------------|--------|--------------------------------|
+| `activities`           | array  | List of activity entries       |
+| `activities[].timestamp` | string | Activity timestamp (ISO 8601) |
+| `activities[].type`    | string | Log level (info, warn, error)  |
+| `activities[].user`    | string | User DN who performed action   |
+| `activities[].message` | string | Activity description           |
+| `activities[].source`  | string | Source (rest, ldap, system)    |
+| `count`                | int    | Number of returned activities  |
+
+#### Example
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" "http://localhost:8080/api/v1/activities?limit=20"
 ```
 
 ---
@@ -2197,19 +2368,21 @@ curl -X POST http://localhost:8080/api/v1/compare \
 
 ## API Reference Summary
 
-| Method | Endpoint                       | Description                    | Auth Required |
-|--------|--------------------------------|--------------------------------|---------------|
-| GET    | `/api/v1/health`               | Health check                   | No            |
-| POST   | `/api/v1/auth/bind`            | Authenticate and get JWT       | No            |
-| GET    | `/api/v1/config/public`        | Get public config (baseDN)     | No            |
-| GET    | `/api/v1/entries/{dn}`         | Get single entry               | Yes           |
-| GET    | `/api/v1/search`               | Search entries with pagination | Yes           |
-| GET    | `/api/v1/search/stream`        | Stream search results (NDJSON) | Yes           |
-| POST   | `/api/v1/entries`              | Create new entry               | Yes           |
-| PUT    | `/api/v1/entries/{dn}`         | Modify entry                   | Yes           |
-| PATCH  | `/api/v1/entries/{dn}`         | Modify entry                   | Yes           |
-| DELETE | `/api/v1/entries/{dn}`         | Delete entry                   | Yes           |
-| POST   | `/api/v1/entries/{dn}/move`    | Rename/move entry              | Yes           |
+| Method | Endpoint                           | Description                    | Auth Required |
+|--------|------------------------------------|--------------------------------|---------------|
+| GET    | `/api/v1/health`                   | Health check                   | No            |
+| GET    | `/api/v1/stats`                    | Server statistics              | Yes           |
+| GET    | `/api/v1/activities`               | Recent activity log            | Yes           |
+| POST   | `/api/v1/auth/bind`                | Authenticate and get JWT       | No            |
+| GET    | `/api/v1/config/public`            | Get public config (baseDN)     | No            |
+| GET    | `/api/v1/entries/{dn}`             | Get single entry               | Yes           |
+| GET    | `/api/v1/search`                   | Search entries with pagination | Yes           |
+| GET    | `/api/v1/search/stream`            | Stream search results (NDJSON) | Yes           |
+| POST   | `/api/v1/entries`                  | Create new entry               | Yes           |
+| PUT    | `/api/v1/entries/{dn}`             | Modify entry                   | Yes           |
+| PATCH  | `/api/v1/entries/{dn}`             | Modify entry                   | Yes           |
+| DELETE | `/api/v1/entries/{dn}`             | Delete entry                   | Yes           |
+| POST   | `/api/v1/entries/{dn}/move`        | Rename/move entry              | Yes           |
 | POST   | `/api/v1/entries/{dn}/disable` | Disable user account           | Yes           |
 | POST   | `/api/v1/entries/{dn}/enable`  | Enable user account            | Yes           |
 | POST   | `/api/v1/entries/{dn}/unlock`  | Unlock locked account          | Yes           |

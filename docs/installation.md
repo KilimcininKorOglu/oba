@@ -201,31 +201,41 @@ docker run -d \
 
 ### Docker Compose
 
-Create a `docker-compose.yml`:
+The repository includes a complete `docker-compose.yml` with LDAP server, REST API, and Web Admin Panel:
 
 ```yaml
 services:
   oba:
     build: .
     ports:
-      - "389:389"
-      - "636:636"
+      - "1389:1389"  # LDAP
+      - "8080:8080"  # REST API
     volumes:
-      - ./config.yaml:/etc/oba/config.yaml:ro
-      - oba-data:/var/lib/oba
+      - ./docker-data:/var/lib/oba
     environment:
-      - OBA_LOGGING_LEVEL=info
+      - OBA_LOG_LEVEL=debug
+      - TZ=Europe/Istanbul
     restart: unless-stopped
 
-volumes:
-  oba-data:
+  web:
+    build: ./web
+    ports:
+      - "3000:80"  # Web Admin Panel
+    depends_on:
+      - oba
+    restart: unless-stopped
 ```
 
 Start with:
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
+
+Access points:
+- LDAP: `ldap://localhost:1389`
+- REST API: `http://localhost:8080`
+- Web Admin: `http://localhost:3000`
 
 ## Post-Installation Steps
 

@@ -378,3 +378,81 @@ docker compose build --no-cache
 # Restart with fresh build
 docker compose up -d --build
 ```
+
+## REST API Issues
+
+### Cannot Connect to REST API
+
+```bash
+# Check if REST API is enabled in config
+grep -A5 "rest:" /var/lib/oba/config.yaml
+
+# Test REST API health endpoint
+curl http://localhost:8080/api/v1/health
+
+# Check if port is listening
+netstat -tlnp | grep 8080
+```
+
+### Authentication Errors
+
+```bash
+# Get a new token
+TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/bind \
+  -H "Content-Type: application/json" \
+  -d '{"dn":"cn=admin,dc=example,dc=com","password":"admin"}' \
+  | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+
+# Test with token
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/stats
+```
+
+### CORS Errors
+
+If browser shows CORS errors:
+
+```yaml
+# Add your frontend origin to config
+rest:
+  corsOrigins:
+    - "http://localhost:3000"
+    - "http://your-domain.com"
+```
+
+## Web Admin Panel Issues
+
+### Cannot Access Web UI
+
+```bash
+# Check if web container is running
+docker compose ps
+
+# Check web container logs
+docker compose logs web
+
+# Verify port mapping
+curl http://localhost:3000
+```
+
+### Dashboard Shows No Data
+
+1. Check if REST API is accessible from web container
+2. Verify authentication token is valid
+3. Check browser console for errors
+
+```bash
+# Test REST API from web container
+docker compose exec web wget -qO- http://oba:8080/api/v1/health
+```
+
+### Login Fails
+
+1. Verify credentials are correct
+2. Check if account is locked
+3. Check REST API logs for errors
+
+```bash
+# Check for locked accounts
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/api/v1/entries/uid%3Duser%2Cou%3Dusers%2Cdc%3Dexample%2Cdc%3Dcom/lock-status"
+```

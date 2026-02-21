@@ -368,6 +368,31 @@ grep "ACL" /var/log/oba/oba.log | tail -5
 
 ## Monitoring
 
+### Web Dashboard
+
+The web admin panel provides real-time monitoring at `http://localhost:3000`:
+
+Dashboard displays:
+- Server status and uptime
+- Active connections and total requests
+- Storage statistics (entries, indexes, pages)
+- Security metrics (locked/disabled accounts, failed logins)
+- System resources (memory, goroutines, GC)
+- LDAP operation counts (binds, searches, adds, modifies, deletes)
+- Recent activity feed
+
+Dashboard auto-refreshes every 5 seconds.
+
+### REST API Statistics
+
+Get detailed statistics via REST API:
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/stats
+```
+
+Response includes storage, security, system, and operation metrics.
+
 ### Log Analysis
 
 ```bash

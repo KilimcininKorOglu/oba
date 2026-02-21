@@ -23,6 +23,38 @@ Examples:
 - `OBA_DIRECTORY_ROOT_PASSWORD=secret`
 - `OBA_LOGGING_LEVEL=debug`
 
+## Timezone Configuration
+
+Set the server timezone using the `TZ` environment variable. This affects:
+- Log timestamps
+- Dashboard date displays
+- API response timestamps
+
+Example (Docker Compose):
+
+```yaml
+services:
+  oba:
+    environment:
+      - TZ=Europe/Istanbul
+```
+
+Example (Shell):
+
+```bash
+TZ=Europe/Istanbul ./oba serve --config config.yaml
+```
+
+Common timezone values:
+- `UTC` - Coordinated Universal Time
+- `Europe/Istanbul` - Turkey Time (UTC+3)
+- `Europe/London` - British Time
+- `America/New_York` - Eastern Time
+- `America/Los_Angeles` - Pacific Time
+- `Asia/Tokyo` - Japan Time
+
+Note: LDAP timestamps (createTimestamp, modifyTimestamp) are always stored in UTC format per RFC 4517, but displayed in the configured timezone.
+
 ## Server Configuration
 
 | Parameter             | Type     | Default | Description                        |
