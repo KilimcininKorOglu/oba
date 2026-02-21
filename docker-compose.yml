@@ -10,7 +10,7 @@ services:
       - ./docker-data:/var/lib/oba
     environment:
       - OBA_LOG_LEVEL=debug
-    command: ["./bin/oba", "serve", "--config", "/var/lib/oba/config.yaml"]
+    command: ["serve", "--config", "/var/lib/oba/config.yaml"]
     restart: unless-stopped
 
   web:
