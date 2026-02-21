@@ -135,16 +135,11 @@ func (s *LogStore) SetClusterWriter(cw ClusterWriter) {
 
 // flushPendingEntries writes buffered entries to the cluster after Raft is ready.
 func (s *LogStore) flushPendingEntries(cw ClusterWriter, pending []*storage.Entry) {
-	// Wait for this node to become leader (only leader can write)
-	// If we're not leader after 30 seconds, skip flushing (follower will get entries via replication)
-	for i := 0; i < 300; i++ { // Max 30 seconds
-		if cw.IsLeader() {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
+	// Wait for Raft to stabilize (leader election)
+	time.Sleep(5 * time.Second)
 
-	// Only flush if we're the leader
+	// Only leader can write to Raft, followers skip flushing
+	// Their logs will not be persisted (this is acceptable for system startup logs)
 	if !cw.IsLeader() {
 		return
 	}
@@ -264,6 +259,13 @@ func (s *LogStore) Write(level, msg, source, user, requestID string, fields map[
 
 	// If cluster writer is set, route through Raft consensus
 	if s.clusterWriter != nil {
+		// Only leader can write to Raft
+		if !s.clusterWriter.IsLeader() {
+			// Follower: write to local database only (not replicated)
+			// This ensures follower logs are preserved locally
+			return s.writeLocal(entry)
+		}
+
 		// Ensure parent exists first (local check)
 		tx, err := s.db.Begin()
 		if err != nil {
@@ -306,6 +308,11 @@ func (s *LogStore) Write(level, msg, source, user, requestID string, fields map[
 	}
 
 	// Standalone mode: direct write
+	return s.writeLocal(entry)
+}
+
+// writeLocal writes an entry directly to local database (no Raft).
+func (s *LogStore) writeLocal(entry *storage.Entry) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
