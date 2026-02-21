@@ -56,6 +56,14 @@ class ObaAPI {
     return this.request('GET', '/health');
   }
 
+  getStats() {
+    return this.request('GET', '/stats');
+  }
+
+  getActivities(limit = 10) {
+    return this.request('GET', `/activities?limit=${limit}`);
+  }
+
   getEntry(dn) {
     return this.request('GET', `/entries/${encodeURIComponent(dn)}`);
   }

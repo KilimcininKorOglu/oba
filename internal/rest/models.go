@@ -132,3 +132,78 @@ type BulkOperationResult struct {
 	Error      string `json:"error,omitempty"`
 	ResultCode int    `json:"resultCode,omitempty"`
 }
+
+// StatsResponse represents server statistics.
+type StatsResponse struct {
+	// Server stats
+	Status      string    `json:"status"`
+	Version     string    `json:"version"`
+	Uptime      string    `json:"uptime"`
+	UptimeSecs  int64     `json:"uptimeSecs"`
+	StartTime   time.Time `json:"startTime"`
+	Connections int       `json:"connections"`
+	Requests    int64     `json:"requests"`
+
+	// Storage stats
+	Storage StorageStats `json:"storage"`
+
+	// Security stats
+	Security SecurityStats `json:"security"`
+
+	// System stats
+	System SystemStats `json:"system"`
+
+	// LDAP operation stats
+	Operations OperationStats `json:"operations"`
+}
+
+// StorageStats contains storage-related statistics.
+type StorageStats struct {
+	EntryCount         uint64 `json:"entryCount"`
+	IndexCount         int    `json:"indexCount"`
+	TotalPages         uint64 `json:"totalPages"`
+	UsedPages          uint64 `json:"usedPages"`
+	FreePages          uint64 `json:"freePages"`
+	BufferPoolSize     int    `json:"bufferPoolSize"`
+	DirtyPages         int    `json:"dirtyPages"`
+	ActiveTransactions int    `json:"activeTransactions"`
+	WALSize            uint64 `json:"walSize"`
+	DatabaseSizeBytes  int64  `json:"databaseSizeBytes"`
+}
+
+// SecurityStats contains security-related statistics.
+type SecurityStats struct {
+	LockedAccounts   int `json:"lockedAccounts"`
+	DisabledAccounts int `json:"disabledAccounts"`
+	FailedLogins24h  int `json:"failedLogins24h"`
+}
+
+// SystemStats contains system-related statistics.
+type SystemStats struct {
+	GoRoutines   int    `json:"goRoutines"`
+	MemoryAlloc  uint64 `json:"memoryAlloc"`
+	MemoryTotal  uint64 `json:"memoryTotal"`
+	MemorySys    uint64 `json:"memorySys"`
+	NumGC        uint32 `json:"numGC"`
+	NumCPU       int    `json:"numCPU"`
+}
+
+// OperationStats contains LDAP operation statistics.
+type OperationStats struct {
+	Binds    int64 `json:"binds"`
+	Searches int64 `json:"searches"`
+	Adds     int64 `json:"adds"`
+	Modifies int64 `json:"modifies"`
+	Deletes  int64 `json:"deletes"`
+	Compares int64 `json:"compares"`
+}
+
+// ActivityEntry represents a recent activity log entry.
+type ActivityEntry struct {
+	Timestamp time.Time `json:"timestamp"`
+	Type      string    `json:"type"`
+	User      string    `json:"user,omitempty"`
+	Target    string    `json:"target,omitempty"`
+	Message   string    `json:"message"`
+	Source    string    `json:"source,omitempty"`
+}

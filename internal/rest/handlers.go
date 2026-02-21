@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -29,6 +30,17 @@ type Handlers struct {
 	startTime     time.Time
 	requestCount  int64
 	activeConns   int64
+
+	// Operation counters
+	bindCount    int64
+	searchCount  int64
+	addCount     int64
+	modifyCount  int64
+	deleteCount  int64
+	compareCount int64
+
+	// Failed login counter (last 24h tracking)
+	failedLogins24h int64
 }
 
 // NewHandlers creates new handlers.
@@ -98,6 +110,7 @@ func getClientIPFromRequest(r *http.Request) string {
 // HandleBind handles POST /api/v1/auth/bind
 func (h *Handlers) HandleBind(w http.ResponseWriter, r *http.Request) {
 	atomic.AddInt64(&h.requestCount, 1)
+	atomic.AddInt64(&h.bindCount, 1)
 
 	var req BindRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -107,6 +120,7 @@ func (h *Handlers) HandleBind(w http.ResponseWriter, r *http.Request) {
 
 	token, err := h.auth.Authenticate(req.DN, req.Password)
 	if err != nil {
+		atomic.AddInt64(&h.failedLogins24h, 1)
 		if err == backend.ErrInvalidCredentials {
 			h.auditLogWithUser(r, req.DN, "login failed: invalid credentials")
 			writeError(w, http.StatusUnauthorized, "invalid_credentials", "invalid DN or password")
@@ -164,6 +178,7 @@ func (h *Handlers) HandleGetEntry(w http.ResponseWriter, r *http.Request) {
 // HandleSearch handles GET /api/v1/search
 func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 	atomic.AddInt64(&h.requestCount, 1)
+	atomic.AddInt64(&h.searchCount, 1)
 	query := r.URL.Query()
 
 	baseDN := query.Get("baseDN")
@@ -298,6 +313,7 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 // HandleAddEntry handles POST /api/v1/entries
 func (h *Handlers) HandleAddEntry(w http.ResponseWriter, r *http.Request) {
 	atomic.AddInt64(&h.requestCount, 1)
+	atomic.AddInt64(&h.addCount, 1)
 
 	var req AddRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -331,6 +347,7 @@ func (h *Handlers) HandleAddEntry(w http.ResponseWriter, r *http.Request) {
 // HandleModifyEntry handles PUT/PATCH /api/v1/entries/{dn}
 func (h *Handlers) HandleModifyEntry(w http.ResponseWriter, r *http.Request) {
 	atomic.AddInt64(&h.requestCount, 1)
+	atomic.AddInt64(&h.modifyCount, 1)
 
 	dn := Param(r, "dn")
 	if dn == "" {
@@ -393,6 +410,7 @@ func (h *Handlers) HandleModifyEntry(w http.ResponseWriter, r *http.Request) {
 // HandleDeleteEntry handles DELETE /api/v1/entries/{dn}
 func (h *Handlers) HandleDeleteEntry(w http.ResponseWriter, r *http.Request) {
 	atomic.AddInt64(&h.requestCount, 1)
+	atomic.AddInt64(&h.deleteCount, 1)
 
 	dn := Param(r, "dn")
 	if dn == "" {
@@ -604,6 +622,7 @@ func (h *Handlers) HandleModifyDN(w http.ResponseWriter, r *http.Request) {
 // HandleCompare handles POST /api/v1/compare
 func (h *Handlers) HandleCompare(w http.ResponseWriter, r *http.Request) {
 	atomic.AddInt64(&h.requestCount, 1)
+	atomic.AddInt64(&h.compareCount, 1)
 
 	var req CompareRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -637,12 +656,112 @@ func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, HealthResponse{
 		Status:      "ok",
-		Version:     "1.0.0",
+		Version:     "1.0.1",
 		Uptime:      uptime.String(),
 		UptimeSecs:  int64(uptime.Seconds()),
 		StartTime:   h.startTime,
 		Connections: int(atomic.LoadInt64(&h.activeConns)),
 		Requests:    atomic.LoadInt64(&h.requestCount),
+	})
+}
+
+// HandleStats handles GET /api/v1/stats
+func (h *Handlers) HandleStats(w http.ResponseWriter, r *http.Request) {
+	uptime := time.Since(h.startTime)
+
+	// Get storage stats
+	engineStats := h.backend.Stats()
+	storageStats := StorageStats{}
+	if engineStats != nil {
+		storageStats = StorageStats{
+			EntryCount:         engineStats.EntryCount,
+			IndexCount:         engineStats.IndexCount,
+			TotalPages:         engineStats.TotalPages,
+			UsedPages:          engineStats.UsedPages,
+			FreePages:          engineStats.FreePages,
+			BufferPoolSize:     engineStats.BufferPoolSize,
+			DirtyPages:         engineStats.DirtyPages,
+			ActiveTransactions: engineStats.ActiveTransactions,
+			WALSize:            engineStats.WALSize,
+		}
+	}
+
+	// Get security stats
+	securityStats := SecurityStats{
+		LockedAccounts:   h.backend.GetLockedAccountCount(),
+		DisabledAccounts: h.backend.GetDisabledAccountCount(),
+		FailedLogins24h:  int(atomic.LoadInt64(&h.failedLogins24h)),
+	}
+
+	// Get system stats
+	var memStats runtime.MemStats
+	runtime.ReadMemStats(&memStats)
+	systemStats := SystemStats{
+		GoRoutines:  runtime.NumGoroutine(),
+		MemoryAlloc: memStats.Alloc,
+		MemoryTotal: memStats.TotalAlloc,
+		MemorySys:   memStats.Sys,
+		NumGC:       memStats.NumGC,
+		NumCPU:      runtime.NumCPU(),
+	}
+
+	// Get operation stats
+	operationStats := OperationStats{
+		Binds:    atomic.LoadInt64(&h.bindCount),
+		Searches: atomic.LoadInt64(&h.searchCount),
+		Adds:     atomic.LoadInt64(&h.addCount),
+		Modifies: atomic.LoadInt64(&h.modifyCount),
+		Deletes:  atomic.LoadInt64(&h.deleteCount),
+		Compares: atomic.LoadInt64(&h.compareCount),
+	}
+
+	writeJSON(w, http.StatusOK, StatsResponse{
+		Status:      "ok",
+		Version:     "1.0.1",
+		Uptime:      uptime.String(),
+		UptimeSecs:  int64(uptime.Seconds()),
+		StartTime:   h.startTime,
+		Connections: int(atomic.LoadInt64(&h.activeConns)),
+		Requests:    atomic.LoadInt64(&h.requestCount),
+		Storage:     storageStats,
+		Security:    securityStats,
+		System:      systemStats,
+		Operations:  operationStats,
+	})
+}
+
+// HandleActivities handles GET /api/v1/activities
+func (h *Handlers) HandleActivities(w http.ResponseWriter, r *http.Request) {
+	// Get limit from query params
+	limitStr := r.URL.Query().Get("limit")
+	limit := 10
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
+			limit = l
+		}
+	}
+
+	// Get activities from log store
+	activities := []ActivityEntry{}
+	store := h.getLogStore()
+	if store != nil {
+		logs, _, _ := store.Query(logging.QueryOptions{
+			Limit: limit,
+		})
+		for _, log := range logs {
+			activities = append(activities, ActivityEntry{
+				Timestamp: log.Timestamp,
+				Type:      log.Level,
+				User:      log.User,
+				Message:   log.Message,
+				Source:    log.Source,
+			})
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"activities": activities,
+		"count":      len(activities),
 	})
 }
 

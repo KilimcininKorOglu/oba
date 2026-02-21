@@ -89,6 +89,8 @@ func NewServer(cfg *ServerConfig, be *backend.ObaBackend, logger logging.Logger)
 
 func (s *Server) setupRoutes() {
 	s.router.GET("/api/v1/health", s.handlers.HandleHealth)
+	s.router.GET("/api/v1/stats", s.handlers.HandleStats)
+	s.router.GET("/api/v1/activities", s.handlers.HandleActivities)
 	s.router.GET("/api/v1/config/public", s.handlers.HandleGetPublicConfig)
 
 	s.router.POST("/api/v1/auth/bind", s.handlers.HandleBind)

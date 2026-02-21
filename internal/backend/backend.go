@@ -846,3 +846,40 @@ func (b *ObaBackend) UnlockAccount(dn string) {
 		lockout.Unlock()
 	}
 }
+
+// Stats returns storage engine statistics.
+func (b *ObaBackend) Stats() *storage.EngineStats {
+	return b.engine.Stats()
+}
+
+// GetLockedAccountCount returns the number of currently locked accounts.
+func (b *ObaBackend) GetLockedAccountCount() int {
+	b.securityMu.RLock()
+	defer b.securityMu.RUnlock()
+
+	count := 0
+	for _, lockout := range b.accountLockouts {
+		if lockout.IsLocked() {
+			count++
+		}
+	}
+	return count
+}
+
+// GetDisabledAccountCount returns the number of disabled accounts.
+func (b *ObaBackend) GetDisabledAccountCount() int {
+	entries, err := b.Search("", 2, nil) // subtree search from root
+	if err != nil {
+		return 0
+	}
+
+	count := 0
+	for _, entry := range entries {
+		if values := entry.GetAttribute(AccountDisabledAttribute); len(values) > 0 {
+			if strings.EqualFold(values[0], "true") {
+				count++
+			}
+		}
+	}
+	return count
+}
