@@ -47,13 +47,14 @@ changelog:
       - '^test:'
       - '^chore:'
 
-dockers:
-  - image_templates:
-      - "ghcr.io/kilimcininkorglu/oba:{{ .Tag }}"
-      - "ghcr.io/kilimcininkorglu/oba:latest"
-    dockerfile: Dockerfile
-    build_flag_templates:
-      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
-      - "--label=org.opencontainers.image.version={{ .Version }}"
-      - "--label=org.opencontainers.image.created={{ .Date }}"
-      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+# Docker builds disabled for now
+# dockers:
+#   - image_templates:
+#       - "ghcr.io/kilimcininkorglu/oba:{{ .Tag }}"
+#       - "ghcr.io/kilimcininkorglu/oba:latest"
+#     dockerfile: Dockerfile
+#     build_flag_templates:
+#       - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+#       - "--label=org.opencontainers.image.version={{ .Version }}"
+#       - "--label=org.opencontainers.image.created={{ .Date }}"
+#       - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
