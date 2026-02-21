@@ -1,0 +1,115 @@
+# Docker Compose configuration for Raft cluster mode
+# Usage: docker compose -f docker-compose.cluster.yml up -d
+
+services:
+  # Node 1 - Initial leader candidate
+  oba-node1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-1.0.0}
+        COMMIT: ${COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
+    hostname: node1
+    ports:
+      - "1389:1389"   # LDAP
+      - "8081:8080"   # REST API
+      - "4445:4445"   # Raft RPC
+    volumes:
+      - ./docker-cluster/node1:/var/lib/oba
+    environment:
+      - OBA_LOG_LEVEL=info
+      - TZ=Europe/Istanbul
+    command: ["serve", "--config", "/var/lib/oba/config.yaml"]
+    networks:
+      - oba-cluster
+    restart: unless-stopped
+
+  # Node 2
+  oba-node2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-1.0.0}
+        COMMIT: ${COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
+    hostname: node2
+    ports:
+      - "2389:1389"   # LDAP
+      - "8082:8080"   # REST API
+      - "4446:4445"   # Raft RPC
+    volumes:
+      - ./docker-cluster/node2:/var/lib/oba
+    environment:
+      - OBA_LOG_LEVEL=info
+      - TZ=Europe/Istanbul
+    command: ["serve", "--config", "/var/lib/oba/config.yaml"]
+    networks:
+      - oba-cluster
+    depends_on:
+      - oba-node1
+    restart: unless-stopped
+
+  # Node 3
+  oba-node3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-1.0.0}
+        COMMIT: ${COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
+    hostname: node3
+    ports:
+      - "3389:1389"   # LDAP
+      - "8083:8080"   # REST API
+      - "4447:4445"   # Raft RPC
+    volumes:
+      - ./docker-cluster/node3:/var/lib/oba
+    environment:
+      - OBA_LOG_LEVEL=info
+      - TZ=Europe/Istanbul
+    command: ["serve", "--config", "/var/lib/oba/config.yaml"]
+    networks:
+      - oba-cluster
+    depends_on:
+      - oba-node1
+    restart: unless-stopped
+
+  # HAProxy load balancer
+  haproxy:
+    image: haproxy:2.8-alpine
+    ports:
+      - "389:389"     # LDAP (load balanced)
+      - "8080:8080"   # REST API (load balanced)
+      - "8404:8404"   # HAProxy stats
+    volumes:
+      - ./docker-cluster/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    networks:
+      - oba-cluster
+    depends_on:
+      - oba-node1
+      - oba-node2
+      - oba-node3
+    restart: unless-stopped
+
+  # Web admin panel
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    environment:
+      - TZ=Europe/Istanbul
+    networks:
+      - oba-cluster
+    depends_on:
+      - haproxy
+    restart: unless-stopped
+
+networks:
+  oba-cluster:
+    driver: bridge

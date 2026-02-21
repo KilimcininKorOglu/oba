@@ -18,6 +18,7 @@ import (
 	"github.com/KilimcininKorOglu/oba/internal/filter"
 	"github.com/KilimcininKorOglu/oba/internal/ldap"
 	"github.com/KilimcininKorOglu/oba/internal/logging"
+	"github.com/KilimcininKorOglu/oba/internal/raft"
 )
 
 // Handlers contains all REST API handlers.
@@ -30,6 +31,9 @@ type Handlers struct {
 	startTime     time.Time
 	requestCount  int64
 	activeConns   int64
+
+	// Cluster backend (nil if not in cluster mode)
+	clusterBackend *raft.ClusterBackend
 
 	// Operation counters
 	bindCount    int64
@@ -60,6 +64,11 @@ func (h *Handlers) SetACLManager(m *acl.Manager) {
 // SetConfigManager sets the config manager for config-related endpoints.
 func (h *Handlers) SetConfigManager(m *config.ConfigManager) {
 	h.configManager = m
+}
+
+// SetClusterBackend sets the cluster backend for cluster mode.
+func (h *Handlers) SetClusterBackend(cb *raft.ClusterBackend) {
+	h.clusterBackend = cb
 }
 
 // IncrementConnections increments active connection count.
@@ -1007,4 +1016,87 @@ func copyAttributes(attrs map[string][]string) map[string][]string {
 		result[k] = copied
 	}
 	return result
+}
+
+// HandleClusterStatus handles GET /api/v1/cluster/status
+func (h *Handlers) HandleClusterStatus(w http.ResponseWriter, r *http.Request) {
+	atomic.AddInt64(&h.requestCount, 1)
+
+	if h.clusterBackend == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"enabled": false,
+			"mode":    "standalone",
+		})
+		return
+	}
+
+	status := h.clusterBackend.Status()
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"enabled":     true,
+		"mode":        "cluster",
+		"nodeId":      status.NodeID,
+		"state":       status.State,
+		"term":        status.Term,
+		"leaderId":    status.LeaderID,
+		"leaderAddr":  status.LeaderAddr,
+		"commitIndex": status.CommitIndex,
+		"lastApplied": status.LastApplied,
+		"peers":       status.Peers,
+	})
+}
+
+// HandleClusterHealth handles GET /api/v1/cluster/health
+// Returns 200 if leader, 503 if not leader (for HAProxy routing)
+func (h *Handlers) HandleClusterHealth(w http.ResponseWriter, r *http.Request) {
+	if h.clusterBackend == nil {
+		// Standalone mode - always healthy
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"status": "ok",
+			"mode":   "standalone",
+		})
+		return
+	}
+
+	isLeader := h.clusterBackend.IsLeader()
+	status := map[string]interface{}{
+		"status":   "ok",
+		"mode":     "cluster",
+		"nodeId":   h.clusterBackend.NodeID(),
+		"state":    h.clusterBackend.State(),
+		"isLeader": isLeader,
+		"leaderId": h.clusterBackend.LeaderID(),
+	}
+
+	if isLeader {
+		writeJSON(w, http.StatusOK, status)
+	} else {
+		// Return 503 for non-leaders (HAProxy will route writes to leader)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(status)
+	}
+}
+
+// HandleClusterLeader handles GET /api/v1/cluster/leader
+func (h *Handlers) HandleClusterLeader(w http.ResponseWriter, r *http.Request) {
+	atomic.AddInt64(&h.requestCount, 1)
+
+	if h.clusterBackend == nil {
+		writeError(w, http.StatusBadRequest, "not_cluster_mode", "server is not in cluster mode")
+		return
+	}
+
+	leaderID := h.clusterBackend.LeaderID()
+	leaderAddr := h.clusterBackend.LeaderAddr()
+
+	if leaderID == 0 {
+		writeError(w, http.StatusServiceUnavailable, "no_leader", "no leader elected")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"leaderId":   leaderID,
+		"leaderAddr": leaderAddr,
+		"isLeader":   h.clusterBackend.IsLeader(),
+	})
 }

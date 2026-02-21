@@ -13,6 +13,7 @@ import (
 	"github.com/KilimcininKorOglu/oba/internal/backend"
 	"github.com/KilimcininKorOglu/oba/internal/config"
 	"github.com/KilimcininKorOglu/oba/internal/logging"
+	"github.com/KilimcininKorOglu/oba/internal/raft"
 )
 
 // ServerConfig holds REST server configuration.
@@ -138,6 +139,15 @@ func (s *Server) setupRoutes() {
 	s.router.GET("/api/v1/logs/stats", s.handlers.HandleGetLogStats)
 	s.router.DELETE("/api/v1/logs", s.handlers.HandleClearLogs)
 	s.router.GET("/api/v1/logs/export", s.handlers.HandleExportLogs)
+	s.router.GET("/api/v1/logs/archives", s.handlers.HandleGetLogArchives)
+	s.router.GET("/api/v1/logs/archives/stats", s.handlers.HandleGetLogArchiveStats)
+	s.router.POST("/api/v1/logs/archive", s.handlers.HandleArchiveLogsNow)
+	s.router.POST("/api/v1/logs/archives/cleanup", s.handlers.HandleCleanupArchives)
+
+	// Cluster management endpoints
+	s.router.GET("/api/v1/cluster/status", s.handlers.HandleClusterStatus)
+	s.router.GET("/api/v1/cluster/health", s.handlers.HandleClusterHealth)
+	s.router.GET("/api/v1/cluster/leader", s.handlers.HandleClusterLeader)
 }
 
 func (s *Server) setupMiddleware() {
@@ -159,6 +169,7 @@ func (s *Server) setupMiddleware() {
 		"/api/v1/health",
 		"/api/v1/auth/bind",
 		"/api/v1/config/public",
+		"/api/v1/cluster/health",
 	}))
 
 	// Admin-only endpoints
@@ -289,6 +300,11 @@ func (s *Server) SetACLManager(m *acl.Manager) {
 // SetConfigManager sets the config manager for config-related endpoints.
 func (s *Server) SetConfigManager(m *config.ConfigManager) {
 	s.handlers.SetConfigManager(m)
+}
+
+// SetClusterBackend sets the cluster backend for cluster-related endpoints.
+func (s *Server) SetClusterBackend(cb *raft.ClusterBackend) {
+	s.handlers.SetClusterBackend(cb)
 }
 
 // SetLogger sets the logger for log-related endpoints.

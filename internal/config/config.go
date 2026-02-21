@@ -16,6 +16,7 @@ type Config struct {
 	ACL       ACLConfig       `yaml:"acl"`
 	ACLFile   string          `yaml:"aclFile"`
 	REST      RESTConfig      `yaml:"rest"`
+	Cluster   ClusterConfig   `yaml:"cluster"`
 }
 
 // ResolvePaths resolves relative paths in the configuration to absolute paths.
@@ -120,9 +121,13 @@ type LogConfig struct {
 
 // LogStoreConfig holds log storage configuration.
 type LogStoreConfig struct {
-	Enabled    bool   `yaml:"enabled"`
-	DBPath     string `yaml:"dbPath"`
-	MaxEntries int    `yaml:"maxEntries"`
+	Enabled    bool          `yaml:"enabled"`
+	DBPath     string        `yaml:"dbPath"`
+	MaxEntries int           `yaml:"maxEntries"`
+	MaxAge     time.Duration `yaml:"maxAge"`     // Max age before archiving
+	ArchiveDir string        `yaml:"archiveDir"` // Directory for archives
+	Compress   bool          `yaml:"compress"`   // Compress archives
+	RetainDays int           `yaml:"retainDays"` // Days to retain archives (0 = forever)
 }
 
 // SecurityConfig holds security-related configuration.
@@ -180,4 +185,22 @@ type RESTConfig struct {
 	TokenTTL    time.Duration `yaml:"tokenTTL"`
 	RateLimit   int           `yaml:"rateLimit"`
 	CORSOrigins []string      `yaml:"corsOrigins"`
+}
+
+// ClusterConfig holds Raft cluster configuration.
+type ClusterConfig struct {
+	Enabled          bool          `yaml:"enabled"`
+	NodeID           uint64        `yaml:"nodeID"`
+	RaftAddr         string        `yaml:"raftAddr"`
+	Peers            []PeerConfig  `yaml:"peers"`
+	ElectionTimeout  time.Duration `yaml:"electionTimeout"`
+	HeartbeatTimeout time.Duration `yaml:"heartbeatTimeout"`
+	SnapshotInterval uint64        `yaml:"snapshotInterval"`
+	DataDir          string        `yaml:"dataDir"`
+}
+
+// PeerConfig holds peer node configuration.
+type PeerConfig struct {
+	ID   uint64 `yaml:"id"`
+	Addr string `yaml:"addr"`
 }

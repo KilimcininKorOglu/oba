@@ -105,6 +105,9 @@ type ObaBackend struct {
 	rootPW       string
 	changeStream *stream.Broker
 
+	// Cluster mode support
+	clusterWriter ClusterWriter
+
 	// Security settings (hot-reloadable)
 	rateLimitEnabled  bool
 	rateLimitAttempts int
@@ -112,6 +115,15 @@ type ObaBackend struct {
 	passwordPolicy    *password.Policy
 	accountLockouts   map[string]*password.AccountLockout
 	securityMu        sync.RWMutex
+}
+
+// ClusterWriter interface for cluster-aware write operations.
+// When set, write operations are routed through this interface for Raft consensus.
+type ClusterWriter interface {
+	Put(entry *storage.Entry) error
+	Delete(dn string) error
+	ModifyDN(oldDN string, newEntry *storage.Entry) error
+	IsLeader() bool
 }
 
 // NewBackend creates a new ObaBackend with the given storage engine and configuration.
@@ -207,6 +219,13 @@ func extractDCFromDN(dn string) string {
 // SetSchema sets the schema for entry validation.
 func (b *ObaBackend) SetSchema(s *schema.Schema) {
 	b.schema = s
+}
+
+// SetClusterWriter sets the cluster writer for cluster-aware write operations.
+// When set, all write operations (Add, Delete, Modify, ModifyDN) are routed
+// through the cluster writer for Raft consensus replication.
+func (b *ObaBackend) SetClusterWriter(cw ClusterWriter) {
+	b.clusterWriter = cw
 }
 
 // Bind authenticates a user with the given DN and password.
@@ -357,7 +376,33 @@ func (b *ObaBackend) AddWithBindDN(entry *Entry, bindDN string) error {
 		}
 	}
 
-	// Start a transaction
+	// Convert to storage entry
+	storageEntry := convertToStorageEntry(entry)
+
+	// If cluster writer is set, route through Raft consensus
+	if b.clusterWriter != nil {
+		// Check if entry already exists (read is local)
+		txn, err := b.engine.Begin()
+		if err != nil {
+			return wrapStorageError(err)
+		}
+		_, err = b.engine.Get(txn, normalizedDN)
+		b.engine.Rollback(txn)
+		if err == nil {
+			return ErrEntryExists
+		}
+
+		// Route write through cluster
+		if err := b.clusterWriter.Put(storageEntry); err != nil {
+			return wrapStorageError(err)
+		}
+
+		// Emit change event after successful commit
+		b.emitChange(stream.OpInsert, normalizedDN, storageEntry)
+		return nil
+	}
+
+	// Standalone mode: direct write
 	txn, err := b.engine.Begin()
 	if err != nil {
 		return wrapStorageError(err)
@@ -369,9 +414,6 @@ func (b *ObaBackend) AddWithBindDN(entry *Entry, bindDN string) error {
 		b.engine.Rollback(txn)
 		return ErrEntryExists
 	}
-
-	// Convert to storage entry
-	storageEntry := convertToStorageEntry(entry)
 
 	// Put the entry
 	if err := b.engine.Put(txn, storageEntry); err != nil {
@@ -398,17 +440,31 @@ func (b *ObaBackend) Delete(dn string) error {
 
 	normalizedDN := normalizeDN(dn)
 
-	// Start a transaction
+	// Check if entry exists (read is local)
 	txn, err := b.engine.Begin()
 	if err != nil {
 		return wrapStorageError(err)
 	}
-
-	// Check if entry exists
 	_, err = b.engine.Get(txn, normalizedDN)
 	if err != nil {
 		b.engine.Rollback(txn)
 		return ErrEntryNotFound
+	}
+	b.engine.Rollback(txn)
+
+	// If cluster writer is set, route through Raft consensus
+	if b.clusterWriter != nil {
+		if err := b.clusterWriter.Delete(normalizedDN); err != nil {
+			return wrapStorageError(err)
+		}
+		b.emitChange(stream.OpDelete, normalizedDN, nil)
+		return nil
+	}
+
+	// Standalone mode: direct delete
+	txn, err = b.engine.Begin()
+	if err != nil {
+		return wrapStorageError(err)
 	}
 
 	// Delete the entry
@@ -466,7 +522,7 @@ func (b *ObaBackend) ModifyWithBindDN(dn string, changes []Modification, bindDN 
 
 	normalizedDN := normalizeDN(dn)
 
-	// Start a transaction
+	// Start a read transaction to get existing entry
 	txn, err := b.engine.Begin()
 	if err != nil {
 		return wrapStorageError(err)
@@ -478,6 +534,7 @@ func (b *ObaBackend) ModifyWithBindDN(dn string, changes []Modification, bindDN 
 		b.engine.Rollback(txn)
 		return ErrEntryNotFound
 	}
+	b.engine.Rollback(txn)
 
 	// Convert to backend entry for modification
 	entry := convertFromStorageEntry(storageEntry)
@@ -519,13 +576,27 @@ func (b *ObaBackend) ModifyWithBindDN(dn string, changes []Modification, bindDN 
 	// Validate modified entry against schema if available
 	if b.schema != nil {
 		if err := b.validateEntry(entry); err != nil {
-			b.engine.Rollback(txn)
 			return err
 		}
 	}
 
 	// Convert back to storage entry
 	modifiedStorageEntry := convertToStorageEntry(entry)
+
+	// If cluster writer is set, route through Raft consensus
+	if b.clusterWriter != nil {
+		if err := b.clusterWriter.Put(modifiedStorageEntry); err != nil {
+			return wrapStorageError(err)
+		}
+		b.emitChange(stream.OpUpdate, normalizedDN, modifiedStorageEntry)
+		return nil
+	}
+
+	// Standalone mode: direct write
+	txn, err = b.engine.Begin()
+	if err != nil {
+		return wrapStorageError(err)
+	}
 
 	// Put the modified entry
 	if err := b.engine.Put(txn, modifiedStorageEntry); err != nil {

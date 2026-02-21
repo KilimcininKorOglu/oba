@@ -1,0 +1,26 @@
+version: 1
+defaultPolicy: deny
+rules:
+  - target: "*"
+    subject: "cn=admin,dc=example,dc=com"
+    scope: subtree
+    rights:
+      - all
+  - target: "dc=example,dc=com"
+    subject: "authenticated"
+    scope: subtree
+    rights:
+      - read
+      - search
+  - target: "ou=users,dc=example,dc=com"
+    subject: "self"
+    scope: subtree
+    rights:
+      - read
+      - write
+  - target: "ou=groups,dc=example,dc=com"
+    subject: "authenticated"
+    scope: subtree
+    rights:
+      - read
+      - search

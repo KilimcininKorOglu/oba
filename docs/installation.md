@@ -201,41 +201,37 @@ docker run -d \
 
 ### Docker Compose
 
-The repository includes a complete `docker-compose.yml` with LDAP server, REST API, and Web Admin Panel:
+The repository includes Docker Compose files for both standalone and cluster modes:
 
-```yaml
-services:
-  oba:
-    build: .
-    ports:
-      - "1389:1389"  # LDAP
-      - "8080:8080"  # REST API
-    volumes:
-      - ./docker-data:/var/lib/oba
-    environment:
-      - OBA_LOG_LEVEL=debug
-      - TZ=Europe/Istanbul
-    restart: unless-stopped
-
-  web:
-    build: ./web
-    ports:
-      - "3000:80"  # Web Admin Panel
-    depends_on:
-      - oba
-    restart: unless-stopped
-```
-
-Start with:
+#### Standalone Mode
 
 ```bash
+# Start single-node deployment
 docker compose up -d
+
+# Access points:
+# - LDAP: ldap://localhost:1389
+# - REST API: http://localhost:8080
+# - Web Admin: http://localhost:3000
 ```
 
-Access points:
-- LDAP: `ldap://localhost:1389`
-- REST API: `http://localhost:8080`
-- Web Admin: `http://localhost:3000`
+#### Cluster Mode (High Availability)
+
+```bash
+# Start 3-node Raft cluster with HAProxy
+docker compose -f docker-compose.cluster.yml up -d
+
+# Access points:
+# - LDAP (load balanced): ldap://localhost:389
+# - REST API (load balanced): http://localhost:8080
+# - HAProxy Stats: http://localhost:8404
+# - Web Admin: http://localhost:3000
+# - Individual nodes: ports 8081-8083 (REST), 1389/2389/3389 (LDAP)
+```
+
+Configuration files:
+- `docker-single/` - Standalone mode configs
+- `docker-cluster/` - Cluster mode configs (node1-3, haproxy.cfg)
 
 ## Post-Installation Steps
 

@@ -11,7 +11,7 @@ services:
       - "1389:1389"
       - "8080:8080"
     volumes:
-      - ./docker-data:/var/lib/oba
+      - ./docker-single:/var/lib/oba
     environment:
       - OBA_LOG_LEVEL=debug
       - TZ=Europe/Istanbul
@@ -38,7 +38,7 @@ services:
       - "2389:1389"
     volumes:
       - .:/app
-      - ./docker-data:/var/lib/oba
+      - ./docker-single:/var/lib/oba
     environment:
       - OBA_LOG_LEVEL=debug
     command: ["go", "run", "./cmd/oba", "serve", "--config", "/var/lib/oba/config.yaml"]

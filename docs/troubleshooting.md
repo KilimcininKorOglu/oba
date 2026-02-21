@@ -363,10 +363,15 @@ docker inspect oba-oba-1
 ### Volume Permissions
 
 ```bash
-# Fix volume permissions
+# Fix volume permissions (standalone)
 docker compose down
-sudo chown -R 1000:1000 ./docker-data
+sudo chown -R 1000:1000 ./docker-single
 docker compose up -d
+
+# Fix volume permissions (cluster)
+docker compose -f docker-compose.cluster.yml down
+sudo chown -R 1000:1000 ./docker-cluster
+docker compose -f docker-compose.cluster.yml up -d
 ```
 
 ### Rebuilding the Container

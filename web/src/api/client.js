@@ -251,6 +251,19 @@ class ObaAPI {
       }
     }
   }
+
+  // Cluster endpoints
+  getClusterStatus() {
+    return this.request('GET', '/cluster/status');
+  }
+
+  getClusterHealth() {
+    return this.request('GET', '/cluster/health');
+  }
+
+  getClusterLeader() {
+    return this.request('GET', '/cluster/leader');
+  }
 }
 
 export const api = new ObaAPI();

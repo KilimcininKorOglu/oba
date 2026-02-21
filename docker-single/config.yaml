@@ -1,0 +1,46 @@
+server:
+  address: ":1389"
+  tlsAddress: ":636"
+  maxConnections: 5000
+  readTimeout: 1m0s
+  writeTimeout: 1m0s
+  pidFile: "/var/lib/oba/oba.pid"
+
+directory:
+  baseDN: "dc=example,dc=com"
+  rootDN: "cn=admin,dc=example,dc=com"
+  rootPassword: "admin"
+
+storage:
+  dataDir: "/var/lib/oba"
+  pageSize: 4096
+  bufferPoolSize: "256MB"
+  checkpointInterval: 5m0s
+
+security:
+  encryption:
+    enabled: true
+    keyFile: "/var/lib/oba/encryption.key"
+  rateLimit:
+    enabled: true
+    maxAttempts: 3
+    lockoutDuration: 10m0s
+  passwordPolicy:
+    enabled: false
+    minLength: 8
+
+logging:
+  level: "info"
+  format: "json"
+  output: "stdout"
+
+aclFile: "/var/lib/oba/acl.yaml"
+
+rest:
+  enabled: true
+  address: ":8080"
+  jwtSecret: "test-secret-key-for-development-only-32bytes"
+  tokenTTL: 12h0m0s
+  rateLimit: 200
+  corsOrigins:
+    - "\"*\""

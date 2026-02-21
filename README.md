@@ -9,6 +9,7 @@ Current Version: 1.0.2
 - Pure Go implementation using only the standard library
 - Custom embedded database engine (ObaDB) optimized for LDAP workloads
 - Full LDAP v3 protocol support
+- High availability clustering with Raft consensus
 - TLS/LDAPS and StartTLS support
 - REST API with JWT authentication
 - Access Control Lists (ACL) with hot reload
@@ -21,7 +22,7 @@ Current Version: 1.0.2
 - MVCC for concurrent access
 - Backup and restore with automatic timestamps
 - Web admin panel (React + Vite + Tailwind)
-- Persistent log storage with query and export
+- Persistent log storage with archiving, query and export
 
 ## Quick Start
 
@@ -30,7 +31,12 @@ Current Version: 1.0.2
 ```bash
 git clone https://github.com/KilimcininKorOglu/oba.git
 cd oba
+
+# Standalone mode
 docker compose up -d
+
+# Cluster mode (3-node HA)
+docker compose -f docker-compose.cluster.yml up -d
 
 # Test the connection
 ldapsearch -x -H ldap://localhost:1389 -b "dc=example,dc=com" "(objectClass=*)"
@@ -152,8 +158,9 @@ oba/
 │   ├── crypto/        # Encryption utilities
 │   ├── filter/        # Search filter evaluation
 │   ├── ldap/          # LDAP protocol messages
-│   ├── logging/       # Structured logging with persistent storage
+│   ├── logging/       # Structured logging with archiving
 │   ├── password/      # Password policy
+│   ├── raft/          # Raft consensus for HA clustering
 │   ├── rest/          # REST API server
 │   ├── schema/        # LDAP schema validation
 │   ├── server/        # Connection handling
@@ -176,6 +183,7 @@ oba/
 - [Getting Started](docs/getting-started.md)
 - [Installation Guide](docs/installation.md)
 - [Configuration Reference](docs/configuration.md)
+- [Cluster Mode (HA)](docs/cluster.md)
 - [REST API Reference](docs/REST_API.md)
 - [Operations Guide](docs/operations.md)
 - [Security Guide](docs/security.md)

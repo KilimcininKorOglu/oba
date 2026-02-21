@@ -304,6 +304,10 @@ func applyConfig(root *yamlNode, config *Config) error {
 			if err := applyRESTConfig(node, &config.REST); err != nil {
 				return err
 			}
+		case "cluster":
+			if err := applyClusterConfig(node, &config.Cluster); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -462,6 +466,28 @@ func applyLogStoreConfig(node *yamlNode, config *LogStoreConfig) error {
 					return err
 				}
 				config.MaxEntries = n
+			}
+		case "maxAge":
+			if child.value != "" {
+				dur, err := parseDuration(child.value)
+				if err != nil {
+					return err
+				}
+				config.MaxAge = dur
+			}
+		case "archiveDir":
+			if child.value != "" {
+				config.ArchiveDir = child.value
+			}
+		case "compress":
+			config.Compress = parseBool(child.value)
+		case "retainDays":
+			if child.value != "" {
+				n, err := strconv.Atoi(child.value)
+				if err != nil {
+					return err
+				}
+				config.RetainDays = n
 			}
 		}
 	}
@@ -703,4 +729,85 @@ func parseDuration(s string) (time.Duration, error) {
 func parseBool(s string) bool {
 	s = strings.ToLower(strings.TrimSpace(s))
 	return s == "true" || s == "yes" || s == "1" || s == "on"
+}
+
+// applyClusterConfig applies cluster configuration.
+func applyClusterConfig(node *yamlNode, config *ClusterConfig) error {
+	for _, child := range node.children {
+		switch child.key {
+		case "enabled":
+			config.Enabled = parseBool(child.value)
+		case "nodeID":
+			if child.value != "" {
+				val, err := strconv.ParseUint(child.value, 10, 64)
+				if err != nil {
+					return ErrInvalidNumber
+				}
+				config.NodeID = val
+			}
+		case "raftAddr":
+			if child.value != "" {
+				config.RaftAddr = child.value
+			}
+		case "peers":
+			peers, err := parseClusterPeers(child)
+			if err != nil {
+				return err
+			}
+			config.Peers = peers
+		case "electionTimeout":
+			if child.value != "" {
+				dur, err := parseDuration(child.value)
+				if err != nil {
+					return err
+				}
+				config.ElectionTimeout = dur
+			}
+		case "heartbeatTimeout":
+			if child.value != "" {
+				dur, err := parseDuration(child.value)
+				if err != nil {
+					return err
+				}
+				config.HeartbeatTimeout = dur
+			}
+		case "snapshotInterval":
+			if child.value != "" {
+				val, err := strconv.ParseUint(child.value, 10, 64)
+				if err != nil {
+					return ErrInvalidNumber
+				}
+				config.SnapshotInterval = val
+			}
+		case "dataDir":
+			if child.value != "" {
+				config.DataDir = child.value
+			}
+		}
+	}
+	return nil
+}
+
+// parseClusterPeers parses cluster peer configurations.
+func parseClusterPeers(node *yamlNode) ([]PeerConfig, error) {
+	var peers []PeerConfig
+	for _, child := range node.children {
+		peer := PeerConfig{}
+		for _, peerChild := range child.children {
+			switch peerChild.key {
+			case "id":
+				val, err := strconv.ParseUint(peerChild.value, 10, 64)
+				if err != nil {
+					return nil, ErrInvalidNumber
+				}
+				peer.ID = val
+			case "addr":
+				peer.Addr = peerChild.value
+			}
+		}
+		if peer.ID > 0 || peer.Addr != "" {
+			peers = append(peers, peer)
+		}
+	}
+	return peers, nil
 }

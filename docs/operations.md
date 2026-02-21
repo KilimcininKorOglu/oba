@@ -603,3 +603,178 @@ storage:
 
 - Shorter intervals: Faster recovery, more I/O overhead
 - Longer intervals: Less I/O overhead, longer recovery time
+
+## Log Management
+
+### Log Storage
+
+Oba can store logs in a persistent database for querying via REST API:
+
+```yaml
+logging:
+  level: "info"
+  format: "json"
+  output: "stdout"
+  store:
+    enabled: true
+    dbPath: "./data/log"
+    maxEntries: 100000      # Max entries in active database
+    maxAge: 7d              # Archive logs older than this
+    archiveDir: "./data/log/archive"
+    compress: true          # Gzip compress archives
+    retainDays: 90          # Delete archives older than this (0 = keep forever)
+```
+
+### Querying Logs
+
+```bash
+# Get recent logs
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/api/v1/logs?limit=100"
+
+# Filter by level
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/api/v1/logs?level=error"
+
+# Filter by source
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/api/v1/logs?source=ldap"
+
+# Filter by user
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/api/v1/logs?user=admin"
+
+# Search in messages
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/api/v1/logs?search=failed"
+
+# Time range
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/api/v1/logs?start_time=2024-01-01T00:00:00Z&end_time=2024-01-02T00:00:00Z"
+
+# Include archived logs
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/api/v1/logs?include_archive=true"
+```
+
+### Log Statistics
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8080/api/v1/logs/stats
+
+# Response
+{
+  "total_entries": 15234,
+  "max_entries": 100000,
+  "by_level": {
+    "debug": 5000,
+    "info": 8000,
+    "warn": 2000,
+    "error": 234
+  },
+  "oldest_entry": "2024-01-15T10:00:00Z",
+  "newest_entry": "2024-01-20T15:30:00Z"
+}
+```
+
+### Log Archiving
+
+When `maxEntries` is exceeded, old logs are automatically archived to gzip-compressed JSON files.
+
+#### List Archives
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8080/api/v1/logs/archives
+
+# Response
+{
+  "archives": [
+    {
+      "name": "logs_20240115_100000_20240118_235959.json.gz",
+      "path": "/var/lib/oba/log/archive/logs_20240115_100000_20240118_235959.json.gz",
+      "size": 1048576,
+      "start_time": "2024-01-15T10:00:00Z",
+      "end_time": "2024-01-18T23:59:59Z",
+      "count": 50000,
+      "compressed": true
+    }
+  ],
+  "count": 1
+}
+```
+
+#### Archive Statistics
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8080/api/v1/logs/archives/stats
+
+# Response
+{
+  "enabled": true,
+  "archive_count": 5,
+  "total_size": 5242880,
+  "total_entries": 250000,
+  "oldest_archive": "2024-01-01T00:00:00Z",
+  "newest_archive": "2024-01-15T00:00:00Z"
+}
+```
+
+#### Manual Archive
+
+Force immediate archiving of all current logs:
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8080/api/v1/logs/archive
+
+# Response
+{
+  "success": true,
+  "archive": {
+    "name": "logs_20240120_000000_20240120_153000.json.gz",
+    "count": 15234
+  }
+}
+```
+
+#### Cleanup Old Archives
+
+Remove archives older than `retainDays`:
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8080/api/v1/logs/archives/cleanup
+
+# Response
+{
+  "success": true,
+  "deleted": 3
+}
+```
+
+### Exporting Logs
+
+```bash
+# Export as JSON
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/api/v1/logs/export?format=json" > logs.json
+
+# Export as CSV
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/api/v1/logs/export?format=csv" > logs.csv
+
+# Export as JSONL (newline-delimited JSON)
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/api/v1/logs/export?format=jsonl" > logs.jsonl
+```
+
+### Clearing Logs
+
+```bash
+# Clear all logs from active database (archives are preserved)
+curl -X DELETE -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8080/api/v1/logs
+```
