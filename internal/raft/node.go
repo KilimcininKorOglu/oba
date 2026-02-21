@@ -589,6 +589,17 @@ func (n *Node) updateCommitIndex() {
 	log := n.state.Log()
 	currentTerm := n.Term()
 
+	// Single node cluster - commit immediately
+	if len(n.peers) == 0 {
+		for idx := log.LastIndex(); idx > n.state.CommitIndex(); idx-- {
+			if log.TermAt(idx) == currentTerm {
+				n.state.SetCommitIndex(idx)
+				break
+			}
+		}
+		return
+	}
+
 	// Find the highest index replicated on majority
 	for idx := log.LastIndex(); idx > n.state.CommitIndex(); idx-- {
 		if log.TermAt(idx) != currentTerm {
@@ -626,7 +637,10 @@ func (n *Node) appendCommand(cmd *Command) {
 
 	n.state.AppendEntry(entry)
 
-	// Immediately replicate to peers
+	// Update commit index (for single node, commits immediately)
+	n.updateCommitIndex()
+
+	// Replicate to peers
 	n.broadcastAppendEntries()
 }
 

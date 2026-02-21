@@ -138,6 +138,11 @@ func (s *Server) setupRoutes() {
 	s.router.GET("/api/v1/logs/stats", s.handlers.HandleGetLogStats)
 	s.router.DELETE("/api/v1/logs", s.handlers.HandleClearLogs)
 	s.router.GET("/api/v1/logs/export", s.handlers.HandleExportLogs)
+
+	// Cluster management endpoints
+	s.router.GET("/api/v1/cluster/status", s.handlers.HandleClusterStatus)
+	s.router.GET("/api/v1/cluster/health", s.handlers.HandleClusterHealth)
+	s.router.GET("/api/v1/cluster/leader", s.handlers.HandleClusterLeader)
 }
 
 func (s *Server) setupMiddleware() {
@@ -159,6 +164,7 @@ func (s *Server) setupMiddleware() {
 		"/api/v1/health",
 		"/api/v1/auth/bind",
 		"/api/v1/config/public",
+		"/api/v1/cluster/health",
 	}))
 
 	// Admin-only endpoints
