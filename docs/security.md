@@ -272,6 +272,101 @@ acl:
 | DN            | Specific user DN                         |
 | *             | Everyone (anonymous and authenticated)   |
 
+### ACL Hot Reload
+
+ACL rules can be updated without server restart using external ACL file:
+
+```yaml
+# config.yaml - use external ACL file
+aclFile: "/etc/oba/acl.yaml"
+```
+
+External ACL file format (`acl.yaml`):
+
+```yaml
+version: 1
+defaultPolicy: "deny"
+rules:
+  - target: "*"
+    subject: "cn=admin,dc=example,dc=com"
+    scope: subtree
+    rights:
+      - all
+  - target: "ou=users,dc=example,dc=com"
+    subject: "authenticated"
+    scope: subtree
+    rights:
+      - read
+      - search
+```
+
+Hot reload methods:
+
+```bash
+# Automatic: File watcher detects changes within ~300ms
+
+# Manual: Send SIGHUP signal
+kill -SIGHUP $(cat /var/run/oba.pid)
+
+# CLI command
+oba reload acl
+```
+
+### ACL Management via REST API
+
+Manage ACL rules through REST API (requires admin authentication):
+
+```bash
+# Get current ACL configuration
+curl http://localhost:8080/api/v1/acl \
+  -H "Authorization: Bearer $TOKEN"
+
+# List all rules
+curl http://localhost:8080/api/v1/acl/rules \
+  -H "Authorization: Bearer $TOKEN"
+
+# Add a new rule
+curl -X POST http://localhost:8080/api/v1/acl/rules \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "rule": {
+      "target": "ou=groups,dc=example,dc=com",
+      "subject": "authenticated",
+      "scope": "subtree",
+      "rights": ["read", "search"],
+      "deny": false
+    }
+  }'
+
+# Update a rule (by index)
+curl -X PUT http://localhost:8080/api/v1/acl/rules/1 \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target": "ou=users,dc=example,dc=com",
+    "subject": "authenticated",
+    "scope": "subtree",
+    "rights": ["read", "write", "search"]
+  }'
+
+# Delete a rule
+curl -X DELETE http://localhost:8080/api/v1/acl/rules/2 \
+  -H "Authorization: Bearer $TOKEN"
+
+# Change default policy
+curl -X PUT http://localhost:8080/api/v1/acl/default \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"policy": "deny"}'
+
+# Save changes to file
+curl -X POST http://localhost:8080/api/v1/acl/save \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+See [REST API Documentation](REST_API.md#acl-management) for complete endpoint reference.
+
 ## Network Security
 
 ### Firewall Configuration

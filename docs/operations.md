@@ -212,7 +212,84 @@ oba config init > /etc/oba/config.yaml
 
 ### Applying Configuration Changes
 
-Most configuration changes require a server restart:
+Many configuration settings support hot reload without server restart.
+
+#### Hot-Reloadable Settings
+
+| Setting                     | Hot Reload | Method                    |
+|-----------------------------|------------|---------------------------|
+| `logging.level`             | Yes        | File watcher / REST API   |
+| `logging.format`            | Yes        | File watcher / REST API   |
+| `server.maxConnections`     | Yes        | File watcher / REST API   |
+| `server.readTimeout`        | Yes        | File watcher / REST API   |
+| `server.writeTimeout`       | Yes        | File watcher / REST API   |
+| `server.tlsCert/tlsKey`     | Yes        | File watcher / REST API   |
+| `security.rateLimit.*`      | Yes        | File watcher / REST API   |
+| `security.passwordPolicy.*` | Yes        | File watcher / REST API   |
+| `rest.rateLimit`            | Yes        | File watcher / REST API   |
+| `rest.tokenTTL`             | Yes        | File watcher / REST API   |
+| `rest.corsOrigins`          | Yes        | File watcher / REST API   |
+| `aclFile` (external)        | Yes        | File watcher / REST API   |
+| `server.address`            | No         | Requires restart          |
+| `directory.*`               | No         | Requires restart          |
+| `storage.*`                 | No         | Requires restart          |
+
+#### Automatic Hot Reload (File Watcher)
+
+When config file is specified, changes are detected automatically:
+
+```bash
+# Edit config file - changes applied within ~300ms
+vim /etc/oba/config.yaml
+
+# Check logs for reload confirmation
+tail -f /var/log/oba/oba.log | grep "config"
+# {"level":"info","msg":"config file changed, applying hot-reloadable settings"}
+# {"level":"info","msg":"log level changed","old":"info","new":"debug"}
+# {"level":"info","msg":"config reload completed"}
+```
+
+#### Hot Reload via REST API
+
+Update configuration through REST API (requires admin authentication):
+
+```bash
+# Get JWT token
+TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/bind \
+  -H "Content-Type: application/json" \
+  -d '{"dn":"cn=admin,dc=example,dc=com","password":"admin"}' \
+  | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+
+# View current config
+curl http://localhost:8080/api/v1/config \
+  -H "Authorization: Bearer $TOKEN"
+
+# Update log level
+curl -X PATCH http://localhost:8080/api/v1/config/logging \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"level": "debug"}'
+
+# Update server settings
+curl -X PATCH http://localhost:8080/api/v1/config/server \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"maxConnections": 5000, "readTimeout": "60s"}'
+
+# Update rate limit
+curl -X PATCH http://localhost:8080/api/v1/config/security.ratelimit \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true, "maxAttempts": 3}'
+
+# Save changes to file
+curl -X POST http://localhost:8080/api/v1/config/save \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+#### Settings Requiring Restart
+
+For non-hot-reloadable settings:
 
 ```bash
 # Validate new configuration first
@@ -235,6 +312,50 @@ oba reload acl
 
 # Manual reload via signal
 kill -SIGHUP $(cat /var/run/oba.pid)
+
+# Reload via REST API
+curl -X POST http://localhost:8080/api/v1/acl/reload \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### ACL Management via REST API
+
+Manage ACL rules dynamically through REST API:
+
+```bash
+# View current ACL
+curl http://localhost:8080/api/v1/acl \
+  -H "Authorization: Bearer $TOKEN"
+
+# Add a new rule
+curl -X POST http://localhost:8080/api/v1/acl/rules \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "rule": {
+      "target": "ou=groups,dc=example,dc=com",
+      "subject": "authenticated",
+      "rights": ["read", "search"]
+    }
+  }'
+
+# Update a rule
+curl -X PUT http://localhost:8080/api/v1/acl/rules/1 \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target": "ou=users,dc=example,dc=com",
+    "subject": "authenticated",
+    "rights": ["read", "write", "search"]
+  }'
+
+# Delete a rule
+curl -X DELETE http://localhost:8080/api/v1/acl/rules/2 \
+  -H "Authorization: Bearer $TOKEN"
+
+# Save ACL to file
+curl -X POST http://localhost:8080/api/v1/acl/save \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 Check reload status in logs:

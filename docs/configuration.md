@@ -399,6 +399,81 @@ openssl rand -hex 32
 
 See [REST API Documentation](REST_API.md) for endpoint details.
 
+## Hot Reload Configuration
+
+Oba supports hot reload for many configuration settings without server restart. Changes can be applied automatically via file watcher or through REST API.
+
+### Hot-Reloadable Settings
+
+| Section                     | Settings                                              | Method           |
+|-----------------------------|-------------------------------------------------------|------------------|
+| `logging`                   | `level`, `format`                                     | File / REST API  |
+| `server`                    | `maxConnections`, `readTimeout`, `writeTimeout`       | File / REST API  |
+| `server`                    | `tlsCert`, `tlsKey` (certificate reload)              | File / REST API  |
+| `security.rateLimit`        | `enabled`, `maxAttempts`, `lockoutDuration`           | File / REST API  |
+| `security.passwordPolicy`   | All fields                                            | File / REST API  |
+| `rest`                      | `rateLimit`, `tokenTTL`, `corsOrigins`                | File / REST API  |
+| `aclFile` (external)        | All ACL rules and default policy                      | File / REST API  |
+
+### Settings Requiring Restart
+
+| Section     | Settings                                    | Reason                    |
+|-------------|---------------------------------------------|---------------------------|
+| `server`    | `address`, `tlsAddress`                     | Listener binding          |
+| `directory` | `baseDN`, `rootDN`, `rootPassword`          | Core identity             |
+| `storage`   | `dataDir`, `pageSize`, `bufferPoolSize`     | Storage engine init       |
+| `rest`      | `enabled`, `address`, `jwtSecret`           | Server binding / security |
+
+### Automatic File Watcher
+
+When a config file is specified, Oba automatically watches for changes:
+
+- Poll interval: 100ms
+- Debounce: 200ms (waits for file write to complete)
+- Validation: New config is validated before applying
+
+```bash
+# Start server with config file (enables file watcher)
+oba serve --config /etc/oba/config.yaml
+```
+
+Log output when config changes:
+
+```
+{"level":"info","msg":"config file changed, applying hot-reloadable settings"}
+{"level":"info","msg":"log level changed","old":"info","new":"debug"}
+{"level":"info","msg":"max connections changed","old":1000,"new":5000}
+{"level":"info","msg":"config reload completed"}
+```
+
+### REST API Hot Reload
+
+Update configuration via REST API (requires admin authentication):
+
+```bash
+# Get current config
+curl http://localhost:8080/api/v1/config \
+  -H "Authorization: Bearer $TOKEN"
+
+# Update logging level
+curl -X PATCH http://localhost:8080/api/v1/config/logging \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"level": "debug"}'
+
+# Update rate limit settings
+curl -X PATCH http://localhost:8080/api/v1/config/security.ratelimit \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true, "maxAttempts": 3, "lockoutDuration": "10m"}'
+
+# Save changes to file
+curl -X POST http://localhost:8080/api/v1/config/save \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+See [REST API Documentation](REST_API.md#config-management) for all config endpoints.
+
 ## Validating Configuration
 
 Validate your configuration file before starting the server:
