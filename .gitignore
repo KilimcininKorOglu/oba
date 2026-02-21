@@ -65,6 +65,14 @@ coverage/
 
 # Hermes
 .hermes/
-docker-*/
+# Docker data (exclude data, keep configs)
+docker-single/data/
+docker-single/log/
+docker-single/*.db
+docker-cluster/node*/data/
+docker-cluster/node*/log/
+docker-cluster/node*/raft/
+docker-cluster/node*/*.db
+docker-data/
 temp/
 plan/

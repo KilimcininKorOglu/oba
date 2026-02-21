@@ -1,0 +1,57 @@
+# Oba LDAP Server - Node 2 Configuration
+
+server:
+  address: ":1389"
+  maxConnections: 10000
+  readTimeout: 30s
+  writeTimeout: 30s
+  pidFile: "/var/lib/oba/oba.pid"
+
+directory:
+  baseDN: "dc=example,dc=com"
+  rootDN: "cn=admin,dc=example,dc=com"
+  rootPassword: "admin"
+
+storage:
+  dataDir: "/var/lib/oba/data"
+  pageSize: 4096
+  bufferPoolSize: "256MB"
+  checkpointInterval: 5m
+  cacheSize: 10000
+
+logging:
+  level: "info"
+  format: "json"
+  output: "stdout"
+  store:
+    enabled: true
+    dbPath: "/var/lib/oba/log"
+    maxEntries: 100
+    archiveDir: "/var/lib/oba/log/archive"
+    compress: true
+    retainDays: 30
+
+rest:
+  enabled: true
+  address: ":8080"
+  jwtSecret: "cluster-jwt-secret-change-in-production"
+  tokenTTL: 24h
+  rateLimit: 100
+  corsOrigins:
+    - "*"
+
+cluster:
+  enabled: true
+  nodeID: 2
+  raftAddr: "0.0.0.0:4445"
+  peers:
+    - id: 1
+      addr: "oba-node1:4445"
+    - id: 2
+      addr: "oba-node2:4445"
+    - id: 3
+      addr: "oba-node3:4445"
+  electionTimeout: 150ms
+  heartbeatTimeout: 50ms
+  snapshotInterval: 10000
+  dataDir: "/var/lib/oba/raft"
