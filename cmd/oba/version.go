@@ -10,7 +10,7 @@ import (
 // Version information - these can be set at build time using ldflags.
 // Example: go build -ldflags "-X main.version=1.0.0 -X main.commit=abc123"
 var (
-	version   = "1.0.1"
+	version   = "1.0.2"
 	commit    = "unknown"
 	buildDate = "unknown"
 )
