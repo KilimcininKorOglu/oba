@@ -82,13 +82,13 @@ security:
     # Number of old passwords to remember (0 = no history)
     historyCount: 0
 
-  # Rate limiting / account lockout settings
+  # Rate limiting / account lockout settings (hot-reloadable)
   rateLimit:
     # Enable rate limiting
     enabled: false
     # Maximum failed authentication attempts before lockout
     maxAttempts: 5
-    # Account lockout duration
+    # Account lockout duration (auto-unlock after this period)
     lockoutDuration: 15m
 
   # Encryption at rest settings
