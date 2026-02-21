@@ -15,6 +15,7 @@ export default function Logs() {
   const [showClear, setShowClear] = useState(false);
   const [filters, setFilters] = useState({
     level: '',
+    source: '',
     search: '',
     limit: '100'
   });
@@ -25,6 +26,7 @@ export default function Logs() {
     try {
       const params = new URLSearchParams();
       if (filters.level) params.set('level', filters.level);
+      if (filters.source) params.set('source', filters.source);
       if (filters.search) params.set('search', filters.search);
       params.set('limit', filters.limit);
       params.set('offset', offset.toString());
@@ -147,6 +149,20 @@ export default function Logs() {
       )
     },
     {
+      header: 'Source',
+      render: (row) => (
+        <span className={`text-xs px-2 py-0.5 rounded ${row.source === 'ldap' ? 'bg-purple-500/20 text-purple-400' : 'bg-green-500/20 text-green-400'}`}>
+          {row.source || '-'}
+        </span>
+      )
+    },
+    {
+      header: 'User',
+      render: (row) => (
+        <span className="text-xs text-zinc-300 font-mono">{row.user || '-'}</span>
+      )
+    },
+    {
       header: 'Message',
       render: (row) => (
         <span className="text-sm text-zinc-100">{row.message}</span>
@@ -233,6 +249,15 @@ export default function Logs() {
             <option value="info">Info</option>
             <option value="warn">Warning</option>
             <option value="error">Error</option>
+          </select>
+          <select
+            value={filters.source}
+            onChange={(e) => setFilters({ ...filters, source: e.target.value })}
+            className="px-4 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-100 focus:outline-none focus:border-blue-500"
+          >
+            <option value="">All Sources</option>
+            <option value="ldap">LDAP</option>
+            <option value="rest">REST</option>
           </select>
           <button
             type="submit"

@@ -47,6 +47,8 @@ func (h *Handlers) HandleGetLogs(w http.ResponseWriter, r *http.Request) {
 
 	opts := logging.QueryOptions{
 		Level:     r.URL.Query().Get("level"),
+		Source:    r.URL.Query().Get("source"),
+		User:      r.URL.Query().Get("user"),
 		RequestID: r.URL.Query().Get("request_id"),
 		Search:    r.URL.Query().Get("search"),
 	}
@@ -151,6 +153,8 @@ func (h *Handlers) HandleExportLogs(w http.ResponseWriter, r *http.Request) {
 
 	opts := logging.QueryOptions{
 		Level:     r.URL.Query().Get("level"),
+		Source:    r.URL.Query().Get("source"),
+		User:      r.URL.Query().Get("user"),
 		RequestID: r.URL.Query().Get("request_id"),
 		Search:    r.URL.Query().Get("search"),
 	}

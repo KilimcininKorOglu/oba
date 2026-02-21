@@ -18,6 +18,23 @@ func BindDN(r *http.Request) string {
 	return dn
 }
 
+// loggingResponseWriter wraps ResponseWriter and captures user from context
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+	user       string
+}
+
+func (w *loggingResponseWriter) WriteHeader(code int) {
+	w.statusCode = code
+	w.ResponseWriter.WriteHeader(code)
+}
+
+// SetUser sets the user for logging
+func (w *loggingResponseWriter) SetUser(user string) {
+	w.user = user
+}
+
 // LoggingMiddleware logs HTTP requests.
 func LoggingMiddleware(logger logging.Logger) Middleware {
 	restLogger := logger.WithSource("rest")
@@ -25,11 +42,16 @@ func LoggingMiddleware(logger logging.Logger) Middleware {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 
-			wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+			wrapped := &loggingResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 
 			next.ServeHTTP(wrapped, r)
 
-			restLogger.Info("http request",
+			reqLogger := restLogger
+			if wrapped.user != "" {
+				reqLogger = reqLogger.WithUser(wrapped.user)
+			}
+
+			reqLogger.Info("http request",
 				"method", r.Method,
 				"path", r.URL.Path,
 				"status", wrapped.statusCode,
@@ -232,6 +254,12 @@ func AuthMiddleware(auth *Authenticator, excludePaths []string) Middleware {
 			}
 
 			ctx := context.WithValue(r.Context(), bindDNKey{}, bindDN)
+
+			// Set user on logging response writer if available
+			if lrw, ok := w.(*loggingResponseWriter); ok {
+				lrw.SetUser(bindDN)
+			}
+
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

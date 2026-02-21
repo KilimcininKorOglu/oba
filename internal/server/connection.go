@@ -241,6 +241,7 @@ func (c *Connection) handleBind(msg *ldap.LDAPMessage) *ldap.LDAPMessage {
 		c.mu.Lock()
 		c.bindDN = req.Name
 		c.authenticated = !req.IsAnonymous()
+		c.logger = c.logger.WithUser(req.Name)
 		c.mu.Unlock()
 
 		c.logger.Info("bind successful",

@@ -19,6 +19,7 @@ type LogEntry struct {
 	Level     string                 `json:"level"`
 	Message   string                 `json:"message"`
 	Source    string                 `json:"source,omitempty"`
+	User      string                 `json:"user,omitempty"`
 	RequestID string                 `json:"request_id,omitempty"`
 	Fields    map[string]interface{} `json:"fields,omitempty"`
 }
@@ -108,7 +109,7 @@ func (s *LogStore) loadNextID() error {
 }
 
 // Write adds a new log entry to the store.
-func (s *LogStore) Write(level, msg, source, requestID string, fields map[string]interface{}) error {
+func (s *LogStore) Write(level, msg, source, user, requestID string, fields map[string]interface{}) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -132,6 +133,10 @@ func (s *LogStore) Write(level, msg, source, requestID string, fields map[string
 
 	if source != "" {
 		entry.SetStringAttribute("source", source)
+	}
+
+	if user != "" {
+		entry.SetStringAttribute("user", user)
 	}
 
 	if requestID != "" {
@@ -279,6 +284,12 @@ func (s *LogStore) Query(opts QueryOptions) ([]LogEntry, int, error) {
 		if opts.Level != "" && logEntry.Level != opts.Level {
 			continue
 		}
+		if opts.Source != "" && logEntry.Source != opts.Source {
+			continue
+		}
+		if opts.User != "" && logEntry.User != opts.User {
+			continue
+		}
 		if opts.RequestID != "" && logEntry.RequestID != opts.RequestID {
 			continue
 		}
@@ -341,6 +352,9 @@ func (s *LogStore) entryToLogEntry(entry *storage.Entry) LogEntry {
 	if srcVals := entry.GetAttribute("source"); len(srcVals) > 0 {
 		logEntry.Source = string(srcVals[0])
 	}
+	if userVals := entry.GetAttribute("user"); len(userVals) > 0 {
+		logEntry.User = string(userVals[0])
+	}
 	if reqVals := entry.GetAttribute("requestid"); len(reqVals) > 0 {
 		logEntry.RequestID = string(reqVals[0])
 	}
@@ -354,6 +368,8 @@ func (s *LogStore) entryToLogEntry(entry *storage.Entry) LogEntry {
 // QueryOptions defines filters for querying logs.
 type QueryOptions struct {
 	Level     string
+	Source    string
+	User      string
 	RequestID string
 	StartTime time.Time
 	EndTime   time.Time

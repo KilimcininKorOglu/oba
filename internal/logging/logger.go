@@ -92,6 +92,8 @@ type Logger interface {
 	WithRequestID(requestID string) Logger
 	// WithSource returns a new logger with the given source.
 	WithSource(source string) Logger
+	// WithUser returns a new logger with the given user DN.
+	WithUser(user string) Logger
 	// WithFields returns a new logger with the given fields.
 	WithFields(keysAndValues ...interface{}) Logger
 	// SetLevel changes the log level at runtime.
@@ -119,6 +121,7 @@ type logger struct {
 	mu        sync.Mutex
 	requestID string
 	source    string
+	user      string
 	store     *LogStore
 }
 
@@ -204,6 +207,62 @@ func (l *logger) WithSource(source string) Logger {
 	return newLogger
 }
 
+// WithUser returns a new logger with the given user DN.
+func (l *logger) WithUser(user string) Logger {
+	newLogger := l.clone()
+	// Extract CN from DN (e.g., "cn=admin,dc=example,dc=com" -> "admin")
+	newLogger.user = extractUsername(user)
+	return newLogger
+}
+
+// extractUsername extracts the username from a DN.
+func extractUsername(dn string) string {
+	if dn == "" {
+		return ""
+	}
+	// Find cn= prefix
+	for _, part := range splitDN(dn) {
+		if len(part) > 3 && (part[:3] == "cn=" || part[:3] == "CN=") {
+			return part[3:]
+		}
+		if len(part) > 4 && (part[:4] == "uid=" || part[:4] == "UID=") {
+			return part[4:]
+		}
+	}
+	return dn
+}
+
+// splitDN splits a DN into parts.
+func splitDN(dn string) []string {
+	var parts []string
+	var current string
+	escaped := false
+	for _, c := range dn {
+		if escaped {
+			current += string(c)
+			escaped = false
+			continue
+		}
+		if c == '\\' {
+			escaped = true
+			current += string(c)
+			continue
+		}
+		if c == ',' {
+			if current != "" {
+				parts = append(parts, current)
+			}
+			current = ""
+			continue
+		}
+		current += string(c)
+	}
+	if current != "" {
+		parts = append(parts, current)
+	}
+	return parts
+}
+
 // WithFields returns a new logger with the given fields.
 func (l *logger) WithFields(keysAndValues ...interface{}) Logger {
 	newLogger := l.clone()
@@ -277,6 +336,7 @@ func (l *logger) clone() *logger {
 		fields:    newFields,
 		requestID: l.requestID,
 		source:    l.source,
+		user:      l.user,
 		store:     l.store,
 	}
 }
@@ -317,11 +377,11 @@ func (l *logger) log(level Level, msg string, keysAndValues ...interface{}) {
 	if l.store != nil {
 		fields := make(map[string]interface{})
 		for k, v := range entry {
-			if k != "ts" && k != "level" && k != "msg" && k != "request_id" && k != "source" {
+			if k != "ts" && k != "level" && k != "msg" && k != "request_id" && k != "source" && k != "user" {
 				fields[k] = v
 			}
 		}
-		l.store.Write(level.String(), msg, l.source, l.requestID, fields)
+		l.store.Write(level.String(), msg, l.source, l.user, l.requestID, fields)
 	}
 
 	// Format and write
@@ -373,6 +433,7 @@ func (n *nopLogger) Warn(_ string, _ ...interface{})    {}
 func (n *nopLogger) Error(_ string, _ ...interface{})   {}
 func (n *nopLogger) WithRequestID(_ string) Logger      { return n }
 func (n *nopLogger) WithSource(_ string) Logger         { return n }
+func (n *nopLogger) WithUser(_ string) Logger           { return n }
 func (n *nopLogger) WithFields(_ ...interface{}) Logger { return n }
 func (n *nopLogger) SetLevel(_ Level)                   {}
 func (n *nopLogger) SetFormat(_ Format)                 {}

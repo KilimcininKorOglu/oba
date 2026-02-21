@@ -134,8 +134,10 @@ func (s *Server) setupRoutes() {
 }
 
 func (s *Server) setupMiddleware() {
-	s.router.Use(RecoveryMiddleware(s.logger))
+	// Logging middleware first (outermost) to capture user info after auth
 	s.router.Use(LoggingMiddleware(s.logger))
+
+	s.router.Use(RecoveryMiddleware(s.logger))
 	s.router.Use(ConnectionTrackingMiddleware(s.handlers))
 
 	if len(s.config.CORSOrigins) > 0 {
