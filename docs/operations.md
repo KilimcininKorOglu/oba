@@ -216,23 +216,23 @@ Many configuration settings support hot reload without server restart.
 
 #### Hot-Reloadable Settings
 
-| Setting                     | Hot Reload | Method                    |
-|-----------------------------|------------|---------------------------|
-| `logging.level`             | Yes        | File watcher / REST API   |
-| `logging.format`            | Yes        | File watcher / REST API   |
-| `server.maxConnections`     | Yes        | File watcher / REST API   |
-| `server.readTimeout`        | Yes        | File watcher / REST API   |
-| `server.writeTimeout`       | Yes        | File watcher / REST API   |
-| `server.tlsCert/tlsKey`     | Yes        | File watcher / REST API   |
-| `security.rateLimit.*`      | Yes        | File watcher / REST API   |
-| `security.passwordPolicy.*` | Yes        | File watcher / REST API   |
-| `rest.rateLimit`            | Yes        | File watcher / REST API   |
-| `rest.tokenTTL`             | Yes        | File watcher / REST API   |
-| `rest.corsOrigins`          | Yes        | File watcher / REST API   |
-| `aclFile` (external)        | Yes        | File watcher / REST API   |
-| `server.address`            | No         | Requires restart          |
-| `directory.*`               | No         | Requires restart          |
-| `storage.*`                 | No         | Requires restart          |
+| Setting                     | Hot Reload | Method                  |
+|-----------------------------|------------|-------------------------|
+| `logging.level`             | Yes        | File watcher / REST API |
+| `logging.format`            | Yes        | File watcher / REST API |
+| `server.maxConnections`     | Yes        | File watcher / REST API |
+| `server.readTimeout`        | Yes        | File watcher / REST API |
+| `server.writeTimeout`       | Yes        | File watcher / REST API |
+| `server.tlsCert/tlsKey`     | Yes        | File watcher / REST API |
+| `security.rateLimit.*`      | Yes        | File watcher / REST API |
+| `security.passwordPolicy.*` | Yes        | File watcher / REST API |
+| `rest.rateLimit`            | Yes        | File watcher / REST API |
+| `rest.tokenTTL`             | Yes        | File watcher / REST API |
+| `rest.corsOrigins`          | Yes        | File watcher / REST API |
+| `aclFile` (external)        | Yes        | File watcher / REST API |
+| `server.address`            | No         | Requires restart        |
+| `directory.*`               | No         | Requires restart        |
+| `storage.*`                 | No         | Requires restart        |
 
 #### Automatic Hot Reload (File Watcher)
 

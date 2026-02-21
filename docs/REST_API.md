@@ -21,6 +21,7 @@ This document provides comprehensive documentation for the Oba LDAP Server REST 
    - [Bulk Operations](#bulk-operations)
    - [ACL Management](#acl-management)
    - [Config Management](#config-management)
+   - [Log Management](#log-management)
 5. [Error Handling](#error-handling)
 6. [Rate Limiting](#rate-limiting)
 7. [CORS Configuration](#cors-configuration)
@@ -1318,14 +1319,14 @@ Response (invalid):
 
 #### ACL Rule Fields
 
-| Field        | Type     | Required | Description                                      |
-|--------------|----------|----------|--------------------------------------------------|
-| `target`     | string   | Yes      | DN pattern this rule applies to (`*` for all)    |
-| `subject`    | string   | Yes      | Who this rule applies to (DN, `authenticated`, `anonymous`, `self`) |
-| `scope`      | string   | No       | `base`, `one`, or `subtree` (default: `subtree`) |
+| Field        | Type     | Required | Description                                                                 |
+|--------------|----------|----------|-----------------------------------------------------------------------------|
+| `target`     | string   | Yes      | DN pattern this rule applies to (`*` for all)                               |
+| `subject`    | string   | Yes      | Who this rule applies to (DN, `authenticated`, `anonymous`, `self`)         |
+| `scope`      | string   | No       | `base`, `one`, or `subtree` (default: `subtree`)                            |
 | `rights`     | []string | Yes      | Access rights: `read`, `write`, `add`, `delete`, `search`, `compare`, `all` |
-| `attributes` | []string | No       | Specific attributes (empty = all)                |
-| `deny`       | bool     | No       | `true` for deny rule, `false` for allow          |
+| `attributes` | []string | No       | Specific attributes (empty = all)                                           |
+| `deny`       | bool     | No       | `true` for deny rule, `false` for allow                                     |
 
 ---
 
@@ -1425,13 +1426,13 @@ PATCH /api/v1/config/{section}
 
 Hot-reloadable sections and fields:
 
-| Section                   | Fields                                                    |
-|---------------------------|-----------------------------------------------------------|
-| `logging`                 | `level`, `format`                                         |
+| Section                   | Fields                                                               |
+|---------------------------|----------------------------------------------------------------------|
+| `logging`                 | `level`, `format`                                                    |
 | `server`                  | `maxConnections`, `readTimeout`, `writeTimeout`, `tlsCert`, `tlsKey` |
-| `security.ratelimit`      | `enabled`, `maxAttempts`, `lockoutDuration`               |
-| `security.passwordpolicy` | All fields                                                |
-| `rest`                    | `rateLimit`, `tokenTTL`, `corsOrigins`                    |
+| `security.ratelimit`      | `enabled`, `maxAttempts`, `lockoutDuration`                          |
+| `security.passwordpolicy` | All fields                                                           |
+| `rest`                    | `rateLimit`, `tokenTTL`, `corsOrigins`                               |
 
 Example - Update log level:
 
@@ -1501,6 +1502,135 @@ Response:
   "message": "config structure is valid"
 }
 ```
+
+---
+
+### Log Management
+
+Query and export server logs. Requires persistent log storage to be enabled (`logging.store.enabled: true`). These endpoints require authentication.
+
+#### Query Logs
+
+Retrieve logs with filtering and pagination.
+
+```
+GET /api/v1/logs
+```
+
+#### Query Parameters
+
+| Parameter | Type   | Default | Description                                   |
+|-----------|--------|---------|-----------------------------------------------|
+| `level`   | string | -       | Filter by log level: debug, info, warn, error |
+| `source`  | string | -       | Filter by source: ldap, rest                  |
+| `user`    | string | -       | Filter by username                            |
+| `from`    | string | -       | Start time (RFC3339 format)                   |
+| `to`      | string | -       | End time (RFC3339 format)                     |
+| `limit`   | int    | 100     | Maximum entries to return                     |
+| `offset`  | int    | 0       | Number of entries to skip                     |
+
+#### Response
+
+```json
+{
+  "logs": [
+    {
+      "id": "1708531200000001",
+      "timestamp": "2026-02-21T12:00:00Z",
+      "level": "info",
+      "message": "bind successful",
+      "source": "ldap",
+      "user": "admin",
+      "fields": {
+        "client": "192.168.1.100:54321",
+        "dn": "cn=admin,dc=example,dc=com"
+      }
+    }
+  ],
+  "total": 1500,
+  "offset": 0,
+  "limit": 100,
+  "hasMore": true
+}
+```
+
+#### Examples
+
+```bash
+# Get recent logs
+curl "http://localhost:8080/api/v1/logs?limit=50" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Filter by level
+curl "http://localhost:8080/api/v1/logs?level=error" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Filter by source
+curl "http://localhost:8080/api/v1/logs?source=ldap" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Filter by time range
+curl "http://localhost:8080/api/v1/logs?from=2026-02-21T00:00:00Z&to=2026-02-21T23:59:59Z" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Filter by user
+curl "http://localhost:8080/api/v1/logs?user=admin" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+#### Export Logs
+
+Export logs in various formats for external analysis.
+
+```
+GET /api/v1/logs/export
+```
+
+#### Query Parameters
+
+Same as Query Logs, plus:
+
+| Parameter | Type   | Default | Description                      |
+|-----------|--------|---------|----------------------------------|
+| `format`  | string | "json"  | Export format: json, csv, ndjson |
+
+#### Response
+
+Returns logs in the requested format with appropriate Content-Type header:
+- `json`: `application/json`
+- `csv`: `text/csv`
+- `ndjson`: `application/x-ndjson`
+
+#### Examples
+
+```bash
+# Export as JSON
+curl "http://localhost:8080/api/v1/logs/export?format=json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -o logs.json
+
+# Export as CSV
+curl "http://localhost:8080/api/v1/logs/export?format=csv" \
+  -H "Authorization: Bearer $TOKEN" \
+  -o logs.csv
+
+# Export as NDJSON (streaming)
+curl "http://localhost:8080/api/v1/logs/export?format=ndjson&level=error" \
+  -H "Authorization: Bearer $TOKEN" \
+  -o errors.ndjson
+```
+
+#### Log Entry Fields
+
+| Field       | Type   | Description                           |
+|-------------|--------|---------------------------------------|
+| `id`        | string | Unique log entry identifier           |
+| `timestamp` | string | Log timestamp (RFC3339)               |
+| `level`     | string | Log level: debug, info, warn, error   |
+| `message`   | string | Log message                           |
+| `source`    | string | Log source: ldap, rest                |
+| `user`      | string | Username (if authenticated operation) |
+| `fields`    | object | Additional structured fields          |
 
 ---
 
@@ -1850,33 +1980,35 @@ curl -X POST http://localhost:8080/api/v1/compare \
 
 ## API Reference Summary
 
-| Method | Endpoint                      | Description                    | Auth Required |
-|--------|-------------------------------|--------------------------------|---------------|
-| GET    | `/api/v1/health`              | Health check                   | No            |
-| POST   | `/api/v1/auth/bind`           | Authenticate and get JWT       | No            |
-| GET    | `/api/v1/entries/{dn}`        | Get single entry               | Yes           |
-| GET    | `/api/v1/search`              | Search entries with pagination | Yes           |
-| GET    | `/api/v1/search/stream`       | Stream search results (NDJSON) | Yes           |
-| POST   | `/api/v1/entries`             | Create new entry               | Yes           |
-| PUT    | `/api/v1/entries/{dn}`        | Modify entry                   | Yes           |
-| PATCH  | `/api/v1/entries/{dn}`        | Modify entry                   | Yes           |
-| DELETE | `/api/v1/entries/{dn}`        | Delete entry                   | Yes           |
-| POST   | `/api/v1/entries/{dn}/move`   | Rename/move entry              | Yes           |
-| POST   | `/api/v1/compare`             | Compare attribute value        | Yes           |
-| POST   | `/api/v1/bulk`                | Bulk operations                | Yes           |
-| GET    | `/api/v1/acl`                 | Get ACL configuration          | Admin         |
-| GET    | `/api/v1/acl/rules`           | List ACL rules                 | Admin         |
-| GET    | `/api/v1/acl/rules/{index}`   | Get single ACL rule            | Admin         |
-| POST   | `/api/v1/acl/rules`           | Add ACL rule                   | Admin         |
-| PUT    | `/api/v1/acl/rules/{index}`   | Update ACL rule                | Admin         |
-| DELETE | `/api/v1/acl/rules/{index}`   | Delete ACL rule                | Admin         |
-| PUT    | `/api/v1/acl/default`         | Set default ACL policy         | Admin         |
-| POST   | `/api/v1/acl/reload`          | Reload ACL from file           | Admin         |
-| POST   | `/api/v1/acl/save`            | Save ACL to file               | Admin         |
-| POST   | `/api/v1/acl/validate`        | Validate ACL configuration     | Admin         |
-| GET    | `/api/v1/config`              | Get full configuration         | Admin         |
-| GET    | `/api/v1/config/{section}`    | Get config section             | Admin         |
-| PATCH  | `/api/v1/config/{section}`    | Update config section          | Admin         |
-| POST   | `/api/v1/config/reload`       | Reload config from file        | Admin         |
-| POST   | `/api/v1/config/save`         | Save config to file            | Admin         |
-| POST   | `/api/v1/config/validate`     | Validate configuration         | Admin         |
+| Method | Endpoint                    | Description                    | Auth Required |
+|--------|-----------------------------|--------------------------------|---------------|
+| GET    | `/api/v1/health`            | Health check                   | No            |
+| POST   | `/api/v1/auth/bind`         | Authenticate and get JWT       | No            |
+| GET    | `/api/v1/entries/{dn}`      | Get single entry               | Yes           |
+| GET    | `/api/v1/search`            | Search entries with pagination | Yes           |
+| GET    | `/api/v1/search/stream`     | Stream search results (NDJSON) | Yes           |
+| POST   | `/api/v1/entries`           | Create new entry               | Yes           |
+| PUT    | `/api/v1/entries/{dn}`      | Modify entry                   | Yes           |
+| PATCH  | `/api/v1/entries/{dn}`      | Modify entry                   | Yes           |
+| DELETE | `/api/v1/entries/{dn}`      | Delete entry                   | Yes           |
+| POST   | `/api/v1/entries/{dn}/move` | Rename/move entry              | Yes           |
+| POST   | `/api/v1/compare`           | Compare attribute value        | Yes           |
+| POST   | `/api/v1/bulk`              | Bulk operations                | Yes           |
+| GET    | `/api/v1/acl`               | Get ACL configuration          | Admin         |
+| GET    | `/api/v1/acl/rules`         | List ACL rules                 | Admin         |
+| GET    | `/api/v1/acl/rules/{index}` | Get single ACL rule            | Admin         |
+| POST   | `/api/v1/acl/rules`         | Add ACL rule                   | Admin         |
+| PUT    | `/api/v1/acl/rules/{index}` | Update ACL rule                | Admin         |
+| DELETE | `/api/v1/acl/rules/{index}` | Delete ACL rule                | Admin         |
+| PUT    | `/api/v1/acl/default`       | Set default ACL policy         | Admin         |
+| POST   | `/api/v1/acl/reload`        | Reload ACL from file           | Admin         |
+| POST   | `/api/v1/acl/save`          | Save ACL to file               | Admin         |
+| POST   | `/api/v1/acl/validate`      | Validate ACL configuration     | Admin         |
+| GET    | `/api/v1/config`            | Get full configuration         | Admin         |
+| GET    | `/api/v1/config/{section}`  | Get config section             | Admin         |
+| PATCH  | `/api/v1/config/{section}`  | Update config section          | Admin         |
+| POST   | `/api/v1/config/reload`     | Reload config from file        | Admin         |
+| POST   | `/api/v1/config/save`       | Save config to file            | Admin         |
+| POST   | `/api/v1/config/validate`   | Validate configuration         | Admin         |
+| GET    | `/api/v1/logs`              | Query logs with filtering      | Yes           |
+| GET    | `/api/v1/logs/export`       | Export logs (json/csv/ndjson)  | Yes           |

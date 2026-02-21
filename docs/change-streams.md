@@ -1,65 +1,65 @@
-# Change Streams ve Persistent Search
+# Change Streams and Persistent Search
 
-Bu dokuman, Oba LDAP Server'in real-time degisiklik bildirimi ozelliklerini aciklar.
+This document describes the real-time change notification features of Oba LDAP Server.
 
-## Genel Bakis
+## Overview
 
-Change Streams, LDAP dizinindeki entry degisikliklerini (ekleme, guncelleme, silme) real-time olarak izlemenizi saglar. Bu ozellik iki sekilde kullanilabilir:
+Change Streams allow you to monitor entry changes (add, update, delete) in the LDAP directory in real-time. This feature can be used in two ways:
 
-1. **LDAP Persistent Search** - Standart LDAP client'lar icin (RFC draft-ietf-ldapext-psearch)
-2. **Go Internal API** - Oba'yi library olarak kullanan uygulamalar icin
+1. **LDAP Persistent Search** - For standard LDAP clients (RFC draft-ietf-ldapext-psearch)
+2. **Go Internal API** - For applications using Oba as a library
 
 ## LDAP Persistent Search
 
-### Nedir?
+### What is it?
 
-Persistent Search, LDAP protokolune eklenen bir control'dur. Normal bir search istegi gibi calisir, ancak:
-- Baglanti acik kaldigi surece sonuclar akmaya devam eder
-- Yeni entry eklendiginde, mevcut entry guncellendiginde veya silindiginde bildirim alirsiniz
-- Her degisiklik bir SearchResultEntry olarak gonderilir
+Persistent Search is a control added to the LDAP protocol. It works like a normal search request, but:
+- Results continue to flow as long as the connection remains open
+- You receive notifications when new entries are added, existing entries are updated, or deleted
+- Each change is sent as a SearchResultEntry
 
-### Control Detaylari
+### Control Details
 
-| Ozellik     | Deger                               |
+| Property    | Value                               |
 |-------------|-------------------------------------|
 | OID         | 2.16.840.1.113730.3.4.3             |
-| Criticality | true veya false                     |
-| Deger       | changeTypes, changesOnly, returnECs |
+| Criticality | true or false                       |
+| Value       | changeTypes, changesOnly, returnECs |
 
-### Parametreler
+### Parameters
 
 #### changeTypes (Bitmask)
 
-Hangi degisiklik turlerini izlemek istediginizi belirtir:
+Specifies which types of changes you want to monitor:
 
-| Deger | Anlam                      |
-|-------|----------------------------|
-| 1     | Add (yeni entry)           |
-| 2     | Delete (silinen entry)     |
-| 4     | Modify (guncellenen entry) |
-| 8     | ModDN (DN degisikligi)     |
-| 15    | Tumu (1+2+4+8)             |
+| Value | Meaning                |
+|-------|------------------------|
+| 1     | Add (new entry)        |
+| 2     | Delete (deleted entry) |
+| 4     | Modify (updated entry) |
+| 8     | ModDN (DN change)      |
+| 15    | All (1+2+4+8)          |
 
 #### changesOnly
 
-| Deger | Anlam                                                     |
-|-------|-----------------------------------------------------------|
-| true  | Sadece degisiklikleri gonder (mevcut entry'leri gonderme) |
-| false | Once mevcut entry'leri gonder, sonra degisiklikleri izle  |
+| Value | Meaning                                               |
+|-------|-------------------------------------------------------|
+| true  | Send only changes (don't send existing entries)       |
+| false | First send existing entries, then monitor for changes |
 
 #### returnECs (Entry Change Notification)
 
-| Deger | Anlam                                          |
-|-------|------------------------------------------------|
-| true  | Her sonucla birlikte degisiklik bilgisi gonder |
-| false | Sadece entry'yi gonder                         |
+| Value | Meaning                                  |
+|-------|------------------------------------------|
+| true  | Send change information with each result |
+| false | Send only the entry                      |
 
-### Kullanim Ornekleri
+### Usage Examples
 
-#### ldapsearch ile
+#### With ldapsearch
 
 ```bash
-# Tum degisiklikleri izle (changesOnly=false)
+# Monitor all changes (changesOnly=false)
 # ps=<changeTypes>/<changesOnly>/<returnECs>
 ldapsearch -H ldap://localhost:1389 \
   -x -D "cn=admin,dc=example,dc=com" -w admin \
@@ -67,21 +67,21 @@ ldapsearch -H ldap://localhost:1389 \
   -E 'ps=15/0/1' \
   "(objectClass=*)"
 
-# Sadece yeni degisiklikleri izle (changesOnly=true)
+# Monitor only new changes (changesOnly=true)
 ldapsearch -H ldap://localhost:1389 \
   -x -D "cn=admin,dc=example,dc=com" -w admin \
   -b "ou=users,dc=example,dc=com" \
   -E 'ps=15/1/1' \
   "(objectClass=*)"
 
-# Sadece ekleme ve silmeleri izle (changeTypes=3 = add+delete)
+# Monitor only adds and deletes (changeTypes=3 = add+delete)
 ldapsearch -H ldap://localhost:1389 \
   -x -D "cn=admin,dc=example,dc=com" -w admin \
   -b "dc=example,dc=com" \
   -E 'ps=3/1/1' \
   "(objectClass=*)"
 
-# Sadece modify islemlerini izle (changeTypes=4)
+# Monitor only modify operations (changeTypes=4)
 ldapsearch -H ldap://localhost:1389 \
   -x -D "cn=admin,dc=example,dc=com" -w admin \
   -b "dc=example,dc=com" \
@@ -89,12 +89,12 @@ ldapsearch -H ldap://localhost:1389 \
   "(objectClass=*)"
 ```
 
-**Parametre Aciklamasi:** `ps=<changeTypes>/<changesOnly>/<returnECs>`
+**Parameter Explanation:** `ps=<changeTypes>/<changesOnly>/<returnECs>`
 - changeTypes: 1=add, 2=delete, 4=modify, 8=modDN, 15=all
-- changesOnly: 0=false (mevcut entry'leri de gonder), 1=true
-- returnECs: 0=false, 1=true (Entry Change Notification control ekle)
+- changesOnly: 0=false (also send existing entries), 1=true
+- returnECs: 0=false, 1=true (add Entry Change Notification control)
 
-#### Python ldap3 ile
+#### With Python ldap3
 
 ```python
 from ldap3 import Server, Connection, SUBTREE
@@ -103,7 +103,7 @@ from ldap3.extend.standard.persistentSearch import PersistentSearch
 server = Server('ldap://localhost:389')
 conn = Connection(server, 'cn=admin,dc=example,dc=com', 'secret', auto_bind=True)
 
-# Persistent search baslat
+# Start persistent search
 ps = PersistentSearch(
     conn,
     search_base='dc=example,dc=com',
@@ -114,20 +114,20 @@ ps = PersistentSearch(
     streaming=True
 )
 
-# Degisiklikleri dinle
+# Listen for changes
 for response in ps.listen():
     if response['type'] == 'searchResEntry':
         print(f"Entry: {response['dn']}")
         print(f"Change: {response.get('controls', {})}")
 ```
 
-#### Java JNDI ile
+#### With Java JNDI
 
 ```java
 import javax.naming.directory.*;
 import javax.naming.ldap.*;
 
-// Control olustur
+// Create control
 byte[] controlValue = createPersistentSearchControlValue(15, true, true);
 Control psControl = new BasicControl(
     "2.16.840.1.113730.3.4.3",  // OID
@@ -135,7 +135,7 @@ Control psControl = new BasicControl(
     controlValue
 );
 
-// Search yap
+// Perform search
 LdapContext ctx = new InitialLdapContext(env, null);
 ctx.setRequestControls(new Control[]{psControl});
 
@@ -145,7 +145,7 @@ NamingEnumeration<SearchResult> results = ctx.search(
     searchControls
 );
 
-// Sonuclari isle (blocking)
+// Process results (blocking)
 while (results.hasMore()) {
     SearchResult result = results.next();
     System.out.println("DN: " + result.getNameInNamespace());
@@ -154,20 +154,20 @@ while (results.hasMore()) {
 
 ### Entry Change Notification Control
 
-returnECs=1 oldugunda, her SearchResultEntry ile birlikte bir control gonderilir:
+When returnECs=1, a control is sent with each SearchResultEntry:
 
-| Ozellik      | Deger                              |
+| Property     | Value                              |
 |--------------|------------------------------------|
 | OID          | 2.16.840.1.113730.3.4.7            |
 | changeType   | 1=add, 2=delete, 4=modify, 8=modDN |
-| previousDN   | Sadece modDN icin, onceki DN       |
-| changeNumber | Degisiklik sira numarasi           |
+| previousDN   | Previous DN (only for modDN)       |
+| changeNumber | Change sequence number             |
 
 ## Go Internal API
 
-Oba'yi Go uygulamanizda library olarak kullaniyorsaniz, Change Streams API'sini dogrudan kullanabilirsiniz.
+If you're using Oba as a library in your Go application, you can use the Change Streams API directly.
 
-### Temel Kullanim
+### Basic Usage
 
 ```go
 package main
@@ -179,10 +179,10 @@ import (
 )
 
 func main() {
-    // Backend'e erisim (server kurulumundan)
+    // Access backend (from server setup)
     be := getBackend()
 
-    // Tum degisiklikleri izle
+    // Watch all changes
     sub := be.Watch(stream.MatchAll())
     defer be.Unwatch(sub.ID)
 
@@ -195,19 +195,19 @@ func main() {
 }
 ```
 
-### Filter Kullanimi
+### Using Filters
 
 ```go
-// Belirli bir DN'i izle
+// Watch a specific DN
 sub := be.Watch(stream.MatchDN("cn=admin,dc=example,dc=com"))
 
-// Bir subtree'yi izle
+// Watch a subtree
 sub := be.Watch(stream.MatchSubtree("ou=users,dc=example,dc=com"))
 
-// Ozel filter
+// Custom filter
 sub := be.Watch(stream.WatchFilter{
     BaseDN: "ou=users,dc=example,dc=com",
-    Scope:  stream.ScopeOneLevel,  // Sadece dogrudan cocuklar
+    Scope:  stream.ScopeOneLevel,  // Only direct children
     Operations: []stream.OperationType{
         stream.OpInsert,
         stream.OpDelete,
@@ -215,12 +215,12 @@ sub := be.Watch(stream.WatchFilter{
 })
 ```
 
-### Resume (Devam Etme)
+### Resume (Continuing)
 
-Baglanti koptuğunda kaldığınız yerden devam edebilirsiniz:
+You can resume from where you left off when the connection drops:
 
 ```go
-// Son alinan token'i kaydet
+// Save the last received token
 var lastToken uint64
 
 sub := be.Watch(stream.MatchAll())
@@ -229,79 +229,79 @@ for event := range sub.Channel {
     processEvent(event)
 }
 
-// Baglanti koptu, yeniden baglan
+// Connection dropped, reconnect
 sub, err := be.WatchWithResume(stream.MatchAll(), lastToken)
 if err == stream.ErrTokenTooOld {
-    // Token cok eski, bastan basla
+    // Token too old, start from beginning
     sub = be.Watch(stream.MatchAll())
 }
 ```
 
-### Event Yapisi
+### Event Structure
 
 ```go
 type ChangeEvent struct {
-    Token     uint64           // Benzersiz sira numarasi
+    Token     uint64           // Unique sequence number
     Operation OperationType    // OpInsert, OpUpdate, OpDelete, OpModifyDN
-    DN        string           // Etkilenen entry'nin DN'i
-    Entry     *storage.Entry   // Entry verisi (delete icin nil)
-    OldDN     string           // Onceki DN (sadece modifyDN icin)
-    Timestamp time.Time        // Olay zamani
+    DN        string           // DN of the affected entry
+    Entry     *storage.Entry   // Entry data (nil for delete)
+    OldDN     string           // Previous DN (only for modifyDN)
+    Timestamp time.Time        // Event timestamp
 }
 ```
 
 ### Backpressure
 
-Subscriber buffer'i dolarsa, yeni event'ler drop edilir:
+If the subscriber buffer fills up, new events are dropped:
 
 ```go
 sub := be.Watch(stream.MatchAll())
 
-// Kac event drop edildi?
+// How many events were dropped?
 dropped := sub.DroppedCount()
 if dropped > 0 {
     log.Printf("Warning: %d events dropped", dropped)
 }
 
-// Drop sayacini sifirla
+// Reset drop counter
 dropped = sub.ResetDropped()
 ```
 
-## Performans
+## Performance
 
-### Limitler
+### Limits
 
-| Parametre     | Varsayilan | Aciklama                              |
-|---------------|------------|---------------------------------------|
-| Buffer Size   | 256        | Subscriber basina event buffer boyutu |
-| Replay Buffer | 4096       | Resume icin saklanan event sayisi     |
+| Parameter     | Default | Description                        |
+|---------------|---------|------------------------------------|
+| Buffer Size   | 256     | Event buffer size per subscriber   |
+| Replay Buffer | 4096    | Number of events stored for resume |
 
-### Oneriler
+### Recommendations
 
-1. **changesOnly=true kullanin** - Mevcut entry'leri almak istemiyorsaniz
-2. **Dar scope secin** - Tum dizin yerine belirli subtree'leri izleyin
-3. **Filter kullanin** - Sadece ilgilendiginiz entry'leri izleyin
-4. **Event'leri hizli isleyin** - Buffer dolmasini onleyin
+1. **Use changesOnly=true** - If you don't need existing entries
+2. **Choose narrow scope** - Watch specific subtrees instead of entire directory
+3. **Use filters** - Watch only entries you're interested in
+4. **Process events quickly** - Prevent buffer overflow
 
-## Sorun Giderme
+## Troubleshooting
 
-### "persistent search not supported" Hatasi
+### "persistent search not supported" Error
 
-Persistent Search control critical olarak gonderildi ama server desteklemiyor. Oba'nin dogru surumunu kullandiginizdan emin olun.
+Persistent Search control was sent as critical but the server doesn't support it. Make sure you're using the correct version of Oba.
 
-### Event'ler Gelmiyor
+### Events Not Arriving
 
-1. Dogru BaseDN kullandiginizdan emin olun
-2. changeTypes degerini kontrol edin
-3. changesOnly=false ile test edin (mevcut entry'leri gormeli)
+1. Make sure you're using the correct BaseDN
+2. Check the changeTypes value
+3. Test with changesOnly=false (should see existing entries)
 
-### Baglanti Kopuyor
+### Connection Dropping
 
-1. Timeout ayarlarini kontrol edin
-2. Network sorunlarini arastirin
-3. Resume mekanizmasini kullanin
+1. Check timeout settings
+2. Investigate network issues
+3. Use the resume mechanism
 
-## Ilgili Belgeler
+## Related Documents
 
 - [RFC draft-ietf-ldapext-psearch](https://tools.ietf.org/html/draft-ietf-ldapext-psearch-03) - Persistent Search Control
 - [RFC 4533](https://tools.ietf.org/html/rfc4533) - LDAP Content Synchronization (syncrepl)

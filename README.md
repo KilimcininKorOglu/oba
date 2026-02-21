@@ -18,6 +18,8 @@ Oba is a lightweight, custom embedded database engine (ObaDB) optimized for LDAP
 - Write-Ahead Logging (WAL) for crash recovery
 - MVCC for concurrent access
 - Backup and restore with automatic timestamps
+- Web admin panel (React + Vite + Tailwind)
+- Persistent log storage with query and export
 
 ## Quick Start
 
@@ -30,6 +32,9 @@ docker compose up -d
 
 # Test the connection
 ldapsearch -x -H ldap://localhost:1389 -b "dc=example,dc=com" "(objectClass=*)"
+
+# Access web admin panel
+open http://localhost:3000
 ```
 
 ### Building from Source
@@ -100,6 +105,33 @@ See `acl.example.yaml` for ACL configuration format.
 | Compare   | Compare attribute values  |
 | Abandon   | Cancel pending operations |
 
+## Web Admin Panel
+
+Oba includes a web-based admin panel built with React, Vite, and Tailwind CSS.
+
+### Features
+
+- Dashboard with server health and statistics
+- LDAP entry browser and search
+- User and group management
+- ACL rule editor
+- Configuration management
+- Log viewer with filtering and export
+- Password change functionality
+
+### Access
+
+When running with Docker Compose, the web panel is available at `http://localhost:3000`.
+
+### Ports
+
+| Service   | Port |
+|-----------|------|
+| LDAP      | 1389 |
+| LDAPS     | 1636 |
+| REST API  | 8080 |
+| Web Panel | 3000 |
+
 ## Architecture
 
 ```
@@ -114,7 +146,7 @@ oba/
 │   ├── crypto/        # Encryption utilities
 │   ├── filter/        # Search filter evaluation
 │   ├── ldap/          # LDAP protocol messages
-│   ├── logging/       # Structured logging
+│   ├── logging/       # Structured logging with persistent storage
 │   ├── password/      # Password policy
 │   ├── rest/          # REST API server
 │   ├── schema/        # LDAP schema validation
@@ -128,6 +160,7 @@ oba/
 │       ├── radix/     # Radix tree for DN hierarchy
 │       ├── stream/    # Change streams
 │       └── tx/        # Transaction management
+├── web/               # Web admin panel (React + Vite + Tailwind)
 ├── docs/              # Documentation
 └── examples/          # Usage examples
 ```

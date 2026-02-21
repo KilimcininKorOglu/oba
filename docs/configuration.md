@@ -147,6 +147,37 @@ logging:
 | warn  | Warning conditions                   |
 | error | Error conditions requiring attention |
 
+### Persistent Log Storage
+
+Oba supports persistent log storage using ObaDB for querying and exporting logs via REST API.
+
+| Parameter             | Type   | Default | Description                              |
+|-----------------------|--------|---------|------------------------------------------|
+| logging.store.enabled | bool   | false   | Enable persistent log storage            |
+| logging.store.path    | string | ""      | Path to log database file (e.g. log.oba) |
+| logging.store.maxSize | int    | 100000  | Maximum number of log entries to retain  |
+| logging.store.maxAge  | string | "7d"    | Maximum age of log entries               |
+
+Example:
+
+```yaml
+logging:
+  level: "info"
+  format: "json"
+  output: "stdout"
+  store:
+    enabled: true
+    path: "/var/lib/oba/log.oba"
+    maxSize: 100000
+    maxAge: "7d"
+```
+
+When enabled, logs can be queried and exported via REST API endpoints:
+- `GET /api/v1/logs` - Query logs with filtering
+- `GET /api/v1/logs/export` - Export logs in various formats
+
+See [REST API Documentation](REST_API.md#log-management) for details.
+
 ## Security Configuration
 
 ### Password Policy
@@ -405,24 +436,24 @@ Oba supports hot reload for many configuration settings without server restart. 
 
 ### Hot-Reloadable Settings
 
-| Section                     | Settings                                              | Method           |
-|-----------------------------|-------------------------------------------------------|------------------|
-| `logging`                   | `level`, `format`                                     | File / REST API  |
-| `server`                    | `maxConnections`, `readTimeout`, `writeTimeout`       | File / REST API  |
-| `server`                    | `tlsCert`, `tlsKey` (certificate reload)              | File / REST API  |
-| `security.rateLimit`        | `enabled`, `maxAttempts`, `lockoutDuration`           | File / REST API  |
-| `security.passwordPolicy`   | All fields                                            | File / REST API  |
-| `rest`                      | `rateLimit`, `tokenTTL`, `corsOrigins`                | File / REST API  |
-| `aclFile` (external)        | All ACL rules and default policy                      | File / REST API  |
+| Section                   | Settings                                        | Method          |
+|---------------------------|-------------------------------------------------|-----------------|
+| `logging`                 | `level`, `format`                               | File / REST API |
+| `server`                  | `maxConnections`, `readTimeout`, `writeTimeout` | File / REST API |
+| `server`                  | `tlsCert`, `tlsKey` (certificate reload)        | File / REST API |
+| `security.rateLimit`      | `enabled`, `maxAttempts`, `lockoutDuration`     | File / REST API |
+| `security.passwordPolicy` | All fields                                      | File / REST API |
+| `rest`                    | `rateLimit`, `tokenTTL`, `corsOrigins`          | File / REST API |
+| `aclFile` (external)      | All ACL rules and default policy                | File / REST API |
 
 ### Settings Requiring Restart
 
-| Section     | Settings                                    | Reason                    |
-|-------------|---------------------------------------------|---------------------------|
-| `server`    | `address`, `tlsAddress`                     | Listener binding          |
-| `directory` | `baseDN`, `rootDN`, `rootPassword`          | Core identity             |
-| `storage`   | `dataDir`, `pageSize`, `bufferPoolSize`     | Storage engine init       |
-| `rest`      | `enabled`, `address`, `jwtSecret`           | Server binding / security |
+| Section     | Settings                                | Reason                    |
+|-------------|-----------------------------------------|---------------------------|
+| `server`    | `address`, `tlsAddress`                 | Listener binding          |
+| `directory` | `baseDN`, `rootDN`, `rootPassword`      | Core identity             |
+| `storage`   | `dataDir`, `pageSize`, `bufferPoolSize` | Storage engine init       |
+| `rest`      | `enabled`, `address`, `jwtSecret`       | Server binding / security |
 
 ### Automatic File Watcher
 
