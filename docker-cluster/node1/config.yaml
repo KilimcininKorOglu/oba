@@ -40,6 +40,8 @@ rest:
   corsOrigins:
     - "*"
 
+aclFile: "/var/lib/oba/acl.yaml"
+
 cluster:
   enabled: true
   nodeID: 1

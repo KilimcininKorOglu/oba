@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/KilimcininKorOglu/oba/internal/logging"
+	"github.com/KilimcininKorOglu/oba/internal/raft"
 )
 
 // Manager manages ACL configuration with hot reload support.
@@ -499,18 +500,8 @@ func (m *Manager) IncrementVersion() uint64 {
 	return atomic.AddUint64(&m.version, 1)
 }
 
-// ACLRuleData represents a single ACL rule for Raft serialization.
-type ACLRuleData struct {
-	Target     string   `json:"target"`
-	Subject    string   `json:"subject"`
-	Scope      string   `json:"scope"`
-	Rights     []string `json:"rights"`
-	Attributes []string `json:"attributes"`
-	Deny       bool     `json:"deny"`
-}
-
 // ApplyFullConfigFromRaft applies a full ACL config from Raft replication.
-func (m *Manager) ApplyFullConfigFromRaft(rules []ACLRuleData, defaultPolicy string) error {
+func (m *Manager) ApplyFullConfigFromRaft(rules []raft.ACLRuleData, defaultPolicy string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -540,7 +531,7 @@ func (m *Manager) ApplyFullConfigFromRaft(rules []ACLRuleData, defaultPolicy str
 }
 
 // AddRuleFromRaft adds a rule from Raft replication.
-func (m *Manager) AddRuleFromRaft(ruleData *ACLRuleData, index int) error {
+func (m *Manager) AddRuleFromRaft(ruleData *raft.ACLRuleData, index int) error {
 	if ruleData == nil {
 		return fmt.Errorf("rule data cannot be nil")
 	}
@@ -569,7 +560,7 @@ func (m *Manager) AddRuleFromRaft(ruleData *ACLRuleData, index int) error {
 }
 
 // UpdateRuleFromRaft updates a rule from Raft replication.
-func (m *Manager) UpdateRuleFromRaft(ruleData *ACLRuleData, index int) error {
+func (m *Manager) UpdateRuleFromRaft(ruleData *raft.ACLRuleData, index int) error {
 	if ruleData == nil {
 		return fmt.Errorf("rule data cannot be nil")
 	}
@@ -634,9 +625,9 @@ func (m *Manager) SetDefaultPolicyFromRaft(policy string) error {
 
 // ACLSnapshot represents ACL data for Raft snapshot.
 type ACLSnapshot struct {
-	Version       uint64        `json:"version"`
-	DefaultPolicy string        `json:"defaultPolicy"`
-	Rules         []ACLRuleData `json:"rules"`
+	Version       uint64              `json:"version"`
+	DefaultPolicy string              `json:"defaultPolicy"`
+	Rules         []raft.ACLRuleData  `json:"rules"`
 }
 
 // GetACLSnapshot returns the current ACL config as a snapshot for Raft.
@@ -647,7 +638,7 @@ func (m *Manager) GetACLSnapshot() ([]byte, error) {
 	snapshot := &ACLSnapshot{
 		Version:       atomic.LoadUint64(&m.version),
 		DefaultPolicy: m.config.DefaultPolicy,
-		Rules:         make([]ACLRuleData, len(m.config.Rules)),
+		Rules:         make([]raft.ACLRuleData, len(m.config.Rules)),
 	}
 
 	for i, rule := range m.config.Rules {
@@ -690,8 +681,8 @@ func (m *Manager) RestoreACLSnapshot(data []byte) error {
 	return nil
 }
 
-// ruleDataToACL converts ACLRuleData to ACL.
-func ruleDataToACL(data *ACLRuleData) (*ACL, error) {
+// ruleDataToACL converts raft.ACLRuleData to ACL.
+func ruleDataToACL(data *raft.ACLRuleData) (*ACL, error) {
 	rule := &ACL{
 		Target:     data.Target,
 		Subject:    data.Subject,
@@ -736,9 +727,9 @@ func ruleDataToACL(data *ACLRuleData) (*ACL, error) {
 	return rule, nil
 }
 
-// aclToRuleData converts ACL to ACLRuleData.
-func aclToRuleData(rule *ACL) ACLRuleData {
-	return ACLRuleData{
+// aclToRuleData converts ACL to raft.ACLRuleData.
+func aclToRuleData(rule *ACL) raft.ACLRuleData {
+	return raft.ACLRuleData{
 		Target:     rule.Target,
 		Subject:    rule.Subject,
 		Scope:      rule.Scope.String(),
@@ -748,12 +739,12 @@ func aclToRuleData(rule *ACL) ACLRuleData {
 	}
 }
 
-// ToRuleDataSlice converts ACL rules to ACLRuleData slice for Raft commands.
-func (m *Manager) ToRuleDataSlice() []ACLRuleData {
+// ToRuleDataSlice converts ACL rules to raft.ACLRuleData slice for Raft commands.
+func (m *Manager) ToRuleDataSlice() []raft.ACLRuleData {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	result := make([]ACLRuleData, len(m.config.Rules))
+	result := make([]raft.ACLRuleData, len(m.config.Rules))
 	for i, rule := range m.config.Rules {
 		result[i] = aclToRuleData(rule)
 	}

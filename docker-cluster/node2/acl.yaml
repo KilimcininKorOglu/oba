@@ -1,0 +1,14 @@
+version: 1
+defaultPolicy: deny
+rules:
+  - target: "dc=example,dc=com"
+    subject: "cn=admin,dc=example,dc=com"
+    scope: subtree
+    rights:
+      - all
+  - target: "dc=example,dc=com"
+    subject: "*"
+    scope: subtree
+    rights:
+      - read
+      - search

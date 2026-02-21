@@ -261,6 +261,8 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 			sysLogger.Info("log store cluster replication enabled")
 		}
 
+		// Note: Config and ACL appliers are set after server creation in serveCmd
+
 		sysLogger.Info("cluster backend created", "peers", len(cfg.Cluster.Peers))
 	}
 
@@ -806,6 +808,17 @@ func serveCmd(args []string) int {
 		if srv.restServer != nil {
 			srv.restServer.SetConfigManager(srv.configManager)
 		}
+		// Set config applier on cluster backend for config replication
+		if srv.clusterBackend != nil {
+			srv.clusterBackend.SetConfigApplier(srv.configManager)
+			srv.logger.WithSource("system").Info("config manager cluster replication enabled")
+		}
+	}
+
+	// Set ACL applier on cluster backend for ACL replication
+	if srv.clusterBackend != nil && srv.aclManager != nil {
+		srv.clusterBackend.SetACLApplier(srv.aclManager)
+		srv.logger.WithSource("system").Info("ACL manager cluster replication enabled")
 	}
 
 	// Write PID file
