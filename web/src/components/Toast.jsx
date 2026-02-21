@@ -9,10 +9,10 @@ const icons = {
 };
 
 const colors = {
-  success: 'bg-green-500/10 border-green-500/50 text-green-500',
-  error: 'bg-red-500/10 border-red-500/50 text-red-500',
-  warning: 'bg-yellow-500/10 border-yellow-500/50 text-yellow-500',
-  info: 'bg-blue-500/10 border-blue-500/50 text-blue-500'
+  success: 'bg-zinc-800 border-green-500 text-green-500',
+  error: 'bg-zinc-800 border-red-500 text-red-500',
+  warning: 'bg-zinc-800 border-yellow-500 text-yellow-500',
+  info: 'bg-zinc-800 border-blue-500 text-blue-500'
 };
 
 export default function Toast() {
@@ -21,7 +21,7 @@ export default function Toast() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed top-4 right-4 z-50 flex flex-col gap-2">
+    <div className="fixed bottom-4 right-4 z-50 flex flex-col-reverse gap-2">
       {toasts.map(toast => {
         const Icon = icons[toast.type] || Info;
         return (
