@@ -8,6 +8,36 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import Modal from '../components/Modal';
 import { useToast } from '../context/ToastContext';
 
+const formatLdapTimestamp = (value) => {
+  // LDAP GeneralizedTime format: YYYYMMDDHHmmssZ or YYYYMMDDHHmmss.fffZ
+  const match = value.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(?:\.(\d+))?Z?$/);
+  if (!match) return null;
+  
+  const [, year, month, day, hour, minute, second] = match;
+  const date = new Date(Date.UTC(
+    parseInt(year),
+    parseInt(month) - 1,
+    parseInt(day),
+    parseInt(hour),
+    parseInt(minute),
+    parseInt(second)
+  ));
+  
+  if (isNaN(date.getTime())) return null;
+  
+  return date.toLocaleString();
+};
+
+const timestampAttributes = [
+  'createtimestamp', 'modifytimestamp', 'pwdchangedtime', 'pwdlockouttime',
+  'pwdfailuretime', 'pwdaccountlockedtime', 'pwdstarttime', 'pwdendtime',
+  'pwdlastlogon', 'pwdlastsuccess', 'lastlogon', 'lastlogontimestamp'
+];
+
+const isTimestampAttribute = (key) => {
+  return timestampAttributes.includes(key.toLowerCase());
+};
+
 export default function EntryDetail() {
   const { dn } = useParams();
   const navigate = useNavigate();
@@ -168,11 +198,17 @@ export default function EntryDetail() {
             <div key={key} className="px-6 py-4">
               <div className="text-sm font-medium text-zinc-400 mb-1">{key}</div>
               <div className="space-y-1">
-                {(Array.isArray(values) ? values : [values]).map((value, i) => (
-                  <div key={i} className="text-zinc-100 font-mono text-sm break-all">
-                    {key === 'userPassword' ? '********' : value}
-                  </div>
-                ))}
+                {(Array.isArray(values) ? values : [values]).map((value, i) => {
+                  const formattedTime = isTimestampAttribute(key) ? formatLdapTimestamp(value) : null;
+                  return (
+                    <div key={i} className="text-zinc-100 font-mono text-sm break-all">
+                      {key === 'userPassword' ? '********' : value}
+                      {formattedTime && (
+                        <span className="text-zinc-400 font-sans ml-2">({formattedTime})</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ))}
