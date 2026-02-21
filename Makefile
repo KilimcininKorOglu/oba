@@ -4,10 +4,12 @@ BINARY_NAME=oba
 BUILD_DIR=bin
 CMD_DIR=cmd/oba
 DOCKER_IMAGE=oba:latest
+GOOS=$(shell go env GOOS)
+GOARCH=$(shell go env GOARCH)
 
 build:
 	@mkdir -p $(BUILD_DIR)
-	go build -o $(BUILD_DIR)/$(BINARY_NAME) ./$(CMD_DIR)
+	go build -o $(BUILD_DIR)/$(BINARY_NAME)_$(GOOS)_$(GOARCH) ./$(CMD_DIR)
 
 clean:
 	rm -rf $(BUILD_DIR)
@@ -29,7 +31,7 @@ bench:
 	go test -bench=. -benchmem ./...
 
 run: build
-	./$(BUILD_DIR)/$(BINARY_NAME) serve
+	./$(BUILD_DIR)/$(BINARY_NAME)_$(GOOS)_$(GOARCH) serve
 
 fmt:
 	go fmt ./...
