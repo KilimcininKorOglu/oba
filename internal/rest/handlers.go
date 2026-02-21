@@ -274,7 +274,16 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		result[i] = convertEntryWithAttrs(e, requestedAttrs)
 	}
 
-	h.auditLog(r, "search", "baseDN", baseDN, "scope", scopeStr, "filter", filterStr, "results", len(result))
+	// Log with meaningful filter value
+	logFilter := filterStr
+	if logFilter == "" {
+		logFilter = "*"
+	}
+	logScope := scopeStr
+	if logScope == "" {
+		logScope = "sub"
+	}
+	h.auditLog(r, "search", "baseDN", baseDN, "scope", logScope, "filter", logFilter, "results", len(result))
 
 	writeJSON(w, http.StatusOK, SearchResponse{
 		Entries:    result,

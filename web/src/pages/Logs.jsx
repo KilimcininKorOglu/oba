@@ -145,6 +145,7 @@ export default function Logs() {
         const details = [];
         if (fields.dn) details.push(`dn=${fields.dn}`);
         if (fields.baseDN) details.push(`baseDN=${fields.baseDN}`);
+        if (fields.scope) details.push(`scope=${fields.scope}`);
         if (fields.filter) details.push(`filter=${fields.filter}`);
         if (fields.results !== undefined) details.push(`results=${fields.results}`);
         if (fields.changes !== undefined) details.push(`changes=${fields.changes}`);
