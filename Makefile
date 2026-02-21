@@ -46,7 +46,11 @@ vet:
 lint: fmt vet
 
 docker:
-	docker build -t $(DOCKER_IMAGE) .
+	docker build \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg COMMIT=$(COMMIT) \
+		--build-arg BUILD_DATE=$(BUILD_DATE) \
+		-t $(DOCKER_IMAGE) .
 
 docker-run:
 	docker run -d --name oba-server \
@@ -61,7 +65,7 @@ docker-logs:
 	docker logs -f oba-server
 
 up:
-	docker compose up -d --build
+	VERSION=$(VERSION) COMMIT=$(COMMIT) BUILD_DATE=$(BUILD_DATE) docker compose up -d --build
 
 down:
 	docker compose down

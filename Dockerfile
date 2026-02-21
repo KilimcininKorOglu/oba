@@ -7,7 +7,7 @@ RUN apk add --no-cache git make
 COPY go.mod ./
 COPY . .
 
-ARG VERSION=1.0.0
+ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILD_DATE=unknown
 
