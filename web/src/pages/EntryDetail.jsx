@@ -7,6 +7,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import ConfirmDialog from '../components/ConfirmDialog';
 import Modal from '../components/Modal';
 import { useToast } from '../context/ToastContext';
+import { formatDate } from '../utils/dateFormat';
 
 const formatLdapTimestamp = (value) => {
   // LDAP GeneralizedTime format: YYYYMMDDHHmmssZ or YYYYMMDDHHmmss.fffZ
@@ -25,7 +26,7 @@ const formatLdapTimestamp = (value) => {
   
   if (isNaN(date.getTime())) return null;
   
-  return date.toLocaleString();
+  return formatDate(date);
 };
 
 const timestampAttributes = [

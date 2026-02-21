@@ -715,6 +715,9 @@ func (h *Handlers) HandleStats(w http.ResponseWriter, r *http.Request) {
 		Compares: atomic.LoadInt64(&h.compareCount),
 	}
 
+	// Get timezone
+	zone, _ := time.Now().Zone()
+
 	writeJSON(w, http.StatusOK, StatsResponse{
 		Status:      "ok",
 		Version:     "1.0.1",
@@ -723,6 +726,7 @@ func (h *Handlers) HandleStats(w http.ResponseWriter, r *http.Request) {
 		StartTime:   h.startTime,
 		Connections: int(atomic.LoadInt64(&h.activeConns)),
 		Requests:    atomic.LoadInt64(&h.requestCount),
+		Timezone:    zone,
 		Storage:     storageStats,
 		Security:    securityStats,
 		System:      systemStats,

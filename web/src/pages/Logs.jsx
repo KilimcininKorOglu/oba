@@ -5,6 +5,7 @@ import Header from '../components/Header';
 import Table from '../components/Table';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast } from '../context/ToastContext';
+import { formatDate } from '../utils/dateFormat';
 
 export default function Logs() {
   const { showToast } = useToast();
@@ -112,7 +113,7 @@ export default function Logs() {
       header: 'Time',
       render: (row) => (
         <span className="text-zinc-400 text-xs">
-          {new Date(row.timestamp).toLocaleString()}
+          {formatDate(row.timestamp)}
         </span>
       )
     },

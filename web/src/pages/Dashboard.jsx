@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Activity, Clock, Users, BarChart3, Search, Plus, Settings,
-  Database, Shield, Cpu, HardDrive, Lock, UserX, AlertTriangle,
+  Database, Shield, Cpu, Lock, UserX, AlertTriangle,
   LogIn, FileSearch, FilePlus, FileEdit, Trash2, GitCompare,
   RefreshCw
 } from 'lucide-react';
 import api from '../api/client';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { setServerTimezone, formatDate, formatRelativeTime } from '../utils/dateFormat';
 
 function formatUptime(uptime) {
   if (!uptime) return 'N/A';
@@ -79,18 +80,6 @@ function ActivityItem({ activity }) {
     }
   };
 
-  const formatTime = (timestamp) => {
-    if (!timestamp) return '';
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diff = now - date;
-    
-    if (diff < 60000) return 'just now';
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-    return date.toLocaleDateString();
-  };
-
   return (
     <div className="flex items-start gap-3 p-3 hover:bg-zinc-700/30 rounded-lg transition-colors">
       {getIcon(activity.type)}
@@ -106,7 +95,7 @@ function ActivityItem({ activity }) {
         </div>
       </div>
       <span className="text-xs text-zinc-500 whitespace-nowrap">
-        {formatTime(activity.timestamp)}
+        {formatRelativeTime(activity.timestamp)}
       </span>
     </div>
   );
@@ -127,6 +116,11 @@ export default function Dashboard() {
         api.getStats(),
         api.getActivities(10)
       ]);
+      
+      // Set server timezone for date formatting
+      if (statsData.timezone) {
+        setServerTimezone(statsData.timezone);
+      }
       
       setStats(statsData);
       setActivities(activitiesData.activities || []);
@@ -196,7 +190,7 @@ export default function Dashboard() {
           label="Uptime" 
           value={formatUptime(stats?.uptime)} 
           color="text-blue-500"
-          subValue={stats?.startTime ? `Started: ${new Date(stats.startTime).toLocaleString()}` : null}
+          subValue={stats?.startTime ? `Started: ${formatDate(stats.startTime)}` : null}
         />
         <StatCard 
           icon={Users} 

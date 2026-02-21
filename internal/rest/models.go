@@ -143,6 +143,7 @@ type StatsResponse struct {
 	StartTime   time.Time `json:"startTime"`
 	Connections int       `json:"connections"`
 	Requests    int64     `json:"requests"`
+	Timezone    string    `json:"timezone"`
 
 	// Storage stats
 	Storage StorageStats `json:"storage"`
