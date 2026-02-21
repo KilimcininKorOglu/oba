@@ -1,11 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Plus, Trash2, Eye, Users } from 'lucide-react';
+import { Plus, Trash2, Users } from 'lucide-react';
 import api from '../api/client';
 import Header from '../components/Header';
-import Table from '../components/Table';
 import Modal from '../components/Modal';
-import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast } from '../context/ToastContext';
 
 export default function Groups() {
@@ -13,8 +10,9 @@ export default function Groups() {
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [baseDN, setBaseDN] = useState('');
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [membersModal, setMembersModal] = useState({ open: false, group: null, members: [] });
+  const [showModal, setShowModal] = useState(false);
+  const [formLoading, setFormLoading] = useState(false);
+  const [form, setForm] = useState({ cn: '', description: '', members: '' });
 
   const fetchGroups = async () => {
     setLoading(true);
@@ -41,23 +39,50 @@ export default function Groups() {
     fetchGroups();
   }, []);
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
+  const handleDelete = async (dn) => {
+    if (!confirm(`Delete group ${dn}?`)) return;
     try {
-      await api.deleteEntry(deleteTarget);
+      await api.deleteEntry(dn);
       showToast('Group deleted', 'success');
       fetchGroups();
     } catch (err) {
       showToast(err.message, 'error');
     }
-    setDeleteTarget(null);
   };
 
-  const showMembers = (group) => {
-    const members = group.attributes?.member || 
-                    group.attributes?.uniqueMember || 
-                    group.attributes?.memberUid || [];
-    setMembersModal({ open: true, group, members });
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.cn) {
+      showToast('Group name is required', 'error');
+      return;
+    }
+
+    setFormLoading(true);
+    try {
+      const dn = `cn=${form.cn},ou=groups,${baseDN}`;
+      const members = form.members.split('\n').map(m => m.trim()).filter(m => m);
+      
+      await api.addEntry(dn, {
+        objectClass: ['groupOfNames', 'top'],
+        cn: [form.cn],
+        member: members.length > 0 ? members : [`cn=admin,${baseDN}`],
+        ...(form.description && { description: [form.description] })
+      });
+      showToast('Group created', 'success');
+      setShowModal(false);
+      setForm({ cn: '', description: '', members: '' });
+      fetchGroups();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const getAttr = (entry, name) => {
+    const attrs = entry.attributes || {};
+    const val = attrs[name] || attrs[name.toLowerCase()];
+    return Array.isArray(val) ? val : val ? [val] : [];
   };
 
   const extractCN = (dn) => {
@@ -65,127 +90,119 @@ export default function Groups() {
     return match ? match[1] : dn;
   };
 
-  const getOU = (dn) => {
-    const match = dn.match(/ou=([^,]+)/i);
-    return match ? match[1] : '-';
-  };
-
-  const getMemberCount = (group) => {
-    const members = group.attributes?.member || 
-                    group.attributes?.uniqueMember || 
-                    group.attributes?.memberUid || [];
-    return members.length;
-  };
-
-  const columns = [
-    {
-      header: 'Group Name',
-      render: (row) => (
-        <span className="font-medium text-zinc-100">{extractCN(row.dn)}</span>
-      )
-    },
-    {
-      header: 'Description',
-      render: (row) => (
-        <span className="text-zinc-400">{row.attributes?.description?.[0] || '-'}</span>
-      )
-    },
-    {
-      header: 'Members',
-      render: (row) => {
-        const count = getMemberCount(row);
-        return (
-          <button
-            onClick={() => showMembers(row)}
-            className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
-          >
-            <Users className="w-4 h-4" />
-            <span>{count}</span>
-          </button>
-        );
-      }
-    },
-    {
-      header: 'OU',
-      render: (row) => (
-        <span className="text-zinc-500 text-sm">{getOU(row.dn)}</span>
-      )
-    },
-    {
-      header: 'Actions',
-      render: (row) => (
-        <div className="flex items-center gap-1">
-          <Link
-            to={`/entries/${encodeURIComponent(row.dn)}`}
-            className="p-1.5 text-zinc-400 hover:text-zinc-100"
-            title="View"
-          >
-            <Eye className="w-4 h-4" />
-          </Link>
-          <button
-            onClick={() => setDeleteTarget(row.dn)}
-            className="p-1.5 text-zinc-400 hover:text-red-500"
-            title="Delete"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
-      )
-    }
-  ];
-
   return (
     <div>
-      <Header
-        title="Groups"
-        actions={
-          <Link
-            to="/groups/new"
-            className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm"
+      <Header 
+        title="Groups" 
+        action={
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg"
           >
             <Plus className="w-4 h-4" />
             Add Group
-          </Link>
+          </button>
         }
       />
 
-      <div className="bg-zinc-800 rounded-lg border border-zinc-700">
-        <Table
-          columns={columns}
-          data={groups}
-          loading={loading}
-          emptyTitle="No groups found"
-          emptyDescription="Add groups to your directory to see them here."
-        />
-      </div>
-
-      <ConfirmDialog
-        isOpen={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={handleDelete}
-        title="Delete Group"
-        message={`Are you sure you want to delete "${extractCN(deleteTarget || '')}"? This action cannot be undone.`}
-      />
-
-      <Modal
-        isOpen={membersModal.open}
-        onClose={() => setMembersModal({ open: false, group: null, members: [] })}
-        title={`Members of ${extractCN(membersModal.group?.dn || '')}`}
-      >
-        <div className="max-h-96 overflow-y-auto">
-          {membersModal.members.length === 0 ? (
-            <p className="text-zinc-400 text-sm">No members in this group.</p>
-          ) : (
-            <ul className="space-y-2">
-              {membersModal.members.map((member, i) => (
-                <li key={i} className="flex items-center gap-2 p-2 bg-zinc-900 rounded">
-                  <Users className="w-4 h-4 text-zinc-500" />
-                  <span className="text-sm text-zinc-300 font-mono">{extractCN(member)}</span>
-                </li>
+      {loading ? (
+        <div className="text-center py-8 text-zinc-500">Loading...</div>
+      ) : groups.length === 0 ? (
+        <div className="text-center py-8 text-zinc-500">No groups found</div>
+      ) : (
+        <div className="bg-zinc-800 border border-zinc-700 rounded-lg overflow-hidden">
+          <table className="min-w-full divide-y divide-zinc-700">
+            <thead className="bg-zinc-900">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase">Name</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase">Members</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase">DN</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-zinc-400 uppercase">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-700">
+              {groups.map((group) => (
+                <tr key={group.dn} className="hover:bg-zinc-700/50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="font-medium text-zinc-100">{extractCN(group.dn)}</div>
+                    <div className="text-sm text-zinc-500">{getAttr(group, 'description')[0] || ''}</div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2 text-zinc-400">
+                      <Users className="w-4 h-4" />
+                      {getAttr(group, 'member').length} member(s)
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-zinc-500 font-mono">
+                    {group.dn}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right">
+                    <button
+                      onClick={() => handleDelete(group.dn)}
+                      className="text-red-400 hover:text-red-300"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </td>
+                </tr>
               ))}
-            </ul>
-          )}
+            </tbody>
+          </table>
         </div>
+      )}
+
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Add Group">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-zinc-300 mb-1">Group Name (cn) *</label>
+            <input
+              type="text"
+              value={form.cn}
+              onChange={(e) => setForm({ ...form, cn: e.target.value })}
+              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-md text-zinc-100 focus:outline-none focus:border-blue-500"
+              placeholder="developers"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-zinc-300 mb-1">Description</label>
+            <input
+              type="text"
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-md text-zinc-100 focus:outline-none focus:border-blue-500"
+              placeholder="Development team"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-zinc-300 mb-1">Members (one DN per line)</label>
+            <textarea
+              value={form.members}
+              onChange={(e) => setForm({ ...form, members: e.target.value })}
+              rows={3}
+              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-md text-zinc-100 focus:outline-none focus:border-blue-500"
+              placeholder={`uid=jdoe,ou=users,${baseDN}`}
+            />
+          </div>
+          <div className="text-sm text-zinc-500">
+            DN: <span className="font-mono text-zinc-400">cn={form.cn || '...'},ou=groups,{baseDN}</span>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button
+              type="submit"
+              disabled={formLoading}
+              className="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md disabled:opacity-50"
+            >
+              {formLoading ? 'Creating...' : 'Create Group'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowModal(false)}
+              className="px-4 py-2 bg-zinc-700 text-zinc-300 rounded-md hover:bg-zinc-600"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
       </Modal>
     </div>
   );
