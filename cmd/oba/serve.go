@@ -242,6 +242,9 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 			restServer.SetClusterBackend(clusterBackend)
 		}
 
+		// Set cluster writer on backend for cluster-aware writes
+		be.SetClusterWriter(clusterBackend)
+
 		sysLogger.Info("cluster backend created", "peers", len(cfg.Cluster.Peers))
 	}
 

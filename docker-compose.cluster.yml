@@ -18,7 +18,6 @@ services:
       - "4445:4445"   # Raft RPC
     volumes:
       - ./docker-data/node1:/var/lib/oba
-      - ./docker-data/cluster/config-node1.yaml:/var/lib/oba/config.yaml:ro
     environment:
       - OBA_LOG_LEVEL=info
       - TZ=Europe/Istanbul
@@ -43,7 +42,6 @@ services:
       - "4446:4445"   # Raft RPC
     volumes:
       - ./docker-data/node2:/var/lib/oba
-      - ./docker-data/cluster/config-node2.yaml:/var/lib/oba/config.yaml:ro
     environment:
       - OBA_LOG_LEVEL=info
       - TZ=Europe/Istanbul
@@ -70,7 +68,6 @@ services:
       - "4447:4445"   # Raft RPC
     volumes:
       - ./docker-data/node3:/var/lib/oba
-      - ./docker-data/cluster/config-node3.yaml:/var/lib/oba/config.yaml:ro
     environment:
       - OBA_LOG_LEVEL=info
       - TZ=Europe/Istanbul
