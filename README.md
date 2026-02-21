@@ -1,6 +1,8 @@
 # Oba
 
-Oba is a lightweight, custom embedded database engine (ObaDB) optimized for LDAP workloads. It also provides a zero-dependency LDAP server implementation written in pure Go. 
+Oba is a lightweight, custom embedded database engine (ObaDB) optimized for LDAP workloads. It also provides a zero-dependency LDAP server implementation written in pure Go.
+
+Current Version: 1.0.2 
 
 ## Features
 
@@ -36,6 +38,8 @@ ldapsearch -x -H ldap://localhost:1389 -b "dc=example,dc=com" "(objectClass=*)"
 # Access web admin panel
 open http://localhost:3000
 ```
+
+Default credentials: `cn=admin,dc=example,dc=com` / `admin`
 
 ### Building from Source
 
@@ -111,9 +115,11 @@ Oba includes a web-based admin panel built with React, Vite, and Tailwind CSS.
 
 ### Features
 
-- Dashboard with server health and statistics
+- Real-time dashboard with server statistics (auto-refresh every 5 seconds)
+- Storage, security, system, and LDAP operation metrics
+- Recent activity feed
 - LDAP entry browser and search
-- User and group management
+- User and group management with lock/unlock support
 - ACL rule editor
 - Configuration management
 - Log viewer with filtering and export
@@ -128,7 +134,7 @@ When running with Docker Compose, the web panel is available at `http://localhos
 | Service   | Port |
 |-----------|------|
 | LDAP      | 1389 |
-| LDAPS     | 1636 |
+| LDAPS     | 636  |
 | REST API  | 8080 |
 | Web Panel | 3000 |
 

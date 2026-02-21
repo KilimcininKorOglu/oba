@@ -496,18 +496,18 @@ logging:
 
 All LDAP and REST API operations are logged with detailed context:
 
-| Operation     | Logged Details                                    |
-|---------------|---------------------------------------------------|
-| Bind (Login)  | User DN, client IP, success/failure               |
-| Search        | Base DN, filter, scope, result count, client IP   |
-| Add           | Entry DN, client IP                               |
-| Modify        | Entry DN, modified attributes, client IP          |
-| Delete        | Entry DN, client IP                               |
-| ModifyDN      | Old DN, new DN, client IP                         |
-| Compare       | Entry DN, attribute, client IP                    |
-| Disable/Enable| Entry DN, action, client IP                       |
-| ACL Changes   | Rule details, action (add/update/delete)          |
-| Config Changes| Section modified, new values                      |
+| Operation      | Logged Details                                  |
+|----------------|-------------------------------------------------|
+| Bind (Login)   | User DN, client IP, success/failure             |
+| Search         | Base DN, filter, scope, result count, client IP |
+| Add            | Entry DN, client IP                             |
+| Modify         | Entry DN, modified attributes, client IP        |
+| Delete         | Entry DN, client IP                             |
+| ModifyDN       | Old DN, new DN, client IP                       |
+| Compare        | Entry DN, attribute, client IP                  |
+| Disable/Enable | Entry DN, action, client IP                     |
+| ACL Changes    | Rule details, action (add/update/delete)        |
+| Config Changes | Section modified, new values                    |
 
 #### Log Entry Format
 

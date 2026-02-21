@@ -293,38 +293,38 @@ Requires authentication.
 
 #### Response Fields
 
-| Field                        | Type   | Description                              |
-|------------------------------|--------|------------------------------------------|
-| `status`                     | string | Server status                            |
-| `version`                    | string | Server version                           |
-| `uptime`                     | string | Human-readable uptime                    |
-| `uptimeSecs`                 | int    | Uptime in seconds                        |
-| `startTime`                  | string | Server start time (ISO 8601)             |
-| `connections`                | int    | Current active connections               |
-| `requests`                   | int    | Total requests processed                 |
-| `timezone`                   | string | Server timezone                          |
-| `storage.entryCount`         | int    | Total LDAP entries                       |
-| `storage.indexCount`         | int    | Number of indexes                        |
-| `storage.totalPages`         | int    | Total database pages                     |
-| `storage.usedPages`          | int    | Used database pages                      |
-| `storage.freePages`          | int    | Free database pages                      |
-| `storage.bufferPoolSize`     | int    | Buffer pool size (pages)                 |
-| `storage.dirtyPages`         | int    | Dirty pages in buffer                    |
-| `storage.activeTransactions` | int    | Active transactions                      |
-| `security.lockedAccounts`    | int    | Accounts locked due to failed logins     |
-| `security.disabledAccounts`  | int    | Manually disabled accounts               |
-| `security.failedLogins24h`   | int    | Failed login attempts in last 24 hours   |
-| `system.goRoutines`          | int    | Active goroutines                        |
-| `system.memoryAlloc`         | int    | Allocated memory (bytes)                 |
-| `system.memorySys`           | int    | System memory (bytes)                    |
-| `system.numGC`               | int    | Garbage collection cycles                |
-| `system.numCPU`              | int    | Number of CPUs                           |
-| `operations.binds`           | int    | Total bind operations                    |
-| `operations.searches`        | int    | Total search operations                  |
-| `operations.adds`            | int    | Total add operations                     |
-| `operations.modifies`        | int    | Total modify operations                  |
-| `operations.deletes`         | int    | Total delete operations                  |
-| `operations.compares`        | int    | Total compare operations                 |
+| Field                        | Type   | Description                            |
+|------------------------------|--------|----------------------------------------|
+| `status`                     | string | Server status                          |
+| `version`                    | string | Server version                         |
+| `uptime`                     | string | Human-readable uptime                  |
+| `uptimeSecs`                 | int    | Uptime in seconds                      |
+| `startTime`                  | string | Server start time (ISO 8601)           |
+| `connections`                | int    | Current active connections             |
+| `requests`                   | int    | Total requests processed               |
+| `timezone`                   | string | Server timezone                        |
+| `storage.entryCount`         | int    | Total LDAP entries                     |
+| `storage.indexCount`         | int    | Number of indexes                      |
+| `storage.totalPages`         | int    | Total database pages                   |
+| `storage.usedPages`          | int    | Used database pages                    |
+| `storage.freePages`          | int    | Free database pages                    |
+| `storage.bufferPoolSize`     | int    | Buffer pool size (pages)               |
+| `storage.dirtyPages`         | int    | Dirty pages in buffer                  |
+| `storage.activeTransactions` | int    | Active transactions                    |
+| `security.lockedAccounts`    | int    | Accounts locked due to failed logins   |
+| `security.disabledAccounts`  | int    | Manually disabled accounts             |
+| `security.failedLogins24h`   | int    | Failed login attempts in last 24 hours |
+| `system.goRoutines`          | int    | Active goroutines                      |
+| `system.memoryAlloc`         | int    | Allocated memory (bytes)               |
+| `system.memorySys`           | int    | System memory (bytes)                  |
+| `system.numGC`               | int    | Garbage collection cycles              |
+| `system.numCPU`              | int    | Number of CPUs                         |
+| `operations.binds`           | int    | Total bind operations                  |
+| `operations.searches`        | int    | Total search operations                |
+| `operations.adds`            | int    | Total add operations                   |
+| `operations.modifies`        | int    | Total modify operations                |
+| `operations.deletes`         | int    | Total delete operations                |
+| `operations.compares`        | int    | Total compare operations               |
 
 #### Example
 
@@ -348,9 +348,9 @@ Requires authentication.
 
 #### Query Parameters
 
-| Parameter | Type | Default | Description                    |
-|-----------|------|---------|--------------------------------|
-| `limit`   | int  | 10      | Number of entries (max 100)    |
+| Parameter | Type | Default | Description                 |
+|-----------|------|---------|-----------------------------|
+| `limit`   | int  | 10      | Number of entries (max 100) |
 
 #### Response
 
@@ -378,15 +378,15 @@ Requires authentication.
 
 #### Response Fields
 
-| Field                  | Type   | Description                    |
-|------------------------|--------|--------------------------------|
-| `activities`           | array  | List of activity entries       |
+| Field                    | Type   | Description                   |
+|--------------------------|--------|-------------------------------|
+| `activities`             | array  | List of activity entries      |
 | `activities[].timestamp` | string | Activity timestamp (ISO 8601) |
-| `activities[].type`    | string | Log level (info, warn, error)  |
-| `activities[].user`    | string | User DN who performed action   |
-| `activities[].message` | string | Activity description           |
-| `activities[].source`  | string | Source (rest, ldap, system)    |
-| `count`                | int    | Number of returned activities  |
+| `activities[].type`      | string | Log level (info, warn, error) |
+| `activities[].user`      | string | User DN who performed action  |
+| `activities[].message`   | string | Activity description          |
+| `activities[].source`    | string | Source (rest, ldap, system)   |
+| `count`                  | int    | Number of returned activities |
 
 #### Example
 
@@ -674,11 +674,11 @@ GET /api/v1/search/stream
 
 #### Query Parameters
 
-| Parameter | Type   | Default | Description                                  |
-|-----------|--------|---------|----------------------------------------------|
-| `baseDN`  | string | -       | Base DN for the search (required)            |
-| `scope`   | string | `sub`   | Search scope: `base`, `one`, or `sub`        |
-| `filter`  | string | `*`     | LDAP filter (RFC 4515 syntax, see Search)    |
+| Parameter | Type   | Default | Description                               |
+|-----------|--------|---------|-------------------------------------------|
+| `baseDN`  | string | -       | Base DN for the search (required)         |
+| `scope`   | string | `sub`   | Search scope: `base`, `one`, or `sub`     |
+| `filter`  | string | `*`     | LDAP filter (RFC 4515 syntax, see Search) |
 
 #### Response Headers
 
@@ -2383,27 +2383,27 @@ curl -X POST http://localhost:8080/api/v1/compare \
 | PATCH  | `/api/v1/entries/{dn}`             | Modify entry                   | Yes           |
 | DELETE | `/api/v1/entries/{dn}`             | Delete entry                   | Yes           |
 | POST   | `/api/v1/entries/{dn}/move`        | Rename/move entry              | Yes           |
-| POST   | `/api/v1/entries/{dn}/disable` | Disable user account           | Yes           |
-| POST   | `/api/v1/entries/{dn}/enable`  | Enable user account            | Yes           |
-| POST   | `/api/v1/entries/{dn}/unlock`  | Unlock locked account          | Yes           |
-| GET    | `/api/v1/entries/{dn}/lock-status` | Get account lock status    | Yes           |
-| POST   | `/api/v1/compare`              | Compare attribute value        | Yes           |
-| POST   | `/api/v1/bulk`                 | Bulk operations                | Yes           |
-| GET    | `/api/v1/acl`                  | Get ACL configuration          | Admin         |
-| GET    | `/api/v1/acl/rules`            | List ACL rules                 | Admin         |
-| GET    | `/api/v1/acl/rules/{index}`    | Get single ACL rule            | Admin         |
-| POST   | `/api/v1/acl/rules`            | Add ACL rule                   | Admin         |
-| PUT    | `/api/v1/acl/rules/{index}`    | Update ACL rule                | Admin         |
-| DELETE | `/api/v1/acl/rules/{index}`    | Delete ACL rule                | Admin         |
-| PUT    | `/api/v1/acl/default`          | Set default ACL policy         | Admin         |
-| POST   | `/api/v1/acl/reload`           | Reload ACL from file           | Admin         |
-| POST   | `/api/v1/acl/save`             | Save ACL to file               | Admin         |
-| POST   | `/api/v1/acl/validate`         | Validate ACL configuration     | Admin         |
-| GET    | `/api/v1/config`               | Get full configuration         | Admin         |
-| GET    | `/api/v1/config/{section}`     | Get config section             | Admin         |
-| PATCH  | `/api/v1/config/{section}`     | Update config section          | Admin         |
-| POST   | `/api/v1/config/reload`        | Reload config from file        | Admin         |
-| POST   | `/api/v1/config/save`          | Save config to file            | Admin         |
-| POST   | `/api/v1/config/validate`      | Validate configuration         | Admin         |
-| GET    | `/api/v1/logs`                 | Query logs with filtering      | Yes           |
-| GET    | `/api/v1/logs/export`          | Export logs (json/csv/ndjson)  | Yes           |
+| POST   | `/api/v1/entries/{dn}/disable`     | Disable user account           | Yes           |
+| POST   | `/api/v1/entries/{dn}/enable`      | Enable user account            | Yes           |
+| POST   | `/api/v1/entries/{dn}/unlock`      | Unlock locked account          | Yes           |
+| GET    | `/api/v1/entries/{dn}/lock-status` | Get account lock status        | Yes           |
+| POST   | `/api/v1/compare`                  | Compare attribute value        | Yes           |
+| POST   | `/api/v1/bulk`                     | Bulk operations                | Yes           |
+| GET    | `/api/v1/acl`                      | Get ACL configuration          | Admin         |
+| GET    | `/api/v1/acl/rules`                | List ACL rules                 | Admin         |
+| GET    | `/api/v1/acl/rules/{index}`        | Get single ACL rule            | Admin         |
+| POST   | `/api/v1/acl/rules`                | Add ACL rule                   | Admin         |
+| PUT    | `/api/v1/acl/rules/{index}`        | Update ACL rule                | Admin         |
+| DELETE | `/api/v1/acl/rules/{index}`        | Delete ACL rule                | Admin         |
+| PUT    | `/api/v1/acl/default`              | Set default ACL policy         | Admin         |
+| POST   | `/api/v1/acl/reload`               | Reload ACL from file           | Admin         |
+| POST   | `/api/v1/acl/save`                 | Save ACL to file               | Admin         |
+| POST   | `/api/v1/acl/validate`             | Validate ACL configuration     | Admin         |
+| GET    | `/api/v1/config`                   | Get full configuration         | Admin         |
+| GET    | `/api/v1/config/{section}`         | Get config section             | Admin         |
+| PATCH  | `/api/v1/config/{section}`         | Update config section          | Admin         |
+| POST   | `/api/v1/config/reload`            | Reload config from file        | Admin         |
+| POST   | `/api/v1/config/save`              | Save config to file            | Admin         |
+| POST   | `/api/v1/config/validate`          | Validate configuration         | Admin         |
+| GET    | `/api/v1/logs`                     | Query logs with filtering      | Yes           |
+| GET    | `/api/v1/logs/export`              | Export logs (json/csv/ndjson)  | Yes           |
