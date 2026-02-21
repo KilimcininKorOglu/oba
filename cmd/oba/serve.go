@@ -239,14 +239,26 @@ func setupHandlers(h *server.Handler, be backend.Backend, logger logging.Logger)
 			return &server.OperationResult{ResultCode: ldap.ResultSuccess}
 		}
 
+		// Check if account is locked
+		if be.IsAccountLocked(req.Name) {
+			return &server.OperationResult{
+				ResultCode:        ldap.ResultInvalidCredentials,
+				DiagnosticMessage: "account is locked due to too many failed attempts",
+			}
+		}
+
 		err := be.Bind(req.Name, string(req.SimplePassword))
 		if err != nil {
+			// Record failed attempt
+			be.RecordAuthFailure(req.Name)
 			return &server.OperationResult{
 				ResultCode:        ldap.ResultInvalidCredentials,
 				DiagnosticMessage: "invalid credentials",
 			}
 		}
 
+		// Record successful authentication
+		be.RecordAuthSuccess(req.Name)
 		return &server.OperationResult{ResultCode: ldap.ResultSuccess}
 	})
 

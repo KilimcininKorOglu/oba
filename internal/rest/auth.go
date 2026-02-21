@@ -58,10 +58,19 @@ func (a *Authenticator) GetTokenTTL() time.Duration {
 
 // Authenticate validates credentials and returns a JWT token.
 func (a *Authenticator) Authenticate(dn, password string) (string, error) {
+	// Check if account is locked
+	if a.backend.IsAccountLocked(dn) {
+		return "", backend.ErrAccountLocked
+	}
+
 	if err := a.backend.Bind(dn, password); err != nil {
+		// Record failed attempt
+		a.backend.RecordAuthFailure(dn)
 		return "", err
 	}
 
+	// Record successful authentication
+	a.backend.RecordAuthSuccess(dn)
 	return a.generateToken(dn)
 }
 

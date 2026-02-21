@@ -76,6 +76,10 @@ func (h *Handlers) HandleBind(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusUnauthorized, "invalid_credentials", "invalid DN or password")
 			return
 		}
+		if err == backend.ErrAccountLocked {
+			writeError(w, http.StatusUnauthorized, "account_locked", "account is locked due to too many failed attempts")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "auth_error", err.Error())
 		return
 	}

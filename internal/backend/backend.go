@@ -38,6 +38,8 @@ var (
 	ErrNotAllowedOnNonLeaf = errors.New("backend: operation not allowed on non-leaf entry")
 	// ErrAccountDisabled is returned when trying to bind with a disabled account.
 	ErrAccountDisabled = errors.New("backend: account is disabled")
+	// ErrAccountLocked is returned when trying to bind with a locked account.
+	ErrAccountLocked = errors.New("backend: account is locked due to too many failed attempts")
 )
 
 // PasswordAttribute is the standard LDAP attribute name for user passwords.
@@ -84,6 +86,15 @@ type Backend interface {
 	// The bindDN is used to set modifiersName.
 	// Returns an error if the entry does not exist or the modifications are invalid.
 	ModifyWithBindDN(dn string, changes []Modification, bindDN string) error
+
+	// IsAccountLocked checks if an account is locked due to too many failed attempts.
+	IsAccountLocked(dn string) bool
+
+	// RecordAuthFailure records a failed authentication attempt.
+	RecordAuthFailure(dn string)
+
+	// RecordAuthSuccess records a successful authentication and clears failure history.
+	RecordAuthSuccess(dn string)
 }
 
 // ObaBackend implements the Backend interface using the ObaDB storage engine.
