@@ -173,6 +173,7 @@ The following endpoints do not require authentication:
 
 - `GET /api/v1/health` - Health check
 - `POST /api/v1/auth/bind` - Authentication
+- `GET /api/v1/config/public` - Public configuration (baseDN)
 
 ---
 
@@ -268,6 +269,18 @@ No authentication required.
 }
 ```
 
+#### Response (Account Disabled)
+
+If the account has been disabled via the disable endpoint:
+
+```json
+{
+  "error": "auth_error",
+  "code": 500,
+  "message": "backend: account is disabled"
+}
+```
+
 #### Example
 
 ```bash
@@ -277,6 +290,34 @@ curl -X POST http://localhost:8080/api/v1/auth/bind \
     "dn": "cn=admin,dc=example,dc=com",
     "password": "admin"
   }'
+```
+
+---
+
+### Get Public Configuration
+
+Retrieve public configuration without authentication. Useful for clients that need to know the baseDN before authenticating.
+
+#### Request
+
+```
+GET /api/v1/config/public
+```
+
+No authentication required.
+
+#### Response
+
+```json
+{
+  "baseDN": "dc=example,dc=com"
+}
+```
+
+#### Example
+
+```bash
+curl http://localhost:8080/api/v1/config/public
 ```
 
 ---
@@ -333,11 +374,27 @@ GET /api/v1/search
 |--------------|--------|---------|----------------------------------------------|
 | `baseDN`     | string | -       | Base DN for the search (required)            |
 | `scope`      | string | `sub`   | Search scope: `base`, `one`, or `sub`        |
-| `filter`     | string | -       | LDAP filter (not yet implemented)            |
+| `filter`     | string | `*`     | LDAP filter (RFC 4515 syntax)                |
 | `attributes` | string | -       | Comma-separated list of attributes to return |
 | `offset`     | int    | `0`     | Number of entries to skip (pagination)       |
 | `limit`      | int    | `0`     | Maximum entries to return (0 = unlimited)    |
 | `timeLimit`  | int    | `0`     | Search timeout in seconds (0 = no limit)     |
+
+#### LDAP Filter Syntax
+
+The filter parameter supports RFC 4515 LDAP filter syntax:
+
+| Filter Type | Syntax                  | Example                          |
+|-------------|-------------------------|----------------------------------|
+| Equality    | `(attr=value)`          | `(cn=john)`                      |
+| Presence    | `(attr=*)`              | `(mail=*)`                       |
+| Substring   | `(attr=*value*)`        | `(cn=*doe*)`                     |
+| Greater/Eq  | `(attr>=value)`         | `(uidNumber>=1000)`              |
+| Less/Eq     | `(attr<=value)`         | `(uidNumber<=2000)`              |
+| Approx      | `(attr~=value)`         | `(cn~=jon)`                      |
+| AND         | `(&(filter1)(filter2))` | `(&(objectClass=person)(cn=j*))` |
+| OR          | `(|(filter1)(filter2))` | `(|(cn=john)(cn=jane))`          |
+| NOT         | `(!(filter))`           | `(!(objectClass=group))`         |
 
 #### Search Scopes
 
@@ -409,6 +466,22 @@ curl "http://localhost:8080/api/v1/search?baseDN=dc=example,dc=com&attributes=cn
   -H "Authorization: Bearer $TOKEN"
 ```
 
+With filter:
+
+```bash
+# Find all users
+curl "http://localhost:8080/api/v1/search?baseDN=dc=example,dc=com&filter=(objectClass=person)" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Find users with specific name pattern
+curl "http://localhost:8080/api/v1/search?baseDN=dc=example,dc=com&filter=(cn=john*)" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Complex filter with AND
+curl "http://localhost:8080/api/v1/search?baseDN=dc=example,dc=com&filter=(%26(objectClass=person)(mail=*))" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
 With time limit:
 
 ```bash
@@ -430,11 +503,11 @@ GET /api/v1/search/stream
 
 #### Query Parameters
 
-| Parameter | Type   | Default | Description                           |
-|-----------|--------|---------|---------------------------------------|
-| `baseDN`  | string | -       | Base DN for the search (required)     |
-| `scope`   | string | `sub`   | Search scope: `base`, `one`, or `sub` |
-| `filter`  | string | -       | LDAP filter (not yet implemented)     |
+| Parameter | Type   | Default | Description                                  |
+|-----------|--------|---------|----------------------------------------------|
+| `baseDN`  | string | -       | Base DN for the search (required)            |
+| `scope`   | string | `sub`   | Search scope: `base`, `one`, or `sub`        |
+| `filter`  | string | `*`     | LDAP filter (RFC 4515 syntax, see Search)    |
 
 #### Response Headers
 
@@ -815,6 +888,77 @@ curl -X POST "http://localhost:8080/api/v1/entries/cn%3Djohn%2Cou%3Dusers%2Cdc%3
     "newSuperior": "ou=managers,dc=example,dc=com"
   }'
 ```
+
+---
+
+### Disable Entry
+
+Disable a user account. Disabled accounts cannot authenticate via LDAP bind or REST API.
+
+#### Request
+
+```
+POST /api/v1/entries/{dn}/disable
+```
+
+The `{dn}` parameter must be URL-encoded.
+
+#### Response
+
+```json
+{
+  "success": true,
+  "disabled": true
+}
+```
+
+#### Example
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/entries/uid%3Djohn%2Cou%3Dusers%2Cdc%3Dexample%2Cdc%3Dcom/disable" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+#### Notes
+
+- Sets the `obaDisabled` attribute to `TRUE` on the entry
+- Disabled users receive "account is disabled" error when attempting to bind
+- Use the enable endpoint to re-enable the account
+
+---
+
+### Enable Entry
+
+Enable a previously disabled user account.
+
+#### Request
+
+```
+POST /api/v1/entries/{dn}/enable
+```
+
+The `{dn}` parameter must be URL-encoded.
+
+#### Response
+
+```json
+{
+  "success": true,
+  "disabled": false
+}
+```
+
+#### Example
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/entries/uid%3Djohn%2Cou%3Dusers%2Cdc%3Dexample%2Cdc%3Dcom/enable" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+#### Notes
+
+- Removes the `obaDisabled` attribute from the entry
+- User can authenticate again after being enabled
 
 ---
 
@@ -1670,6 +1814,7 @@ All errors are returned as JSON with consistent structure.
 | `empty_operations`        | 400         | Bulk request has no operations           |
 | `unauthorized`            | 401         | Missing or invalid authentication        |
 | `invalid_credentials`     | 401         | Invalid DN or password                   |
+| `account_disabled`        | 401         | Account has been disabled                |
 | `forbidden`               | 403         | Insufficient access rights               |
 | `not_found`               | 404         | Entry not found                          |
 | `entry_exists`            | 409         | Entry already exists                     |
@@ -1980,35 +2125,38 @@ curl -X POST http://localhost:8080/api/v1/compare \
 
 ## API Reference Summary
 
-| Method | Endpoint                    | Description                    | Auth Required |
-|--------|-----------------------------|--------------------------------|---------------|
-| GET    | `/api/v1/health`            | Health check                   | No            |
-| POST   | `/api/v1/auth/bind`         | Authenticate and get JWT       | No            |
-| GET    | `/api/v1/entries/{dn}`      | Get single entry               | Yes           |
-| GET    | `/api/v1/search`            | Search entries with pagination | Yes           |
-| GET    | `/api/v1/search/stream`     | Stream search results (NDJSON) | Yes           |
-| POST   | `/api/v1/entries`           | Create new entry               | Yes           |
-| PUT    | `/api/v1/entries/{dn}`      | Modify entry                   | Yes           |
-| PATCH  | `/api/v1/entries/{dn}`      | Modify entry                   | Yes           |
-| DELETE | `/api/v1/entries/{dn}`      | Delete entry                   | Yes           |
-| POST   | `/api/v1/entries/{dn}/move` | Rename/move entry              | Yes           |
-| POST   | `/api/v1/compare`           | Compare attribute value        | Yes           |
-| POST   | `/api/v1/bulk`              | Bulk operations                | Yes           |
-| GET    | `/api/v1/acl`               | Get ACL configuration          | Admin         |
-| GET    | `/api/v1/acl/rules`         | List ACL rules                 | Admin         |
-| GET    | `/api/v1/acl/rules/{index}` | Get single ACL rule            | Admin         |
-| POST   | `/api/v1/acl/rules`         | Add ACL rule                   | Admin         |
-| PUT    | `/api/v1/acl/rules/{index}` | Update ACL rule                | Admin         |
-| DELETE | `/api/v1/acl/rules/{index}` | Delete ACL rule                | Admin         |
-| PUT    | `/api/v1/acl/default`       | Set default ACL policy         | Admin         |
-| POST   | `/api/v1/acl/reload`        | Reload ACL from file           | Admin         |
-| POST   | `/api/v1/acl/save`          | Save ACL to file               | Admin         |
-| POST   | `/api/v1/acl/validate`      | Validate ACL configuration     | Admin         |
-| GET    | `/api/v1/config`            | Get full configuration         | Admin         |
-| GET    | `/api/v1/config/{section}`  | Get config section             | Admin         |
-| PATCH  | `/api/v1/config/{section}`  | Update config section          | Admin         |
-| POST   | `/api/v1/config/reload`     | Reload config from file        | Admin         |
-| POST   | `/api/v1/config/save`       | Save config to file            | Admin         |
-| POST   | `/api/v1/config/validate`   | Validate configuration         | Admin         |
-| GET    | `/api/v1/logs`              | Query logs with filtering      | Yes           |
-| GET    | `/api/v1/logs/export`       | Export logs (json/csv/ndjson)  | Yes           |
+| Method | Endpoint                       | Description                    | Auth Required |
+|--------|--------------------------------|--------------------------------|---------------|
+| GET    | `/api/v1/health`               | Health check                   | No            |
+| POST   | `/api/v1/auth/bind`            | Authenticate and get JWT       | No            |
+| GET    | `/api/v1/config/public`        | Get public config (baseDN)     | No            |
+| GET    | `/api/v1/entries/{dn}`         | Get single entry               | Yes           |
+| GET    | `/api/v1/search`               | Search entries with pagination | Yes           |
+| GET    | `/api/v1/search/stream`        | Stream search results (NDJSON) | Yes           |
+| POST   | `/api/v1/entries`              | Create new entry               | Yes           |
+| PUT    | `/api/v1/entries/{dn}`         | Modify entry                   | Yes           |
+| PATCH  | `/api/v1/entries/{dn}`         | Modify entry                   | Yes           |
+| DELETE | `/api/v1/entries/{dn}`         | Delete entry                   | Yes           |
+| POST   | `/api/v1/entries/{dn}/move`    | Rename/move entry              | Yes           |
+| POST   | `/api/v1/entries/{dn}/disable` | Disable user account           | Yes           |
+| POST   | `/api/v1/entries/{dn}/enable`  | Enable user account            | Yes           |
+| POST   | `/api/v1/compare`              | Compare attribute value        | Yes           |
+| POST   | `/api/v1/bulk`                 | Bulk operations                | Yes           |
+| GET    | `/api/v1/acl`                  | Get ACL configuration          | Admin         |
+| GET    | `/api/v1/acl/rules`            | List ACL rules                 | Admin         |
+| GET    | `/api/v1/acl/rules/{index}`    | Get single ACL rule            | Admin         |
+| POST   | `/api/v1/acl/rules`            | Add ACL rule                   | Admin         |
+| PUT    | `/api/v1/acl/rules/{index}`    | Update ACL rule                | Admin         |
+| DELETE | `/api/v1/acl/rules/{index}`    | Delete ACL rule                | Admin         |
+| PUT    | `/api/v1/acl/default`          | Set default ACL policy         | Admin         |
+| POST   | `/api/v1/acl/reload`           | Reload ACL from file           | Admin         |
+| POST   | `/api/v1/acl/save`             | Save ACL to file               | Admin         |
+| POST   | `/api/v1/acl/validate`         | Validate ACL configuration     | Admin         |
+| GET    | `/api/v1/config`               | Get full configuration         | Admin         |
+| GET    | `/api/v1/config/{section}`     | Get config section             | Admin         |
+| PATCH  | `/api/v1/config/{section}`     | Update config section          | Admin         |
+| POST   | `/api/v1/config/reload`        | Reload config from file        | Admin         |
+| POST   | `/api/v1/config/save`          | Save config to file            | Admin         |
+| POST   | `/api/v1/config/validate`      | Validate configuration         | Admin         |
+| GET    | `/api/v1/logs`                 | Query logs with filtering      | Yes           |
+| GET    | `/api/v1/logs/export`          | Export logs (json/csv/ndjson)  | Yes           |
