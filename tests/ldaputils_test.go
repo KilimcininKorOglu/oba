@@ -65,29 +65,7 @@ func TestLdapUtils(t *testing.T) {
 func setupLdapUtilsTestData(t *testing.T, srv *TestServer) {
 	be := srv.Backend()
 
-	// Add base entry
-	baseEntry := backend.NewEntry("dc=test,dc=com")
-	baseEntry.SetAttribute("objectclass", "domain", "top")
-	baseEntry.SetAttribute("dc", "test")
-	if err := be.Add(baseEntry); err != nil {
-		t.Fatalf("failed to add base entry: %v", err)
-	}
-
-	// Add ou=users
-	usersOU := backend.NewEntry("ou=users,dc=test,dc=com")
-	usersOU.SetAttribute("objectclass", "organizationalUnit", "top")
-	usersOU.SetAttribute("ou", "users")
-	if err := be.Add(usersOU); err != nil {
-		t.Fatalf("failed to add users OU: %v", err)
-	}
-
-	// Add ou=groups
-	groupsOU := backend.NewEntry("ou=groups,dc=test,dc=com")
-	groupsOU.SetAttribute("objectclass", "organizationalUnit", "top")
-	groupsOU.SetAttribute("ou", "groups")
-	if err := be.Add(groupsOU); err != nil {
-		t.Fatalf("failed to add groups OU: %v", err)
-	}
+	// Base entry and OUs are created by bootstrap, only add user/group entries
 
 	// Add user entries
 	alice := backend.NewEntry("uid=alice,ou=users,dc=test,dc=com")

@@ -127,9 +127,65 @@ func NewBackend(engine storage.StorageEngine, cfg *config.Config) *ObaBackend {
 				HistoryCount:     cfg.Security.PasswordPolicy.HistoryCount,
 			}
 		}
+
+		// Bootstrap directory structure if baseDN is configured
+		if cfg.Directory.BaseDN != "" {
+			b.bootstrapDirectory(cfg.Directory.BaseDN)
+		}
 	}
 
 	return b
+}
+
+// bootstrapDirectory creates the base directory structure if it doesn't exist.
+// Creates: baseDN, ou=users, ou=groups
+func (b *ObaBackend) bootstrapDirectory(baseDN string) {
+	normalizedBaseDN := normalizeDN(baseDN)
+
+	// Check if base entry exists
+	_, err := b.getEntry(normalizedBaseDN)
+	if err == nil {
+		// Base entry exists, directory already bootstrapped
+		return
+	}
+
+	// Create base entry
+	baseEntry := NewEntry(normalizedBaseDN)
+	baseEntry.SetAttribute("objectClass", "organization", "dcObject", "top")
+
+	// Extract dc from baseDN (e.g., "dc=example,dc=com" -> "example")
+	dc := extractDCFromDN(normalizedBaseDN)
+	if dc != "" {
+		baseEntry.SetAttribute("dc", dc)
+		baseEntry.SetAttribute("o", dc)
+	}
+
+	_ = b.Add(baseEntry)
+
+	// Create ou=users
+	usersOU := NewEntry("ou=users," + normalizedBaseDN)
+	usersOU.SetAttribute("objectClass", "organizationalUnit", "top")
+	usersOU.SetAttribute("ou", "users")
+	_ = b.Add(usersOU)
+
+	// Create ou=groups
+	groupsOU := NewEntry("ou=groups," + normalizedBaseDN)
+	groupsOU.SetAttribute("objectClass", "organizationalUnit", "top")
+	groupsOU.SetAttribute("ou", "groups")
+	_ = b.Add(groupsOU)
+}
+
+// extractDCFromDN extracts the first dc component from a DN.
+// e.g., "dc=example,dc=com" -> "example"
+func extractDCFromDN(dn string) string {
+	parts := strings.Split(strings.ToLower(dn), ",")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if strings.HasPrefix(part, "dc=") {
+			return part[3:]
+		}
+	}
+	return ""
 }
 
 // SetSchema sets the schema for entry validation.

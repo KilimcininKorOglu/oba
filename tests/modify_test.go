@@ -69,23 +69,7 @@ func TestIntegrationModify(t *testing.T) {
 
 // setupModifyTestData adds base entries for modify tests.
 func setupModifyTestData(t *testing.T, srv *TestServer) {
-	be := srv.Backend()
-
-	// Add base entry
-	baseEntry := backend.NewEntry("dc=test,dc=com")
-	baseEntry.SetAttribute("objectclass", "domain", "top")
-	baseEntry.SetAttribute("dc", "test")
-	if err := be.Add(baseEntry); err != nil {
-		t.Fatalf("failed to add base entry: %v", err)
-	}
-
-	// Add ou=users
-	usersOU := backend.NewEntry("ou=users,dc=test,dc=com")
-	usersOU.SetAttribute("objectclass", "organizationalUnit", "top")
-	usersOU.SetAttribute("ou", "users")
-	if err := be.Add(usersOU); err != nil {
-		t.Fatalf("failed to add users OU: %v", err)
-	}
+	// Base entry and OUs are created by bootstrap, nothing to do here
 }
 
 // testAddEntry tests adding a new entry.
