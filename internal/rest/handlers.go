@@ -15,6 +15,7 @@ import (
 	"github.com/oba-ldap/oba/internal/backend"
 	"github.com/oba-ldap/oba/internal/config"
 	"github.com/oba-ldap/oba/internal/ldap"
+	"github.com/oba-ldap/oba/internal/logging"
 )
 
 // Handlers contains all REST API handlers.
@@ -23,6 +24,7 @@ type Handlers struct {
 	auth          *Authenticator
 	aclManager    *acl.Manager
 	configManager *config.ConfigManager
+	logger        logging.Logger
 	startTime     time.Time
 	requestCount  int64
 	activeConns   int64

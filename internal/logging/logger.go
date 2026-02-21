@@ -102,6 +102,10 @@ type Logger interface {
 	GetLevel() Level
 	// GetFormat returns the current log format.
 	GetFormat() Format
+	// SetStore sets the log store for persistent logging.
+	SetStore(store *LogStore)
+	// GetStore returns the log store.
+	GetStore() *LogStore
 }
 
 // logger is the default implementation of Logger.
@@ -112,6 +116,7 @@ type logger struct {
 	fields    map[string]interface{}
 	mu        sync.Mutex
 	requestID string
+	store     *LogStore
 }
 
 // Config holds the logger configuration.
@@ -235,6 +240,20 @@ func (l *logger) GetFormat() Format {
 	return l.format
 }
 
+// SetStore sets the log store for persistent logging.
+func (l *logger) SetStore(store *LogStore) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.store = store
+}
+
+// GetStore returns the log store.
+func (l *logger) GetStore() *LogStore {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.store
+}
+
 // clone creates a copy of the logger.
 func (l *logger) clone() *logger {
 	newFields := make(map[string]interface{}, len(l.fields))
@@ -247,6 +266,7 @@ func (l *logger) clone() *logger {
 		output:    l.output,
 		fields:    newFields,
 		requestID: l.requestID,
+		store:     l.store,
 	}
 }
 
@@ -280,6 +300,17 @@ func (l *logger) log(level Level, msg string, keysAndValues ...interface{}) {
 		if key, ok := keysAndValues[i].(string); ok {
 			entry[key] = keysAndValues[i+1]
 		}
+	}
+
+	// Write to store if available
+	if l.store != nil {
+		fields := make(map[string]interface{})
+		for k, v := range entry {
+			if k != "ts" && k != "level" && k != "msg" && k != "request_id" {
+				fields[k] = v
+			}
+		}
+		l.store.Write(level.String(), msg, l.requestID, fields)
 	}
 
 	// Format and write
@@ -336,3 +367,5 @@ func (n *nopLogger) SetFormat(_ Format)                 {}
 func (n *nopLogger) SetOutput(_ io.Writer)              {}
 func (n *nopLogger) GetLevel() Level                    { return LevelInfo }
 func (n *nopLogger) GetFormat() Format                  { return FormatText }
+func (n *nopLogger) SetStore(_ *LogStore)               {}
+func (n *nopLogger) GetStore() *LogStore                { return nil }

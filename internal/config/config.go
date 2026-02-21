@@ -112,9 +112,17 @@ type StorageConfig struct {
 
 // LogConfig holds logging configuration.
 type LogConfig struct {
-	Level  string `yaml:"level"`
-	Format string `yaml:"format"`
-	Output string `yaml:"output"`
+	Level      string         `yaml:"level"`
+	Format     string         `yaml:"format"`
+	Output     string         `yaml:"output"`
+	Store      LogStoreConfig `yaml:"store"`
+}
+
+// LogStoreConfig holds log storage configuration.
+type LogStoreConfig struct {
+	Enabled    bool   `yaml:"enabled"`
+	DBPath     string `yaml:"dbPath"`
+	MaxEntries int    `yaml:"maxEntries"`
 }
 
 // SecurityConfig holds security-related configuration.

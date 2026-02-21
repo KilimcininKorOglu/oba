@@ -52,6 +52,14 @@ logging:
   format: "json"
   # Output: stdout, stderr, or file path
   output: "stdout"
+  # Log storage configuration (ObaDB)
+  store:
+    # Enable log storage for querying via REST API
+    enabled: false
+    # Path to log database directory
+    dbPath: "./data/log.oba"
+    # Maximum number of log entries to keep
+    maxEntries: 100000
 
 # Security configuration
 security:

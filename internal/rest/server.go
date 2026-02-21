@@ -125,6 +125,12 @@ func (s *Server) setupRoutes() {
 	s.router.POST("/api/v1/config/reload", s.handlers.HandleReloadConfig)
 	s.router.POST("/api/v1/config/save", s.handlers.HandleSaveConfig)
 	s.router.POST("/api/v1/config/validate", s.handlers.HandleValidateConfig)
+
+	// Log management endpoints
+	s.router.GET("/api/v1/logs", s.handlers.HandleGetLogs)
+	s.router.GET("/api/v1/logs/stats", s.handlers.HandleGetLogStats)
+	s.router.DELETE("/api/v1/logs", s.handlers.HandleClearLogs)
+	s.router.GET("/api/v1/logs/export", s.handlers.HandleExportLogs)
 }
 
 func (s *Server) setupMiddleware() {
@@ -271,4 +277,9 @@ func (s *Server) SetACLManager(m *acl.Manager) {
 // SetConfigManager sets the config manager for config-related endpoints.
 func (s *Server) SetConfigManager(m *config.ConfigManager) {
 	s.handlers.SetConfigManager(m)
+}
+
+// SetLogger sets the logger for log-related endpoints.
+func (s *Server) SetLogger(logger logging.Logger) {
+	s.handlers.SetLogger(logger)
 }

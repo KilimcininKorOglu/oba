@@ -12,6 +12,7 @@ import Bulk from './pages/Bulk';
 import Compare from './pages/Compare';
 import ACL from './pages/ACL';
 import Config from './pages/Config';
+import Logs from './pages/Logs';
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -34,6 +35,7 @@ function AppRoutes() {
         <Route path="compare" element={<Compare />} />
         <Route path="acl" element={<ACL />} />
         <Route path="config" element={<Config />} />
+        <Route path="logs" element={<Logs />} />
       </Route>
     </Routes>
   );

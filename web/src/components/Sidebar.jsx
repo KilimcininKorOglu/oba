@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, FolderTree, Search, Layers, GitCompare, Shield, Settings, LogOut } from 'lucide-react';
+import { LayoutDashboard, FolderTree, Search, Layers, GitCompare, Shield, Settings, FileText, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const navItems = [
@@ -13,6 +13,7 @@ const navItems = [
 const adminItems = [
   { to: '/acl', icon: Shield, label: 'ACL Rules' },
   { to: '/config', icon: Settings, label: 'Config' },
+  { to: '/logs', icon: FileText, label: 'Logs' },
 ];
 
 export default function Sidebar() {
