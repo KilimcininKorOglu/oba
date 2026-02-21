@@ -3,32 +3,44 @@ import { Plus, Trash2, Users, Pencil } from 'lucide-react';
 import api from '../api/client';
 import Header from '../components/Header';
 import Modal from '../components/Modal';
+import MultiSelect from '../components/MultiSelect';
 import { useToast } from '../context/ToastContext';
 
 export default function Groups() {
   const { showToast } = useToast();
   const [groups, setGroups] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [baseDN, setBaseDN] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editGroup, setEditGroup] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
-  const [form, setForm] = useState({ cn: '', description: '', members: '' });
+  const [form, setForm] = useState({ cn: '', description: '', members: [] });
 
-  const fetchGroups = async () => {
+  const fetchData = async () => {
     setLoading(true);
     try {
       const config = await api.getConfig();
       const base = config?.directory?.baseDN || 'dc=example,dc=com';
       setBaseDN(base);
 
-      const data = await api.searchEntries({
-        baseDN: base,
-        scope: 'sub',
-        filter: '(|(objectClass=groupOfNames)(objectClass=groupOfUniqueNames)(objectClass=posixGroup)(objectClass=group))',
-        limit: 1000
-      });
-      setGroups(data.entries || []);
+      const [groupsData, usersData] = await Promise.all([
+        api.searchEntries({
+          baseDN: base,
+          scope: 'sub',
+          filter: '(|(objectClass=groupOfNames)(objectClass=groupOfUniqueNames)(objectClass=posixGroup)(objectClass=group))',
+          limit: 1000
+        }),
+        api.searchEntries({
+          baseDN: base,
+          scope: 'sub',
+          filter: '(|(objectClass=person)(objectClass=inetOrgPerson))',
+          limit: 1000
+        })
+      ]);
+
+      setGroups(groupsData.entries || []);
+      setAllUsers(usersData.entries || []);
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
@@ -37,7 +49,7 @@ export default function Groups() {
   };
 
   useEffect(() => {
-    fetchGroups();
+    fetchData();
   }, []);
 
   const handleDelete = async (dn) => {
@@ -45,7 +57,7 @@ export default function Groups() {
     try {
       await api.deleteEntry(dn);
       showToast('Group deleted', 'success');
-      fetchGroups();
+      fetchData();
     } catch (err) {
       showToast(err.message, 'error');
     }
@@ -62,9 +74,14 @@ export default function Groups() {
     return match ? match[1] : dn;
   };
 
+  const extractUID = (dn) => {
+    const match = dn.match(/^(?:uid|cn)=([^,]+)/i);
+    return match ? match[1] : dn;
+  };
+
   const openAddModal = () => {
     setEditGroup(null);
-    setForm({ cn: '', description: '', members: '' });
+    setForm({ cn: '', description: '', members: [] });
     setShowModal(true);
   };
 
@@ -73,7 +90,7 @@ export default function Groups() {
     setForm({
       cn: extractCN(group.dn),
       description: getAttr(group, 'description')[0] || '',
-      members: getAttr(group, 'member').join('\n')
+      members: getAttr(group, 'member')
     });
     setShowModal(true);
   };
@@ -87,7 +104,7 @@ export default function Groups() {
 
     setFormLoading(true);
     try {
-      const members = form.members.split('\n').map(m => m.trim()).filter(m => m);
+      const members = form.members.length > 0 ? form.members : [`cn=admin,${baseDN}`];
 
       if (editGroup) {
         const modifications = [];
@@ -96,9 +113,7 @@ export default function Groups() {
         } else {
           modifications.push({ operation: 'delete', attribute: 'description' });
         }
-        if (members.length > 0) {
-          modifications.push({ operation: 'replace', attribute: 'member', values: members });
-        }
+        modifications.push({ operation: 'replace', attribute: 'member', values: members });
 
         await api.modifyEntry(editGroup.dn, modifications);
         showToast('Group updated', 'success');
@@ -107,21 +122,26 @@ export default function Groups() {
         await api.addEntry(dn, {
           objectClass: ['groupOfNames', 'top'],
           cn: [form.cn],
-          member: members.length > 0 ? members : [`cn=admin,${baseDN}`],
+          member: members,
           ...(form.description && { description: [form.description] })
         });
         showToast('Group created', 'success');
       }
       setShowModal(false);
-      setForm({ cn: '', description: '', members: '' });
+      setForm({ cn: '', description: '', members: [] });
       setEditGroup(null);
-      fetchGroups();
+      fetchData();
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
       setFormLoading(false);
     }
   };
+
+  const userOptions = allUsers.map(user => ({
+    value: user.dn,
+    label: `${getAttr(user, 'cn')[0] || extractUID(user.dn)} (${extractUID(user.dn)})`
+  }));
 
   return (
     <div>
@@ -218,13 +238,12 @@ export default function Groups() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-zinc-300 mb-1">Members (one DN per line)</label>
-            <textarea
+            <label className="block text-sm font-medium text-zinc-300 mb-1">Members</label>
+            <MultiSelect
+              options={userOptions}
               value={form.members}
-              onChange={(e) => setForm({ ...form, members: e.target.value })}
-              rows={4}
-              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-md text-zinc-100 focus:outline-none focus:border-blue-500"
-              placeholder={`uid=jdoe,ou=users,${baseDN}`}
+              onChange={(members) => setForm({ ...form, members })}
+              placeholder="Select members..."
             />
           </div>
           {!editGroup && (

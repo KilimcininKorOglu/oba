@@ -3,32 +3,44 @@ import { Plus, Trash2, Pencil } from 'lucide-react';
 import api from '../api/client';
 import Header from '../components/Header';
 import Modal from '../components/Modal';
+import MultiSelect from '../components/MultiSelect';
 import { useToast } from '../context/ToastContext';
 
 export default function Users() {
   const { showToast } = useToast();
   const [users, setUsers] = useState([]);
+  const [allGroups, setAllGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [baseDN, setBaseDN] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editUser, setEditUser] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
-  const [form, setForm] = useState({ uid: '', cn: '', sn: '', mail: '', password: '' });
+  const [form, setForm] = useState({ uid: '', cn: '', sn: '', mail: '', password: '', groups: [] });
 
-  const fetchUsers = async () => {
+  const fetchData = async () => {
     setLoading(true);
     try {
       const config = await api.getConfig();
       const base = config?.directory?.baseDN || 'dc=example,dc=com';
       setBaseDN(base);
 
-      const data = await api.searchEntries({
-        baseDN: base,
-        scope: 'sub',
-        filter: '(|(objectClass=person)(objectClass=inetOrgPerson)(objectClass=organizationalPerson)(objectClass=user))',
-        limit: 1000
-      });
-      setUsers(data.entries || []);
+      const [usersData, groupsData] = await Promise.all([
+        api.searchEntries({
+          baseDN: base,
+          scope: 'sub',
+          filter: '(|(objectClass=person)(objectClass=inetOrgPerson)(objectClass=organizationalPerson)(objectClass=user))',
+          limit: 1000
+        }),
+        api.searchEntries({
+          baseDN: base,
+          scope: 'sub',
+          filter: '(|(objectClass=groupOfNames)(objectClass=groupOfUniqueNames)(objectClass=posixGroup)(objectClass=group))',
+          limit: 1000
+        })
+      ]);
+
+      setUsers(usersData.entries || []);
+      setAllGroups(groupsData.entries || []);
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
@@ -37,7 +49,7 @@ export default function Users() {
   };
 
   useEffect(() => {
-    fetchUsers();
+    fetchData();
   }, []);
 
   const handleDelete = async (dn) => {
@@ -45,15 +57,32 @@ export default function Users() {
     try {
       await api.deleteEntry(dn);
       showToast('User deleted', 'success');
-      fetchUsers();
+      fetchData();
     } catch (err) {
       showToast(err.message, 'error');
     }
   };
 
+  const getAttr = (entry, name) => {
+    const attrs = entry.attributes || {};
+    const val = attrs[name] || attrs[name.toLowerCase()];
+    return Array.isArray(val) ? val : val ? [val] : [];
+  };
+
+  const extractCN = (dn) => {
+    const match = dn.match(/^cn=([^,]+)/i);
+    return match ? match[1] : dn;
+  };
+
+  const getUserGroups = (userDN) => {
+    return allGroups
+      .filter(g => getAttr(g, 'member').includes(userDN))
+      .map(g => g.dn);
+  };
+
   const openAddModal = () => {
     setEditUser(null);
-    setForm({ uid: '', cn: '', sn: '', mail: '', password: '' });
+    setForm({ uid: '', cn: '', sn: '', mail: '', password: '', groups: [] });
     setShowModal(true);
   };
 
@@ -69,7 +98,8 @@ export default function Users() {
       cn: getAttrVal('cn'),
       sn: getAttrVal('sn'),
       mail: getAttrVal('mail'),
-      password: ''
+      password: '',
+      groups: getUserGroups(user.dn)
     });
     setShowModal(true);
   };
@@ -83,7 +113,10 @@ export default function Users() {
 
     setFormLoading(true);
     try {
+      let userDN;
+      
       if (editUser) {
+        userDN = editUser.dn;
         const modifications = [];
         if (form.cn) modifications.push({ operation: 'replace', attribute: 'cn', values: [form.cn] });
         if (form.sn) modifications.push({ operation: 'replace', attribute: 'sn', values: [form.sn] });
@@ -92,15 +125,14 @@ export default function Users() {
         if (form.password) modifications.push({ operation: 'replace', attribute: 'userPassword', values: [form.password] });
 
         await api.modifyEntry(editUser.dn, modifications);
-        showToast('User updated', 'success');
       } else {
         if (!form.uid) {
           showToast('UID is required', 'error');
           setFormLoading(false);
           return;
         }
-        const dn = `uid=${form.uid},ou=users,${baseDN}`;
-        await api.addEntry(dn, {
+        userDN = `uid=${form.uid},ou=users,${baseDN}`;
+        await api.addEntry(userDN, {
           objectClass: ['inetOrgPerson', 'organizationalPerson', 'person', 'top'],
           uid: [form.uid],
           cn: [form.cn],
@@ -108,12 +140,41 @@ export default function Users() {
           ...(form.mail && { mail: [form.mail] }),
           ...(form.password && { userPassword: [form.password] })
         });
-        showToast('User created', 'success');
       }
+
+      // Update group memberships
+      const currentGroups = editUser ? getUserGroups(editUser.dn) : [];
+      const newGroups = form.groups;
+
+      // Remove from groups user is no longer in
+      for (const groupDN of currentGroups) {
+        if (!newGroups.includes(groupDN)) {
+          const group = allGroups.find(g => g.dn === groupDN);
+          if (group) {
+            const members = getAttr(group, 'member').filter(m => m !== userDN);
+            if (members.length > 0) {
+              await api.modifyEntry(groupDN, [{ operation: 'replace', attribute: 'member', values: members }]);
+            }
+          }
+        }
+      }
+
+      // Add to new groups
+      for (const groupDN of newGroups) {
+        if (!currentGroups.includes(groupDN)) {
+          const group = allGroups.find(g => g.dn === groupDN);
+          if (group) {
+            const members = [...getAttr(group, 'member'), userDN];
+            await api.modifyEntry(groupDN, [{ operation: 'replace', attribute: 'member', values: members }]);
+          }
+        }
+      }
+
+      showToast(editUser ? 'User updated' : 'User created', 'success');
       setShowModal(false);
-      setForm({ uid: '', cn: '', sn: '', mail: '', password: '' });
+      setForm({ uid: '', cn: '', sn: '', mail: '', password: '', groups: [] });
       setEditUser(null);
-      fetchUsers();
+      fetchData();
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
@@ -121,11 +182,10 @@ export default function Users() {
     }
   };
 
-  const getAttr = (entry, name) => {
-    const attrs = entry.attributes || {};
-    const val = attrs[name] || attrs[name.toLowerCase()];
-    return Array.isArray(val) ? val[0] : val || '';
-  };
+  const groupOptions = allGroups.map(group => ({
+    value: group.dn,
+    label: extractCN(group.dn)
+  }));
 
   return (
     <div>
@@ -153,43 +213,56 @@ export default function Users() {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase">Name</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase">Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase">DN</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase">Groups</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-zinc-400 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-700">
-              {users.map((user) => (
-                <tr key={user.dn} className="hover:bg-zinc-700/50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="font-medium text-zinc-100">{getAttr(user, 'cn')}</div>
-                    <div className="text-sm text-zinc-500">{getAttr(user, 'uid')}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-zinc-400">
-                    {getAttr(user, 'mail') || '-'}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-zinc-500 font-mono">
-                    {user.dn}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => openEditModal(user)}
-                        className="text-zinc-400 hover:text-zinc-200"
-                        title="Edit"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(user.dn)}
-                        className="text-red-400 hover:text-red-300"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {users.map((user) => {
+                const userGroups = getUserGroups(user.dn);
+                return (
+                  <tr key={user.dn} className="hover:bg-zinc-700/50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="font-medium text-zinc-100">{getAttr(user, 'cn')[0]}</div>
+                      <div className="text-sm text-zinc-500">{getAttr(user, 'uid')[0]}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-zinc-400">
+                      {getAttr(user, 'mail')[0] || '-'}
+                    </td>
+                    <td className="px-6 py-4">
+                      {userGroups.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {userGroups.map(gdn => (
+                            <span key={gdn} className="px-2 py-0.5 bg-zinc-700 text-zinc-300 text-xs rounded">
+                              {extractCN(gdn)}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-zinc-500">-</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => openEditModal(user)}
+                          className="text-zinc-400 hover:text-zinc-200"
+                          title="Edit"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(user.dn)}
+                          className="text-red-400 hover:text-red-300"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -247,6 +320,15 @@ export default function Users() {
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-md text-zinc-100 focus:outline-none focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-zinc-300 mb-1">Groups</label>
+            <MultiSelect
+              options={groupOptions}
+              value={form.groups}
+              onChange={(groups) => setForm({ ...form, groups })}
+              placeholder="Select groups..."
             />
           </div>
           {!editUser && (
