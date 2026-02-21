@@ -162,10 +162,20 @@ export default function Logs() {
       }
     },
     {
-      header: 'Request ID',
-      render: (row) => (
-        <span className="text-xs text-zinc-500 font-mono">{row.request_id || '-'}</span>
-      )
+      header: 'Client IP',
+      render: (row) => {
+        const fields = row.fields || {};
+        // REST logs have remoteAddr, LDAP logs have request_id
+        if (row.source === 'rest' && fields.remoteAddr) {
+          // Extract IP from "192.168.1.100:54321" format
+          const ip = fields.remoteAddr.split(':')[0];
+          return <span className="text-xs text-zinc-500 font-mono">{ip}</span>;
+        }
+        if (row.request_id) {
+          return <span className="text-xs text-zinc-500 font-mono">{row.request_id}</span>;
+        }
+        return <span className="text-xs text-zinc-500">-</span>;
+      }
     }
   ];
 

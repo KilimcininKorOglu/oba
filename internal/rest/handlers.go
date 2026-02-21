@@ -60,7 +60,7 @@ func (h *Handlers) DecrementConnections() {
 	atomic.AddInt64(&h.activeConns, -1)
 }
 
-// auditLog logs an audit message with user context
+// auditLog logs an audit message with user context and client IP
 func (h *Handlers) auditLog(r *http.Request, msg string, keyvals ...interface{}) {
 	if h.logger == nil {
 		return
@@ -69,7 +69,21 @@ func (h *Handlers) auditLog(r *http.Request, msg string, keyvals ...interface{})
 	if user := BindDN(r); user != "" {
 		logger = logger.WithUser(user)
 	}
+	// Add client IP
+	keyvals = append(keyvals, "remoteAddr", getClientIPFromRequest(r))
 	logger.Info(msg, keyvals...)
+}
+
+// getClientIPFromRequest extracts client IP from request
+func getClientIPFromRequest(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		return strings.TrimSpace(parts[0])
+	}
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return xri
+	}
+	return r.RemoteAddr
 }
 
 // HandleBind handles POST /api/v1/auth/bind
