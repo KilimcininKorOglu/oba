@@ -181,7 +181,7 @@ func (s *Server) Start() error {
 		return err
 	}
 
-	s.logger.Info("REST server started", "address", s.config.Address)
+	s.logger.WithSource("system").Info("REST server started", "address", s.config.Address)
 
 	go s.server.Serve(listener)
 
@@ -210,7 +210,7 @@ func (s *Server) Start() error {
 			return err
 		}
 
-		s.logger.Info("REST TLS server started", "address", s.config.TLSAddress)
+		s.logger.WithSource("system").Info("REST TLS server started", "address", s.config.TLSAddress)
 
 		go s.tlsServer.Serve(tlsListener)
 	}
@@ -232,7 +232,7 @@ func (s *Server) Stop(ctx context.Context) error {
 		}
 	}
 
-	s.logger.Info("REST server stopped")
+	s.logger.WithSource("system").Info("REST server stopped")
 	return nil
 }
 

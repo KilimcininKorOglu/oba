@@ -117,14 +117,14 @@ func NewConnection(conn net.Conn, server *Server) *Connection {
 // It reads LDAP messages, dispatches them to handlers, and sends responses.
 // This method blocks until the connection is closed or an error occurs.
 func (c *Connection) Handle() {
-	// Log connection established
-	c.logger.Info("connection established",
+	// Log connection established (debug level - not audit relevant)
+	c.logger.Debug("connection established",
 		"client", c.conn.RemoteAddr().String(),
 		"tls", c.isTLS)
 
 	defer func() {
-		// Log connection closed with duration
-		c.logger.Info("connection closed",
+		// Log connection closed (debug level - not audit relevant)
+		c.logger.Debug("connection closed",
 			"client", c.conn.RemoteAddr().String(),
 			"duration_ms", time.Since(c.startTime).Milliseconds())
 		c.Close()

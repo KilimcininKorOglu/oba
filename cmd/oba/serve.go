@@ -77,6 +77,9 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 		Output: cfg.Logging.Output,
 	})
 
+	// System logger for non-audit operational logs
+	sysLogger := logger.WithSource("system")
+
 	// Create log store if enabled
 	if cfg.Logging.Store.Enabled && cfg.Logging.Store.DBPath != "" {
 		logStore, err := logging.NewLogStore(logging.LogStoreConfig{
@@ -85,10 +88,10 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 			MaxEntries: cfg.Logging.Store.MaxEntries,
 		})
 		if err != nil {
-			logger.Warn("failed to create log store", "error", err)
+			sysLogger.Warn("failed to create log store", "error", err)
 		} else {
 			logger.SetStore(logStore)
-			logger.Info("log store enabled", "path", cfg.Logging.Store.DBPath)
+			sysLogger.Info("log store enabled", "path", cfg.Logging.Store.DBPath)
 		}
 	}
 
@@ -101,7 +104,7 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 	// Configure encryption if enabled
 	if cfg.Security.Encryption.Enabled && cfg.Security.Encryption.KeyFile != "" {
 		engineOpts = engineOpts.WithEncryptionKeyFile(cfg.Security.Encryption.KeyFile)
-		logger.Info("encryption enabled", "keyFile", cfg.Security.Encryption.KeyFile)
+		sysLogger.Info("encryption enabled", "keyFile", cfg.Security.Encryption.KeyFile)
 	}
 
 	db, err := engine.Open(cfg.Storage.DataDir, engineOpts)
@@ -141,20 +144,20 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 		var err error
 		aclManager, err = acl.NewManager(&acl.ManagerConfig{
 			FilePath: cfg.ACLFile,
-			Logger:   logger,
+			Logger:   sysLogger,
 		})
 		if err != nil {
 			db.Close()
 			cancel()
 			return nil, fmt.Errorf("failed to load ACL file: %w", err)
 		}
-		logger.Info("ACL loaded from file", "file", cfg.ACLFile)
+		sysLogger.Info("ACL loaded from file", "file", cfg.ACLFile)
 
 		// Create file watcher for automatic reload
 		aclWatcher, err = acl.NewFileWatcher(&acl.WatcherConfig{
 			FilePath: cfg.ACLFile,
 			Manager:  aclManager,
-			Logger:   logger,
+			Logger:   sysLogger,
 		})
 		if err != nil {
 			db.Close()
@@ -167,14 +170,14 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 		var err error
 		aclManager, err = acl.NewManager(&acl.ManagerConfig{
 			EmbeddedConfig: embeddedConfig,
-			Logger:         logger,
+			Logger:         sysLogger,
 		})
 		if err != nil {
 			db.Close()
 			cancel()
 			return nil, fmt.Errorf("failed to create ACL manager: %w", err)
 		}
-		logger.Info("ACL loaded from config", "rules", len(cfg.ACL.Rules))
+		sysLogger.Info("ACL loaded from config", "rules", len(cfg.ACL.Rules))
 	}
 
 	// Create REST server if enabled
@@ -204,7 +207,7 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 		// Set logger for log endpoints
 		restServer.SetLogger(logger)
 
-		logger.Info("REST API enabled", "address", cfg.REST.Address)
+		sysLogger.Info("REST API enabled", "address", cfg.REST.Address)
 	}
 
 	return &LDAPServer{
@@ -230,8 +233,6 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 
 // setupHandlers configures the LDAP operation handlers with backend integration.
 func setupHandlers(h *server.Handler, be backend.Backend, logger logging.Logger) {
-	ldapLogger := logger.WithSource("ldap")
-
 	// Bind handler
 	h.SetBindHandler(func(conn *server.Connection, req *ldap.BindRequest) *server.OperationResult {
 		if req.IsAnonymous() {
@@ -240,14 +241,12 @@ func setupHandlers(h *server.Handler, be backend.Backend, logger logging.Logger)
 
 		err := be.Bind(req.Name, string(req.SimplePassword))
 		if err != nil {
-			ldapLogger.Debug("bind failed", "dn", req.Name, "error", err.Error())
 			return &server.OperationResult{
 				ResultCode:        ldap.ResultInvalidCredentials,
 				DiagnosticMessage: "invalid credentials",
 			}
 		}
 
-		ldapLogger.Info("bind successful", "dn", req.Name)
 		return &server.OperationResult{ResultCode: ldap.ResultSuccess}
 	})
 
@@ -261,7 +260,6 @@ func setupHandlers(h *server.Handler, be backend.Backend, logger logging.Logger)
 
 		entries, err := be.Search(req.BaseObject, int(req.Scope), f)
 		if err != nil {
-			ldapLogger.Debug("search failed", "baseDN", req.BaseObject, "error", err.Error())
 			return &server.SearchResult{
 				OperationResult: server.OperationResult{
 					ResultCode:        ldap.ResultOperationsError,
@@ -298,7 +296,6 @@ func setupHandlers(h *server.Handler, be backend.Backend, logger logging.Logger)
 
 		err := be.AddWithBindDN(entry, conn.BindDN())
 		if err != nil {
-			ldapLogger.Debug("add failed", "dn", req.Entry, "error", err.Error())
 			if err == backend.ErrEntryExists {
 				return &server.OperationResult{
 					ResultCode:        ldap.ResultEntryAlreadyExists,
@@ -311,7 +308,6 @@ func setupHandlers(h *server.Handler, be backend.Backend, logger logging.Logger)
 			}
 		}
 
-		ldapLogger.Info("entry added", "dn", req.Entry)
 		return &server.OperationResult{ResultCode: ldap.ResultSuccess}
 	})
 
@@ -334,7 +330,6 @@ func setupHandlers(h *server.Handler, be backend.Backend, logger logging.Logger)
 
 		err = be.Delete(req.DN)
 		if err != nil {
-			ldapLogger.Debug("delete failed", "dn", req.DN, "error", err.Error())
 			if err == backend.ErrEntryNotFound {
 				return &server.OperationResult{
 					ResultCode:        ldap.ResultNoSuchObject,
@@ -347,7 +342,6 @@ func setupHandlers(h *server.Handler, be backend.Backend, logger logging.Logger)
 			}
 		}
 
-		ldapLogger.Info("entry deleted", "dn", req.DN)
 		return &server.OperationResult{ResultCode: ldap.ResultSuccess}
 	})
 
@@ -368,7 +362,6 @@ func setupHandlers(h *server.Handler, be backend.Backend, logger logging.Logger)
 
 		err := be.ModifyWithBindDN(req.Object, changes, conn.BindDN())
 		if err != nil {
-			ldapLogger.Debug("modify failed", "dn", req.Object, "error", err.Error())
 			if err == backend.ErrEntryNotFound {
 				return &server.OperationResult{
 					ResultCode:        ldap.ResultNoSuchObject,
@@ -381,7 +374,6 @@ func setupHandlers(h *server.Handler, be backend.Backend, logger logging.Logger)
 			}
 		}
 
-		ldapLogger.Info("entry modified", "dn", req.Object)
 		return &server.OperationResult{ResultCode: ldap.ResultSuccess}
 	})
 }
@@ -451,7 +443,7 @@ func (s *LDAPServer) Start() error {
 			return fmt.Errorf("%w: %v", ErrListenerFailed, err)
 		}
 		s.listener = listener
-		s.logger.Info("LDAP server listening", "address", s.config.Server.Address)
+		s.logger.WithSource("system").Info("LDAP server listening", "address", s.config.Server.Address)
 
 		s.wg.Add(1)
 		go s.acceptConnections(listener, false)
@@ -468,7 +460,7 @@ func (s *LDAPServer) Start() error {
 			return fmt.Errorf("%w: %v", ErrListenerFailed, err)
 		}
 		s.tlsListener = listener
-		s.logger.Info("LDAPS server listening", "address", s.config.Server.TLSAddress)
+		s.logger.WithSource("system").Info("LDAPS server listening", "address", s.config.Server.TLSAddress)
 
 		s.wg.Add(1)
 		go s.acceptConnections(listener, true)
@@ -546,7 +538,7 @@ func (s *LDAPServer) Stop(ctx context.Context) error {
 		if s.engine != nil {
 			s.engine.Close()
 		}
-		s.logger.Info("server stopped gracefully")
+		s.logger.WithSource("system").Info("server stopped gracefully")
 		return nil
 	case <-ctx.Done():
 		// Close log store first to flush pending writes
@@ -557,7 +549,7 @@ func (s *LDAPServer) Stop(ctx context.Context) error {
 		if s.engine != nil {
 			s.engine.Close()
 		}
-		s.logger.Warn("server shutdown timed out")
+		s.logger.WithSource("system").Warn("server shutdown timed out")
 		return ctx.Err()
 	}
 }
@@ -734,11 +726,11 @@ func serveCmd(args []string) int {
 			OnChange: srv.handleConfigReload,
 		})
 		if err != nil {
-			srv.logger.Warn("failed to create config watcher", "error", err)
+			srv.logger.WithSource("system").Warn("failed to create config watcher", "error", err)
 		} else {
 			srv.configWatcher = configWatcher
 			configWatcher.Start()
-			srv.logger.Info("config file watcher started", "file", *configFile)
+			srv.logger.WithSource("system").Info("config file watcher started", "file", *configFile)
 			defer configWatcher.Stop()
 		}
 	}
@@ -786,25 +778,26 @@ func serveCmd(args []string) int {
 
 // handleSIGHUP handles the SIGHUP signal for ACL reload.
 func (s *LDAPServer) handleSIGHUP() {
-	s.logger.Info("received SIGHUP, reloading ACL configuration")
+	sysLogger := s.logger.WithSource("system")
+	sysLogger.Info("received SIGHUP, reloading ACL configuration")
 
 	if s.aclManager == nil {
-		s.logger.Warn("ACL manager not configured, nothing to reload")
+		sysLogger.Warn("ACL manager not configured, nothing to reload")
 		return
 	}
 
 	if !s.aclManager.IsFileMode() {
-		s.logger.Warn("ACL loaded from embedded config, hot reload not supported")
+		sysLogger.Warn("ACL loaded from embedded config, hot reload not supported")
 		return
 	}
 
 	if err := s.aclManager.Reload(); err != nil {
-		s.logger.Error("ACL reload failed", "error", err)
+		sysLogger.Error("ACL reload failed", "error", err)
 		return
 	}
 
 	stats := s.aclManager.Stats()
-	s.logger.Info("ACL configuration reloaded successfully",
+	sysLogger.Info("ACL configuration reloaded successfully",
 		"rules", stats.RuleCount,
 		"defaultPolicy", stats.DefaultPolicy,
 		"reloadCount", stats.ReloadCount,
@@ -826,7 +819,7 @@ func (s *LDAPServer) writePIDFile() error {
 	}
 
 	s.pidFile = pidFile
-	s.logger.Info("PID file written", "file", pidFile, "pid", pid)
+	s.logger.WithSource("system").Info("PID file written", "file", pidFile, "pid", pid)
 	return nil
 }
 
@@ -834,7 +827,7 @@ func (s *LDAPServer) writePIDFile() error {
 func (s *LDAPServer) removePIDFile() {
 	if s.pidFile != "" {
 		os.Remove(s.pidFile)
-		s.logger.Debug("PID file removed", "file", s.pidFile)
+		s.logger.WithSource("system").Debug("PID file removed", "file", s.pidFile)
 	}
 }
 

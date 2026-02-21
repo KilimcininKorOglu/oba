@@ -51,7 +51,15 @@ func LoggingMiddleware(logger logging.Logger) Middleware {
 				reqLogger = reqLogger.WithUser(wrapped.user)
 			}
 
-			reqLogger.Info("http request",
+			// Generate meaningful message based on path and method
+			msg := getAuditMessage(r.Method, r.URL.Path)
+
+			// Skip logging for health checks
+			if msg == "" {
+				return
+			}
+
+			reqLogger.Info(msg,
 				"method", r.Method,
 				"path", r.URL.Path,
 				"status", wrapped.statusCode,
@@ -60,6 +68,119 @@ func LoggingMiddleware(logger logging.Logger) Middleware {
 			)
 		})
 	}
+}
+
+// getAuditMessage returns a meaningful audit message based on path and method
+func getAuditMessage(method, path string) string {
+	// Auth
+	if strings.HasPrefix(path, "/api/v1/auth/bind") {
+		return "REST login"
+	}
+
+	// Entry operations
+	if strings.HasPrefix(path, "/api/v1/entries") {
+		switch method {
+		case "GET":
+			return "REST get entry"
+		case "POST":
+			return "REST add entry"
+		case "PUT", "PATCH":
+			return "REST modify entry"
+		case "DELETE":
+			return "REST delete entry"
+		}
+		if strings.HasSuffix(path, "/move") {
+			return "REST move entry"
+		}
+	}
+
+	// Search
+	if strings.HasPrefix(path, "/api/v1/search") {
+		return "REST search"
+	}
+
+	// Bulk
+	if strings.HasPrefix(path, "/api/v1/bulk") {
+		return "REST bulk operation"
+	}
+
+	// Compare
+	if strings.HasPrefix(path, "/api/v1/compare") {
+		return "REST compare"
+	}
+
+	// ACL
+	if strings.HasPrefix(path, "/api/v1/acl") {
+		switch method {
+		case "GET":
+			return "REST get ACL"
+		case "POST":
+			if strings.HasSuffix(path, "/rules") {
+				return "REST add ACL rule"
+			}
+			if strings.HasSuffix(path, "/reload") {
+				return "REST reload ACL"
+			}
+			if strings.HasSuffix(path, "/save") {
+				return "REST save ACL"
+			}
+			return "REST ACL operation"
+		case "PUT":
+			if strings.Contains(path, "/rules/") {
+				return "REST update ACL rule"
+			}
+			if strings.HasSuffix(path, "/default") {
+				return "REST set default policy"
+			}
+			return "REST ACL operation"
+		case "DELETE":
+			return "REST delete ACL rule"
+		}
+	}
+
+	// Config
+	if strings.HasPrefix(path, "/api/v1/config") {
+		if strings.HasSuffix(path, "/public") {
+			return "REST get public config"
+		}
+		switch method {
+		case "GET":
+			return "REST get config"
+		case "PATCH":
+			return "REST update config"
+		case "POST":
+			if strings.HasSuffix(path, "/reload") {
+				return "REST reload config"
+			}
+			if strings.HasSuffix(path, "/save") {
+				return "REST save config"
+			}
+			return "REST config operation"
+		}
+	}
+
+	// Logs
+	if strings.HasPrefix(path, "/api/v1/logs") {
+		switch method {
+		case "GET":
+			if strings.HasSuffix(path, "/stats") {
+				return "REST get log stats"
+			}
+			if strings.HasSuffix(path, "/export") {
+				return "REST export logs"
+			}
+			return "REST get logs"
+		case "DELETE":
+			return "REST clear logs"
+		}
+	}
+
+	// Health check - don't log
+	if path == "/api/v1/health" {
+		return ""
+	}
+
+	return "REST request"
 }
 
 type responseWriter struct {
