@@ -306,21 +306,30 @@ func TestObaDBStateMachineSnapshot(t *testing.T) {
 		t.Error("Snapshot should not be empty")
 	}
 
-	// Verify snapshot format: [mainLen:4][mainData][logLen:4][logData]
+	// Verify snapshot format: [version:1][mainLen:4][mainData][logLen:4][logData][configLen:4][configData][aclLen:4][aclData]
 	reader := bytes.NewReader(data)
-	
+
+	// Read version
+	var version uint8
+	if err := binary.Read(reader, binary.LittleEndian, &version); err != nil {
+		t.Fatalf("Failed to read version: %v", err)
+	}
+	if version != 2 {
+		t.Errorf("Expected version 2, got %d", version)
+	}
+
 	// Read main database length
 	var mainLen uint32
 	if err := binary.Read(reader, binary.LittleEndian, &mainLen); err != nil {
 		t.Fatalf("Failed to read mainLen: %v", err)
 	}
-	
+
 	// Read main database data
 	mainData := make([]byte, mainLen)
 	if _, err := reader.Read(mainData); err != nil {
 		t.Fatalf("Failed to read mainData: %v", err)
 	}
-	
+
 	// Parse main database entry count
 	mainReader := bytes.NewReader(mainData)
 	var count uint32

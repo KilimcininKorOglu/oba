@@ -84,6 +84,33 @@ func (h *Handlers) HandleUpdateConfigSection(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// In cluster mode, route through Raft
+	if h.clusterBackend != nil {
+		if !h.clusterBackend.IsLeader() {
+			writeError(w, http.StatusServiceUnavailable, "not_leader",
+				"not leader, redirect to: "+h.clusterBackend.LeaderAddr())
+			return
+		}
+
+		// Convert to string map for Raft serialization
+		stringData := config.ToStringMap(data)
+		version := h.configManager.GetVersion() + 1
+
+		if err := h.clusterBackend.ProposeConfigChange(section, stringData, version); err != nil {
+			writeError(w, http.StatusInternalServerError, "replication_failed", err.Error())
+			return
+		}
+
+		h.auditLog(r, "config updated via Raft", "section", section)
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"message":    "config section updated and replicated",
+			"section":    section,
+			"replicated": true,
+		})
+		return
+	}
+
+	// Standalone mode - direct update
 	if err := h.configManager.UpdateSection(section, data); err != nil {
 		writeError(w, http.StatusBadRequest, "update_failed", err.Error())
 		return

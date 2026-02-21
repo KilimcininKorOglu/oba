@@ -3,18 +3,39 @@ package raft
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"sync"
 
 	"github.com/KilimcininKorOglu/oba/internal/storage"
 )
 
+// ConfigApplier is the interface for applying config changes from Raft.
+type ConfigApplier interface {
+	ApplyFromRaft(section string, data map[string]string) error
+	GetConfigSnapshot() ([]byte, error)
+	RestoreConfigSnapshot(data []byte) error
+}
+
+// ACLApplier is the interface for applying ACL changes from Raft.
+type ACLApplier interface {
+	ApplyFullConfigFromRaft(rules []ACLRuleData, defaultPolicy string) error
+	AddRuleFromRaft(rule *ACLRuleData, index int) error
+	UpdateRuleFromRaft(rule *ACLRuleData, index int) error
+	DeleteRuleFromRaft(index int) error
+	SetDefaultPolicyFromRaft(policy string) error
+	GetACLSnapshot() ([]byte, error)
+	RestoreACLSnapshot(data []byte) error
+}
+
 // ObaDBStateMachine wraps ObaDB storage engine as a Raft state machine.
 // Supports multiple databases (main LDAP and log database).
 type ObaDBStateMachine struct {
-	mainEngine storage.StorageEngine
-	logEngine  storage.StorageEngine
-	mu         sync.Mutex
+	mainEngine    storage.StorageEngine
+	logEngine     storage.StorageEngine
+	configApplier ConfigApplier
+	aclApplier    ACLApplier
+	mu            sync.Mutex
 }
 
 // NewObaDBStateMachine creates a new state machine wrapping ObaDB.
@@ -27,6 +48,20 @@ func (sm *ObaDBStateMachine) SetLogEngine(engine storage.StorageEngine) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	sm.logEngine = engine
+}
+
+// SetConfigApplier sets the config applier for config replication.
+func (sm *ObaDBStateMachine) SetConfigApplier(applier ConfigApplier) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.configApplier = applier
+}
+
+// SetACLApplier sets the ACL applier for ACL replication.
+func (sm *ObaDBStateMachine) SetACLApplier(applier ACLApplier) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.aclApplier = applier
 }
 
 // getEngine returns the appropriate engine for the given database ID.
@@ -47,6 +82,20 @@ func (sm *ObaDBStateMachine) Apply(cmd *Command) error {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
+	switch cmd.Type {
+	case CmdPut, CmdDelete, CmdModifyDN:
+		return sm.applyLDAPCommand(cmd)
+	case CmdConfigUpdate:
+		return sm.applyConfigCommand(cmd)
+	case CmdACLFullUpdate, CmdACLAddRule, CmdACLUpdateRule, CmdACLDeleteRule, CmdACLSetDefault:
+		return sm.applyACLCommand(cmd)
+	default:
+		return fmt.Errorf("unknown command type: %d", cmd.Type)
+	}
+}
+
+// applyLDAPCommand applies LDAP operations (Put, Delete, ModifyDN).
+func (sm *ObaDBStateMachine) applyLDAPCommand(cmd *Command) error {
 	engine := sm.getEngine(cmd.DatabaseID)
 	tx, err := engine.Begin()
 	if err != nil {
@@ -88,13 +137,57 @@ func (sm *ObaDBStateMachine) Apply(cmd *Command) error {
 	return engine.Commit(tx)
 }
 
+// applyConfigCommand applies config update commands.
+func (sm *ObaDBStateMachine) applyConfigCommand(cmd *Command) error {
+	if sm.configApplier == nil {
+		return nil // Config applier not set, skip
+	}
+
+	configCmd, err := DeserializeConfigCommand(cmd.ConfigData)
+	if err != nil {
+		return fmt.Errorf("failed to deserialize config command: %w", err)
+	}
+
+	return sm.configApplier.ApplyFromRaft(configCmd.Section, configCmd.Data)
+}
+
+// applyACLCommand applies ACL update commands.
+func (sm *ObaDBStateMachine) applyACLCommand(cmd *Command) error {
+	if sm.aclApplier == nil {
+		return nil // ACL applier not set, skip
+	}
+
+	aclCmd, err := DeserializeACLCommand(cmd.ACLData)
+	if err != nil {
+		return fmt.Errorf("failed to deserialize ACL command: %w", err)
+	}
+
+	switch cmd.Type {
+	case CmdACLFullUpdate:
+		return sm.aclApplier.ApplyFullConfigFromRaft(aclCmd.Rules, aclCmd.DefaultPolicy)
+	case CmdACLAddRule:
+		return sm.aclApplier.AddRuleFromRaft(aclCmd.Rule, aclCmd.RuleIndex)
+	case CmdACLUpdateRule:
+		return sm.aclApplier.UpdateRuleFromRaft(aclCmd.Rule, aclCmd.RuleIndex)
+	case CmdACLDeleteRule:
+		return sm.aclApplier.DeleteRuleFromRaft(aclCmd.RuleIndex)
+	case CmdACLSetDefault:
+		return sm.aclApplier.SetDefaultPolicyFromRaft(aclCmd.DefaultPolicy)
+	}
+
+	return nil
+}
+
 // Snapshot creates a snapshot of the current state.
-// This serializes all entries from both databases.
+// This serializes all entries from both databases, plus config and ACL.
 func (sm *ObaDBStateMachine) Snapshot() ([]byte, error) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
 	var buf bytes.Buffer
+
+	// Snapshot version (for backward compatibility)
+	binary.Write(&buf, binary.LittleEndian, uint8(2)) // Version 2 includes config/ACL
 
 	// Snapshot main database
 	mainData, err := sm.snapshotEngine(sm.mainEngine)
@@ -112,6 +205,30 @@ func (sm *ObaDBStateMachine) Snapshot() ([]byte, error) {
 		}
 		binary.Write(&buf, binary.LittleEndian, uint32(len(logData)))
 		buf.Write(logData)
+	} else {
+		binary.Write(&buf, binary.LittleEndian, uint32(0))
+	}
+
+	// Snapshot config if available
+	if sm.configApplier != nil {
+		configData, err := sm.configApplier.GetConfigSnapshot()
+		if err != nil {
+			return nil, err
+		}
+		binary.Write(&buf, binary.LittleEndian, uint32(len(configData)))
+		buf.Write(configData)
+	} else {
+		binary.Write(&buf, binary.LittleEndian, uint32(0))
+	}
+
+	// Snapshot ACL if available
+	if sm.aclApplier != nil {
+		aclData, err := sm.aclApplier.GetACLSnapshot()
+		if err != nil {
+			return nil, err
+		}
+		binary.Write(&buf, binary.LittleEndian, uint32(len(aclData)))
+		buf.Write(aclData)
 	} else {
 		binary.Write(&buf, binary.LittleEndian, uint32(0))
 	}
@@ -165,6 +282,14 @@ func (sm *ObaDBStateMachine) Restore(data []byte) error {
 
 	reader := bytes.NewReader(data)
 
+	// Check snapshot version
+	var version uint8
+	if err := binary.Read(reader, binary.LittleEndian, &version); err != nil {
+		// Old format without version, reset reader and use version 1
+		reader = bytes.NewReader(data)
+		version = 1
+	}
+
 	// Restore main database
 	var mainLen uint32
 	if err := binary.Read(reader, binary.LittleEndian, &mainLen); err != nil {
@@ -193,6 +318,39 @@ func (sm *ObaDBStateMachine) Restore(data []byte) error {
 		}
 		if err := sm.restoreEngine(sm.logEngine, logData); err != nil {
 			return err
+		}
+	}
+
+	// Version 2+ includes config and ACL
+	if version >= 2 {
+		// Restore config if available
+		var configLen uint32
+		if err := binary.Read(reader, binary.LittleEndian, &configLen); err != nil {
+			return nil // No config data, ok
+		}
+		if configLen > 0 && sm.configApplier != nil {
+			configData := make([]byte, configLen)
+			if _, err := io.ReadFull(reader, configData); err != nil {
+				return err
+			}
+			if err := sm.configApplier.RestoreConfigSnapshot(configData); err != nil {
+				return err
+			}
+		}
+
+		// Restore ACL if available
+		var aclLen uint32
+		if err := binary.Read(reader, binary.LittleEndian, &aclLen); err != nil {
+			return nil // No ACL data, ok
+		}
+		if aclLen > 0 && sm.aclApplier != nil {
+			aclData := make([]byte, aclLen)
+			if _, err := io.ReadFull(reader, aclData); err != nil {
+				return err
+			}
+			if err := sm.aclApplier.RestoreACLSnapshot(aclData); err != nil {
+				return err
+			}
 		}
 	}
 

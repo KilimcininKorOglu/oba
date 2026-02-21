@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	modkernel32          = syscall.NewLazyDLL("kernel32.dll")
+	modkernel32           = syscall.NewLazyDLL("kernel32.dll")
 	procCreateFileMapping = modkernel32.NewProc("CreateFileMappingW")
 	procMapViewOfFile     = modkernel32.NewProc("MapViewOfFile")
 	procUnmapViewOfFile   = modkernel32.NewProc("UnmapViewOfFile")
@@ -19,10 +19,10 @@ var (
 )
 
 const (
-	pageReadonly         = 0x02
-	pageReadWrite        = 0x04
-	fileMapRead          = 0x04
-	fileMapWrite         = 0x02
+	pageReadonly  = 0x02
+	pageReadWrite = 0x04
+	fileMapRead   = 0x04
+	fileMapWrite  = 0x02
 )
 
 // mapFile performs the actual memory mapping using Windows API.

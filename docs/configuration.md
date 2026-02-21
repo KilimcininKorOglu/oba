@@ -537,6 +537,32 @@ curl -X POST http://localhost:8080/api/v1/config/save \
 
 See [REST API Documentation](REST_API.md#config-management) for all config endpoints.
 
+### Cluster Mode Configuration Sync
+
+In cluster mode, configuration changes made via REST API are automatically synchronized across all nodes via Raft consensus. This ensures consistent configuration across the entire cluster.
+
+```bash
+# Update config on leader - automatically replicated to followers
+curl -X PATCH http://localhost:8081/api/v1/config/logging \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"level": "warn"}'
+```
+
+Response includes replication status:
+
+```json
+{
+  "message": "config section updated and replicated",
+  "replicated": true,
+  "section": "logging"
+}
+```
+
+Note: File-based operations (reload, save) only affect the local node. For cluster-wide changes, use the REST API on the leader node.
+
+See [Cluster Documentation](cluster.md#configuration-and-acl-synchronization) for details.
+
 ## Validating Configuration
 
 Validate your configuration file before starting the server:

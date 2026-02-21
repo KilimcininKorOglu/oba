@@ -16,12 +16,12 @@ import (
 
 // ArchiveConfig holds configuration for log archiving.
 type ArchiveConfig struct {
-	Enabled     bool          // Enable archiving
-	ArchiveDir  string        // Directory for archive files
-	MaxAge      time.Duration // Max age before archiving (e.g., 7 days)
-	MaxSize     int64         // Max active log size in bytes before archiving
-	Compress    bool          // Compress archive files with gzip
-	RetainDays  int           // Days to retain archives (0 = forever)
+	Enabled    bool          // Enable archiving
+	ArchiveDir string        // Directory for archive files
+	MaxAge     time.Duration // Max age before archiving (e.g., 7 days)
+	MaxSize    int64         // Max active log size in bytes before archiving
+	Compress   bool          // Compress archive files with gzip
+	RetainDays int           // Days to retain archives (0 = forever)
 }
 
 // DefaultArchiveConfig returns default archive configuration.
@@ -61,13 +61,13 @@ func NewLogArchive(config ArchiveConfig) (*LogArchive, error) {
 
 // ArchiveFile represents a single archive file.
 type ArchiveFile struct {
-	Name      string    `json:"name"`
-	Path      string    `json:"path"`
-	Size      int64     `json:"size"`
-	StartTime time.Time `json:"start_time"`
-	EndTime   time.Time `json:"end_time"`
-	Count     int       `json:"count"`
-	Compressed bool     `json:"compressed"`
+	Name       string    `json:"name"`
+	Path       string    `json:"path"`
+	Size       int64     `json:"size"`
+	StartTime  time.Time `json:"start_time"`
+	EndTime    time.Time `json:"end_time"`
+	Count      int       `json:"count"`
+	Compressed bool      `json:"compressed"`
 }
 
 // Archive writes log entries to an archive file.

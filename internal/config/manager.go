@@ -1,10 +1,13 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -14,6 +17,7 @@ type ConfigManager struct {
 	configFile string
 	mu         sync.RWMutex
 	onUpdate   func(old, new *Config)
+	version    uint64 // Config version for Raft sync
 }
 
 // NewConfigManager creates a new config manager.
@@ -489,4 +493,293 @@ func maskPath(path string) string {
 		return ""
 	}
 	return path
+}
+
+// GetVersion returns the current config version for Raft sync.
+func (m *ConfigManager) GetVersion() uint64 {
+	return atomic.LoadUint64(&m.version)
+}
+
+// IncrementVersion increments and returns the new config version.
+func (m *ConfigManager) IncrementVersion() uint64 {
+	return atomic.AddUint64(&m.version, 1)
+}
+
+// ApplyFromRaft applies a config change received from Raft replication.
+// This bypasses validation since leader already validated.
+func (m *ConfigManager) ApplyFromRaft(section string, data map[string]string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	oldConfig := m.config
+	newConfig := copyConfig(oldConfig)
+
+	switch strings.ToLower(section) {
+	case "logging":
+		if v, ok := data["level"]; ok {
+			newConfig.Logging.Level = v
+		}
+		if v, ok := data["format"]; ok {
+			newConfig.Logging.Format = v
+		}
+	case "server":
+		if v, ok := data["maxConnections"]; ok {
+			if i, err := strconv.Atoi(v); err == nil {
+				newConfig.Server.MaxConnections = i
+			}
+		}
+		if v, ok := data["readTimeout"]; ok {
+			if d, err := time.ParseDuration(v); err == nil {
+				newConfig.Server.ReadTimeout = d
+			}
+		}
+		if v, ok := data["writeTimeout"]; ok {
+			if d, err := time.ParseDuration(v); err == nil {
+				newConfig.Server.WriteTimeout = d
+			}
+		}
+		if v, ok := data["tlsCert"]; ok {
+			newConfig.Server.TLSCert = v
+		}
+		if v, ok := data["tlsKey"]; ok {
+			newConfig.Server.TLSKey = v
+		}
+	case "security.ratelimit":
+		if v, ok := data["enabled"]; ok {
+			newConfig.Security.RateLimit.Enabled = v == "true"
+		}
+		if v, ok := data["maxAttempts"]; ok {
+			if i, err := strconv.Atoi(v); err == nil {
+				newConfig.Security.RateLimit.MaxAttempts = i
+			}
+		}
+		if v, ok := data["lockoutDuration"]; ok {
+			if d, err := time.ParseDuration(v); err == nil {
+				newConfig.Security.RateLimit.LockoutDuration = d
+			}
+		}
+	case "security.passwordpolicy":
+		if v, ok := data["enabled"]; ok {
+			newConfig.Security.PasswordPolicy.Enabled = v == "true"
+		}
+		if v, ok := data["minLength"]; ok {
+			if i, err := strconv.Atoi(v); err == nil {
+				newConfig.Security.PasswordPolicy.MinLength = i
+			}
+		}
+		if v, ok := data["requireUppercase"]; ok {
+			newConfig.Security.PasswordPolicy.RequireUppercase = v == "true"
+		}
+		if v, ok := data["requireLowercase"]; ok {
+			newConfig.Security.PasswordPolicy.RequireLowercase = v == "true"
+		}
+		if v, ok := data["requireDigit"]; ok {
+			newConfig.Security.PasswordPolicy.RequireDigit = v == "true"
+		}
+		if v, ok := data["requireSpecial"]; ok {
+			newConfig.Security.PasswordPolicy.RequireSpecial = v == "true"
+		}
+		if v, ok := data["maxAge"]; ok {
+			if d, err := time.ParseDuration(v); err == nil {
+				newConfig.Security.PasswordPolicy.MaxAge = d
+			}
+		}
+		if v, ok := data["historyCount"]; ok {
+			if i, err := strconv.Atoi(v); err == nil {
+				newConfig.Security.PasswordPolicy.HistoryCount = i
+			}
+		}
+	case "rest":
+		if v, ok := data["rateLimit"]; ok {
+			if i, err := strconv.Atoi(v); err == nil {
+				newConfig.REST.RateLimit = i
+			}
+		}
+		if v, ok := data["tokenTTL"]; ok {
+			if d, err := time.ParseDuration(v); err == nil {
+				newConfig.REST.TokenTTL = d
+			}
+		}
+		if v, ok := data["corsOrigins"]; ok {
+			// corsOrigins is stored as comma-separated string
+			if v != "" {
+				newConfig.REST.CORSOrigins = strings.Split(v, ",")
+			}
+		}
+	default:
+		return fmt.Errorf("unknown or read-only section: %s", section)
+	}
+
+	m.config = newConfig
+	atomic.AddUint64(&m.version, 1)
+
+	// Trigger callback (async)
+	if m.onUpdate != nil {
+		go m.onUpdate(oldConfig, newConfig)
+	}
+
+	return nil
+}
+
+// ConfigSnapshot represents config data for Raft snapshot.
+type ConfigSnapshot struct {
+	Version uint64            `json:"version"`
+	Data    map[string]string `json:"data"`
+}
+
+// GetConfigSnapshot returns the current config as a snapshot for Raft.
+func (m *ConfigManager) GetConfigSnapshot() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	snapshot := &ConfigSnapshot{
+		Version: atomic.LoadUint64(&m.version),
+		Data:    make(map[string]string),
+	}
+
+	// Serialize hot-reloadable config sections
+	snapshot.Data["logging.level"] = m.config.Logging.Level
+	snapshot.Data["logging.format"] = m.config.Logging.Format
+	snapshot.Data["server.maxConnections"] = strconv.Itoa(m.config.Server.MaxConnections)
+	snapshot.Data["server.readTimeout"] = m.config.Server.ReadTimeout.String()
+	snapshot.Data["server.writeTimeout"] = m.config.Server.WriteTimeout.String()
+	snapshot.Data["security.ratelimit.enabled"] = strconv.FormatBool(m.config.Security.RateLimit.Enabled)
+	snapshot.Data["security.ratelimit.maxAttempts"] = strconv.Itoa(m.config.Security.RateLimit.MaxAttempts)
+	snapshot.Data["security.ratelimit.lockoutDuration"] = m.config.Security.RateLimit.LockoutDuration.String()
+	snapshot.Data["security.passwordpolicy.enabled"] = strconv.FormatBool(m.config.Security.PasswordPolicy.Enabled)
+	snapshot.Data["security.passwordpolicy.minLength"] = strconv.Itoa(m.config.Security.PasswordPolicy.MinLength)
+	snapshot.Data["security.passwordpolicy.requireUppercase"] = strconv.FormatBool(m.config.Security.PasswordPolicy.RequireUppercase)
+	snapshot.Data["security.passwordpolicy.requireLowercase"] = strconv.FormatBool(m.config.Security.PasswordPolicy.RequireLowercase)
+	snapshot.Data["security.passwordpolicy.requireDigit"] = strconv.FormatBool(m.config.Security.PasswordPolicy.RequireDigit)
+	snapshot.Data["security.passwordpolicy.requireSpecial"] = strconv.FormatBool(m.config.Security.PasswordPolicy.RequireSpecial)
+	snapshot.Data["security.passwordpolicy.maxAge"] = m.config.Security.PasswordPolicy.MaxAge.String()
+	snapshot.Data["security.passwordpolicy.historyCount"] = strconv.Itoa(m.config.Security.PasswordPolicy.HistoryCount)
+	snapshot.Data["rest.rateLimit"] = strconv.Itoa(m.config.REST.RateLimit)
+	snapshot.Data["rest.tokenTTL"] = m.config.REST.TokenTTL.String()
+	snapshot.Data["rest.corsOrigins"] = strings.Join(m.config.REST.CORSOrigins, ",")
+
+	return json.Marshal(snapshot)
+}
+
+// RestoreConfigSnapshot restores config from a Raft snapshot.
+func (m *ConfigManager) RestoreConfigSnapshot(data []byte) error {
+	var snapshot ConfigSnapshot
+	if err := json.Unmarshal(data, &snapshot); err != nil {
+		return fmt.Errorf("failed to unmarshal config snapshot: %w", err)
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Apply snapshot data to config
+	if v, ok := snapshot.Data["logging.level"]; ok {
+		m.config.Logging.Level = v
+	}
+	if v, ok := snapshot.Data["logging.format"]; ok {
+		m.config.Logging.Format = v
+	}
+	if v, ok := snapshot.Data["server.maxConnections"]; ok {
+		if i, err := strconv.Atoi(v); err == nil {
+			m.config.Server.MaxConnections = i
+		}
+	}
+	if v, ok := snapshot.Data["server.readTimeout"]; ok {
+		if d, err := time.ParseDuration(v); err == nil {
+			m.config.Server.ReadTimeout = d
+		}
+	}
+	if v, ok := snapshot.Data["server.writeTimeout"]; ok {
+		if d, err := time.ParseDuration(v); err == nil {
+			m.config.Server.WriteTimeout = d
+		}
+	}
+	if v, ok := snapshot.Data["security.ratelimit.enabled"]; ok {
+		m.config.Security.RateLimit.Enabled = v == "true"
+	}
+	if v, ok := snapshot.Data["security.ratelimit.maxAttempts"]; ok {
+		if i, err := strconv.Atoi(v); err == nil {
+			m.config.Security.RateLimit.MaxAttempts = i
+		}
+	}
+	if v, ok := snapshot.Data["security.ratelimit.lockoutDuration"]; ok {
+		if d, err := time.ParseDuration(v); err == nil {
+			m.config.Security.RateLimit.LockoutDuration = d
+		}
+	}
+	if v, ok := snapshot.Data["security.passwordpolicy.enabled"]; ok {
+		m.config.Security.PasswordPolicy.Enabled = v == "true"
+	}
+	if v, ok := snapshot.Data["security.passwordpolicy.minLength"]; ok {
+		if i, err := strconv.Atoi(v); err == nil {
+			m.config.Security.PasswordPolicy.MinLength = i
+		}
+	}
+	if v, ok := snapshot.Data["security.passwordpolicy.requireUppercase"]; ok {
+		m.config.Security.PasswordPolicy.RequireUppercase = v == "true"
+	}
+	if v, ok := snapshot.Data["security.passwordpolicy.requireLowercase"]; ok {
+		m.config.Security.PasswordPolicy.RequireLowercase = v == "true"
+	}
+	if v, ok := snapshot.Data["security.passwordpolicy.requireDigit"]; ok {
+		m.config.Security.PasswordPolicy.RequireDigit = v == "true"
+	}
+	if v, ok := snapshot.Data["security.passwordpolicy.requireSpecial"]; ok {
+		m.config.Security.PasswordPolicy.RequireSpecial = v == "true"
+	}
+	if v, ok := snapshot.Data["security.passwordpolicy.maxAge"]; ok {
+		if d, err := time.ParseDuration(v); err == nil {
+			m.config.Security.PasswordPolicy.MaxAge = d
+		}
+	}
+	if v, ok := snapshot.Data["security.passwordpolicy.historyCount"]; ok {
+		if i, err := strconv.Atoi(v); err == nil {
+			m.config.Security.PasswordPolicy.HistoryCount = i
+		}
+	}
+	if v, ok := snapshot.Data["rest.rateLimit"]; ok {
+		if i, err := strconv.Atoi(v); err == nil {
+			m.config.REST.RateLimit = i
+		}
+	}
+	if v, ok := snapshot.Data["rest.tokenTTL"]; ok {
+		if d, err := time.ParseDuration(v); err == nil {
+			m.config.REST.TokenTTL = d
+		}
+	}
+	if v, ok := snapshot.Data["rest.corsOrigins"]; ok && v != "" {
+		m.config.REST.CORSOrigins = strings.Split(v, ",")
+	}
+
+	atomic.StoreUint64(&m.version, snapshot.Version)
+
+	return nil
+}
+
+// ToStringMap converts interface{} map to string map for Raft serialization.
+func ToStringMap(data map[string]interface{}) map[string]string {
+	result := make(map[string]string)
+	for k, v := range data {
+		switch val := v.(type) {
+		case string:
+			result[k] = val
+		case float64:
+			result[k] = strconv.FormatFloat(val, 'f', -1, 64)
+		case bool:
+			result[k] = strconv.FormatBool(val)
+		case int:
+			result[k] = strconv.Itoa(val)
+		case []interface{}:
+			// Convert slice to comma-separated string
+			strs := make([]string, len(val))
+			for i, item := range val {
+				if s, ok := item.(string); ok {
+					strs[i] = s
+				}
+			}
+			result[k] = strings.Join(strs, ",")
+		default:
+			result[k] = fmt.Sprintf("%v", v)
+		}
+	}
+	return result
 }

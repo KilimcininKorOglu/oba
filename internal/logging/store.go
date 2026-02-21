@@ -287,7 +287,7 @@ func (s *LogStore) trimOldEntries() {
 		if entry.DN == "ou=logs" {
 			continue
 		}
-		
+
 		ed := entryData{dn: entry.DN}
 		if idVals := entry.GetAttribute("logid"); len(idVals) > 0 {
 			ed.id, _ = strconv.ParseUint(string(idVals[0]), 10, 64)
@@ -401,7 +401,7 @@ func (s *LogStore) Query(opts QueryOptions) ([]LogEntry, int, error) {
 		archiveOpts := opts
 		archiveOpts.Offset = 0 // We'll handle pagination after merging
 		archiveOpts.Limit = 0
-		
+
 		var startTime, endTime *time.Time
 		if !opts.StartTime.IsZero() {
 			startTime = &opts.StartTime
@@ -411,7 +411,7 @@ func (s *LogStore) Query(opts QueryOptions) ([]LogEntry, int, error) {
 		}
 		archiveOpts.StartTime = time.Time{}
 		archiveOpts.EndTime = time.Time{}
-		
+
 		// Create archive query options
 		archiveQueryOpts := QueryOptions{
 			Level:     opts.Level,
@@ -426,7 +426,7 @@ func (s *LogStore) Query(opts QueryOptions) ([]LogEntry, int, error) {
 		if endTime != nil {
 			archiveQueryOpts.EndTime = *endTime
 		}
-		
+
 		archivedEntries, _, _ := s.archive.QueryAllArchives(archiveQueryOpts)
 		allEntries = append(allEntries, archivedEntries...)
 	}

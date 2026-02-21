@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/KilimcininKorOglu/oba/internal/acl"
+	"github.com/KilimcininKorOglu/oba/internal/raft"
 )
 
 // ACLRuleJSON represents an ACL rule in JSON format.
@@ -129,6 +130,32 @@ func (h *Handlers) HandleAddACLRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// In cluster mode, route through Raft
+	if h.clusterBackend != nil {
+		if !h.clusterBackend.IsLeader() {
+			writeError(w, http.StatusServiceUnavailable, "not_leader",
+				"not leader, redirect to: "+h.clusterBackend.LeaderAddr())
+			return
+		}
+
+		ruleData := aclRuleToRaftData(&req.Rule)
+		version := h.aclManager.GetVersion() + 1
+
+		if err := h.clusterBackend.ProposeACLAddRule(ruleData, req.Index, version); err != nil {
+			writeError(w, http.StatusInternalServerError, "replication_failed", err.Error())
+			return
+		}
+
+		h.auditLog(r, "ACL rule added via Raft", "target", rule.Target, "subject", rule.Subject)
+		writeJSON(w, http.StatusCreated, map[string]interface{}{
+			"message":    "rule added and replicated",
+			"rule":       aclRuleToJSON(rule),
+			"replicated": true,
+		})
+		return
+	}
+
+	// Standalone mode - direct add
 	if err := h.aclManager.AddRule(rule, req.Index); err != nil {
 		writeError(w, http.StatusBadRequest, "add_failed", err.Error())
 		return
@@ -169,6 +196,32 @@ func (h *Handlers) HandleUpdateACLRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// In cluster mode, route through Raft
+	if h.clusterBackend != nil {
+		if !h.clusterBackend.IsLeader() {
+			writeError(w, http.StatusServiceUnavailable, "not_leader",
+				"not leader, redirect to: "+h.clusterBackend.LeaderAddr())
+			return
+		}
+
+		ruleData := aclRuleToRaftData(&req)
+		version := h.aclManager.GetVersion() + 1
+
+		if err := h.clusterBackend.ProposeACLUpdateRule(ruleData, index, version); err != nil {
+			writeError(w, http.StatusInternalServerError, "replication_failed", err.Error())
+			return
+		}
+
+		h.auditLog(r, "ACL rule updated via Raft", "index", index, "target", rule.Target)
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"message":    "rule updated and replicated",
+			"rule":       aclRuleToJSON(rule),
+			"replicated": true,
+		})
+		return
+	}
+
+	// Standalone mode - direct update
 	if err := h.aclManager.UpdateRule(index, rule); err != nil {
 		writeError(w, http.StatusBadRequest, "update_failed", err.Error())
 		return
@@ -197,6 +250,30 @@ func (h *Handlers) HandleDeleteACLRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// In cluster mode, route through Raft
+	if h.clusterBackend != nil {
+		if !h.clusterBackend.IsLeader() {
+			writeError(w, http.StatusServiceUnavailable, "not_leader",
+				"not leader, redirect to: "+h.clusterBackend.LeaderAddr())
+			return
+		}
+
+		version := h.aclManager.GetVersion() + 1
+
+		if err := h.clusterBackend.ProposeACLDeleteRule(index, version); err != nil {
+			writeError(w, http.StatusInternalServerError, "replication_failed", err.Error())
+			return
+		}
+
+		h.auditLog(r, "ACL rule deleted via Raft", "index", index)
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"message":    "rule deleted and replicated",
+			"replicated": true,
+		})
+		return
+	}
+
+	// Standalone mode - direct delete
 	if err := h.aclManager.DeleteRule(index); err != nil {
 		writeError(w, http.StatusNotFound, "delete_failed", err.Error())
 		return
@@ -225,6 +302,31 @@ func (h *Handlers) HandleSetDefaultPolicy(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// In cluster mode, route through Raft
+	if h.clusterBackend != nil {
+		if !h.clusterBackend.IsLeader() {
+			writeError(w, http.StatusServiceUnavailable, "not_leader",
+				"not leader, redirect to: "+h.clusterBackend.LeaderAddr())
+			return
+		}
+
+		version := h.aclManager.GetVersion() + 1
+
+		if err := h.clusterBackend.ProposeACLSetDefault(req.Policy, version); err != nil {
+			writeError(w, http.StatusInternalServerError, "replication_failed", err.Error())
+			return
+		}
+
+		h.auditLog(r, "ACL default policy changed via Raft", "policy", req.Policy)
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"message":    "default policy updated and replicated",
+			"policy":     req.Policy,
+			"replicated": true,
+		})
+		return
+	}
+
+	// Standalone mode - direct update
 	if err := h.aclManager.SetDefaultPolicy(req.Policy); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_policy", err.Error())
 		return
@@ -418,4 +520,16 @@ func extractPathParam(path, prefix string) string {
 		return strings.TrimPrefix(path, prefix)
 	}
 	return ""
+}
+
+// aclRuleToRaftData converts ACLRuleJSON to raft.ACLRuleData for Raft replication.
+func aclRuleToRaftData(j *ACLRuleJSON) *raft.ACLRuleData {
+	return &raft.ACLRuleData{
+		Target:     j.Target,
+		Subject:    j.Subject,
+		Scope:      j.Scope,
+		Rights:     j.Rights,
+		Attributes: j.Attributes,
+		Deny:       j.Deny,
+	}
 }

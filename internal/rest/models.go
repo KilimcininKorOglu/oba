@@ -181,12 +181,12 @@ type SecurityStats struct {
 
 // SystemStats contains system-related statistics.
 type SystemStats struct {
-	GoRoutines   int    `json:"goRoutines"`
-	MemoryAlloc  uint64 `json:"memoryAlloc"`
-	MemoryTotal  uint64 `json:"memoryTotal"`
-	MemorySys    uint64 `json:"memorySys"`
-	NumGC        uint32 `json:"numGC"`
-	NumCPU       int    `json:"numCPU"`
+	GoRoutines  int    `json:"goRoutines"`
+	MemoryAlloc uint64 `json:"memoryAlloc"`
+	MemoryTotal uint64 `json:"memoryTotal"`
+	MemorySys   uint64 `json:"memorySys"`
+	NumGC       uint32 `json:"numGC"`
+	NumCPU      int    `json:"numCPU"`
 }
 
 // OperationStats contains LDAP operation statistics.
