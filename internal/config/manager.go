@@ -45,11 +45,18 @@ func (m *ConfigManager) GetConfigFile() string {
 
 // ConfigJSON represents config in JSON format with sensitive data masked.
 type ConfigJSON struct {
-	Server   ServerConfigJSON   `json:"server"`
-	Logging  LogConfigJSON      `json:"logging"`
-	Security SecurityConfigJSON `json:"security"`
-	REST     RESTConfigJSON     `json:"rest"`
-	Storage  StorageConfigJSON  `json:"storage"`
+	Server    ServerConfigJSON    `json:"server"`
+	Directory DirectoryConfigJSON `json:"directory"`
+	Logging   LogConfigJSON       `json:"logging"`
+	Security  SecurityConfigJSON  `json:"security"`
+	REST      RESTConfigJSON      `json:"rest"`
+	Storage   StorageConfigJSON   `json:"storage"`
+}
+
+// DirectoryConfigJSON represents directory config in JSON.
+type DirectoryConfigJSON struct {
+	BaseDN string `json:"baseDN"`
+	RootDN string `json:"rootDN"`
 }
 
 // ServerConfigJSON represents server config in JSON.
@@ -134,6 +141,10 @@ func (m *ConfigManager) ToJSON() *ConfigJSON {
 			WriteTimeout:   m.config.Server.WriteTimeout.String(),
 			TLSCert:        m.config.Server.TLSCert,
 			TLSKey:         maskPath(m.config.Server.TLSKey),
+		},
+		Directory: DirectoryConfigJSON{
+			BaseDN: m.config.Directory.BaseDN,
+			RootDN: m.config.Directory.RootDN,
 		},
 		Logging: LogConfigJSON{
 			Level:  m.config.Logging.Level,
