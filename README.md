@@ -1,6 +1,6 @@
 # Oba
 
-Oba is a lightweight, zero-dependency LDAP server implementation written in pure Go.
+Oba is a lightweight, custom embedded database engine (ObaDB) optimized for LDAP workloads. It also provides a zero-dependency LDAP server implementation written in pure Go. 
 
 ## Features
 
