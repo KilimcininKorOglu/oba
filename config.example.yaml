@@ -92,7 +92,10 @@ security:
     keyFile: ""
 
 # Access Control List configuration
+# Choose ONE of the following options:
+
 # Option 1: Inline ACL (no hot reload)
+# Rules are embedded in this config file. Server restart required for changes.
 acl:
   # Default policy when no rule matches: allow, deny
   defaultPolicy: "deny"
@@ -118,7 +121,9 @@ acl:
       attributes: ["cn", "uid"]
 
 # Option 2: External ACL file (hot reload supported)
-# Uncomment to use external file instead of inline config above
+# Uncomment the line below and comment out the 'acl:' section above.
+# Changes to the external file are detected automatically (~300ms).
+# Manual reload: kill -SIGHUP $(cat /var/run/oba.pid) or: oba reload acl
 # aclFile: "/etc/oba/acl.yaml"
 
 # REST API configuration

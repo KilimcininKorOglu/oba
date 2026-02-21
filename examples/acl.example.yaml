@@ -1,0 +1,69 @@
+# Oba ACL Configuration
+# This file supports hot reload - changes are detected automatically.
+# Manual reload: kill -SIGHUP $(cat /var/run/oba.pid) or: oba reload acl
+
+# Configuration version (required)
+version: 1
+
+# Default policy when no rule matches: allow | deny
+defaultPolicy: "deny"
+
+# ACL rules (evaluated in order, first match wins)
+rules:
+  # Rule 1: Admin has full access to everything
+  - target: "*"
+    subject: "cn=admin,dc=example,dc=com"
+    rights: ["read", "write", "add", "delete", "search", "compare"]
+
+  # Rule 2: Authenticated users can read and search the directory
+  - target: "dc=example,dc=com"
+    subject: "authenticated"
+    scope: "subtree"
+    rights:
+      - read
+      - search
+
+  # Rule 3: Users can modify their own entry (specific attributes only)
+  - target: "ou=users,dc=example,dc=com"
+    subject: "self"
+    rights: ["read", "write"]
+    attributes:
+      - userPassword
+      - mail
+      - telephoneNumber
+      - description
+
+  # Rule 4: Anonymous can only search for public attributes
+  - target: "ou=users,dc=example,dc=com"
+    subject: "anonymous"
+    rights: ["search"]
+    attributes: ["cn", "uid", "mail"]
+
+  # Rule 5: Service accounts can read everything
+  - target: "dc=example,dc=com"
+    subject: "cn=*,ou=services,dc=example,dc=com"
+    scope: "subtree"
+    rights: ["read", "search", "compare"]
+
+# Environment variable substitution is supported:
+# subject: "${ADMIN_DN}"
+# Use: export ADMIN_DN="cn=admin,dc=example,dc=com"
+
+# Available rights:
+#   read    - Read entry attributes
+#   write   - Modify entry attributes
+#   add     - Create new entries
+#   delete  - Delete entries
+#   search  - Search for entries
+#   compare - Compare attribute values
+
+# Available scopes:
+#   base     - Only the target entry itself
+#   onelevel - Target entry and immediate children
+#   subtree  - Target entry and all descendants (default)
+
+# Special subjects:
+#   anonymous     - Unauthenticated connections
+#   authenticated - Any authenticated user
+#   self          - The entry being accessed matches the bound DN
+#   *             - Wildcard matching (e.g., cn=*,ou=admins,dc=example,dc=com)
