@@ -7,7 +7,7 @@ RUN apk add --no-cache git make
 COPY go.mod ./
 COPY . .
 
-RUN make build
+RUN go build -o bin/oba ./cmd/oba
 
 FROM alpine:latest
 

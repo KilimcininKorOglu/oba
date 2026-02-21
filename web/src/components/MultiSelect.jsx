@@ -20,18 +20,19 @@ export default function MultiSelect({
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (
-        containerRef.current && 
-        !containerRef.current.contains(e.target) &&
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target)
-      ) {
+      const clickedContainer = containerRef.current?.contains(e.target);
+      const clickedDropdown = dropdownRef.current?.contains(e.target);
+      
+      if (!clickedContainer && !clickedDropdown) {
         setIsOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen && containerRef.current) {
