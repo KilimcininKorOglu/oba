@@ -93,6 +93,14 @@ class ObaAPI {
     return this.request('POST', `/entries/${encodeURIComponent(dn)}/enable`);
   }
 
+  unlockEntry(dn) {
+    return this.request('POST', `/entries/${encodeURIComponent(dn)}/unlock`);
+  }
+
+  getLockStatus(dn) {
+    return this.request('GET', `/entries/${encodeURIComponent(dn)}/lock-status`);
+  }
+
   compare(dn, attribute, value) {
     return this.request('POST', '/compare', { dn, attribute, value });
   }

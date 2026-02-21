@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Pencil, UserX, UserCheck } from 'lucide-react';
+import { Plus, Trash2, Pencil, UserX, UserCheck, Unlock } from 'lucide-react';
 import api from '../api/client';
 import Header from '../components/Header';
 import Modal from '../components/Modal';
@@ -10,6 +10,7 @@ export default function Users() {
   const { showToast } = useToast();
   const [users, setUsers] = useState([]);
   const [allGroups, setAllGroups] = useState([]);
+  const [lockedUsers, setLockedUsers] = useState({});
   const [loading, setLoading] = useState(true);
   const [baseDN, setBaseDN] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -41,6 +42,20 @@ export default function Users() {
 
       setUsers(usersData.entries || []);
       setAllGroups(groupsData.entries || []);
+
+      // Check lock status for each user
+      const lockStatuses = {};
+      for (const user of usersData.entries || []) {
+        try {
+          const status = await api.getLockStatus(user.dn);
+          if (status.locked) {
+            lockStatuses[user.dn] = true;
+          }
+        } catch {
+          // Ignore errors
+        }
+      }
+      setLockedUsers(lockStatuses);
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
@@ -74,6 +89,20 @@ export default function Users() {
         showToast('User disabled', 'success');
       }
       fetchData();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleUnlock = async (user) => {
+    try {
+      await api.unlockEntry(user.dn);
+      setLockedUsers(prev => {
+        const next = { ...prev };
+        delete next[user.dn];
+        return next;
+      });
+      showToast('Account unlocked', 'success');
     } catch (err) {
       showToast(err.message, 'error');
     }
@@ -242,6 +271,7 @@ export default function Users() {
               {users.map((user) => {
                 const userGroups = getUserGroups(user.dn);
                 const disabled = isUserDisabled(user);
+                const locked = lockedUsers[user.dn];
                 return (
                   <tr key={user.dn} className={`hover:bg-zinc-700/50 ${disabled ? 'opacity-60' : ''}`}>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -252,13 +282,20 @@ export default function Users() {
                       {getAttr(user, 'mail')[0] || '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        disabled 
-                          ? 'bg-red-500/20 text-red-400' 
-                          : 'bg-green-500/20 text-green-400'
-                      }`}>
-                        {disabled ? 'Disabled' : 'Active'}
-                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {locked && (
+                          <span className="px-2 py-1 text-xs rounded-full bg-orange-500/20 text-orange-400">
+                            Locked
+                          </span>
+                        )}
+                        <span className={`px-2 py-1 text-xs rounded-full ${
+                          disabled 
+                            ? 'bg-red-500/20 text-red-400' 
+                            : 'bg-green-500/20 text-green-400'
+                        }`}>
+                          {disabled ? 'Disabled' : 'Active'}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       {userGroups.length > 0 ? (
@@ -275,6 +312,15 @@ export default function Users() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
                       <div className="flex items-center justify-end gap-2">
+                        {locked && (
+                          <button
+                            onClick={() => handleUnlock(user)}
+                            className="text-orange-400 hover:text-orange-300"
+                            title="Unlock account"
+                          >
+                            <Unlock className="w-4 h-4" />
+                          </button>
+                        )}
                         <button
                           onClick={() => handleToggleStatus(user)}
                           className={disabled ? 'text-green-400 hover:text-green-300' : 'text-yellow-400 hover:text-yellow-300'}

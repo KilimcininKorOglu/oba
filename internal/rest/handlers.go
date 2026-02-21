@@ -484,6 +484,50 @@ func (h *Handlers) HandleEnableEntry(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "disabled": false})
 }
 
+// HandleUnlockEntry handles POST /api/v1/entries/{dn}/unlock
+func (h *Handlers) HandleUnlockEntry(w http.ResponseWriter, r *http.Request) {
+	atomic.AddInt64(&h.requestCount, 1)
+
+	dn := Param(r, "dn")
+	if dn == "" {
+		writeError(w, http.StatusBadRequest, "missing_dn", "DN is required")
+		return
+	}
+
+	decodedDN, err := url.PathUnescape(dn)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_dn", "invalid DN encoding")
+		return
+	}
+
+	// Unlock the account in backend
+	h.backend.UnlockAccount(decodedDN)
+
+	h.auditLog(r, "account unlocked", "dn", decodedDN)
+	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "locked": false})
+}
+
+// HandleGetLockStatus handles GET /api/v1/entries/{dn}/lock-status
+func (h *Handlers) HandleGetLockStatus(w http.ResponseWriter, r *http.Request) {
+	atomic.AddInt64(&h.requestCount, 1)
+
+	dn := Param(r, "dn")
+	if dn == "" {
+		writeError(w, http.StatusBadRequest, "missing_dn", "DN is required")
+		return
+	}
+
+	decodedDN, err := url.PathUnescape(dn)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_dn", "invalid DN encoding")
+		return
+	}
+
+	locked := h.backend.IsAccountLocked(decodedDN)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{"dn": decodedDN, "locked": locked})
+}
+
 // HandleModifyDN handles POST /api/v1/entries/{dn}/move
 func (h *Handlers) HandleModifyDN(w http.ResponseWriter, r *http.Request) {
 	atomic.AddInt64(&h.requestCount, 1)
