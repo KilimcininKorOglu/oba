@@ -3,7 +3,6 @@ import { RefreshCw, Download, Trash2, Search } from 'lucide-react';
 import api from '../api/client';
 import Header from '../components/Header';
 import Table from '../components/Table';
-import LoadingSpinner from '../components/LoadingSpinner';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast } from '../context/ToastContext';
 
@@ -24,27 +23,21 @@ export default function Logs() {
   const fetchLogs = async (offset = 0) => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (filters.level) params.set('level', filters.level);
-      if (filters.source) params.set('source', filters.source);
-      if (filters.search) params.set('search', filters.search);
-      params.set('limit', filters.limit);
-      params.set('offset', offset.toString());
+      const params = {};
+      if (filters.level) params.level = filters.level;
+      if (filters.source) params.source = filters.source;
+      if (filters.search) params.search = filters.search;
+      params.limit = filters.limit;
+      params.offset = offset.toString();
 
-      const response = await fetch(`/api/v1/logs?${params}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
-
-      if (!response.ok) {
-        if (response.status === 503) {
-          showToast('Log storage is not enabled', 'warning');
-          setLogs([]);
-          return;
-        }
-        throw new Error('Failed to fetch logs');
+      const data = await api.getLogs(params);
+      
+      if (data.disabled) {
+        showToast('Log storage is not enabled', 'warning');
+        setLogs([]);
+        return;
       }
 
-      const data = await response.json();
       setLogs(data.entries || []);
       setPagination({
         offset: data.offset || 0,
@@ -60,13 +53,8 @@ export default function Logs() {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch('/api/v1/logs/stats', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data);
-      }
+      const data = await api.getLogStats();
+      setStats(data);
     } catch {
       // ignore
     }
@@ -84,15 +72,10 @@ export default function Logs() {
 
   const handleClear = async () => {
     try {
-      const response = await fetch('/api/v1/logs', {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
-      if (response.ok) {
-        showToast('Logs cleared', 'success');
-        fetchLogs();
-        fetchStats();
-      }
+      await api.clearLogs();
+      showToast('Logs cleared', 'success');
+      fetchLogs();
+      fetchStats();
     } catch (err) {
       showToast(err.message, 'error');
     }
@@ -101,18 +84,11 @@ export default function Logs() {
 
   const handleExport = async (format) => {
     try {
-      const params = new URLSearchParams();
-      if (filters.level) params.set('level', filters.level);
-      if (filters.search) params.set('search', filters.search);
-      params.set('format', format);
+      const params = { format };
+      if (filters.level) params.level = filters.level;
+      if (filters.search) params.search = filters.search;
 
-      const response = await fetch(`/api/v1/logs/export?${params}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
-
-      if (!response.ok) throw new Error('Export failed');
-
-      const blob = await response.blob();
+      const blob = await api.exportLogs(params);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

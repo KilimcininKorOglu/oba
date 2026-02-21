@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Search as SearchIcon, Download } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Search as SearchIcon, Download, Eye } from 'lucide-react';
 import api from '../api/client';
 import Header from '../components/Header';
 import Table from '../components/Table';
@@ -92,7 +93,17 @@ export default function Search() {
   };
 
   const columns = [
-    { header: 'DN', render: (row) => <span className="font-mono text-sm">{row.dn}</span> },
+    { 
+      header: 'DN', 
+      render: (row) => (
+        <Link 
+          to={`/entries/${encodeURIComponent(row.dn)}`}
+          className="font-mono text-sm text-blue-400 hover:text-blue-300"
+        >
+          {row.dn}
+        </Link>
+      )
+    },
     {
       header: 'Attributes',
       render: (row) => (
@@ -100,6 +111,18 @@ export default function Search() {
           {Object.keys(row.attributes || {}).slice(0, 3).join(', ')}
           {Object.keys(row.attributes || {}).length > 3 && '...'}
         </span>
+      )
+    },
+    {
+      header: '',
+      render: (row) => (
+        <Link
+          to={`/entries/${encodeURIComponent(row.dn)}`}
+          className="p-1 text-zinc-400 hover:text-zinc-100"
+          title="View details"
+        >
+          <Eye className="w-4 h-4" />
+        </Link>
       )
     }
   ];

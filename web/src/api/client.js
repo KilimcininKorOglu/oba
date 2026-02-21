@@ -157,6 +157,43 @@ class ObaAPI {
     return this.request('POST', '/config/validate', config);
   }
 
+  async getLogs(params = {}) {
+    const query = new URLSearchParams(params).toString();
+    const headers = { 'Authorization': `Bearer ${this.token}` };
+    
+    const response = await fetch(`${this.baseURL}/logs?${query}`, { headers });
+    
+    if (response.status === 503) {
+      return { entries: [], total_count: 0, disabled: true };
+    }
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch logs');
+    }
+    
+    return response.json();
+  }
+
+  async getLogStats() {
+    const headers = { 'Authorization': `Bearer ${this.token}` };
+    const response = await fetch(`${this.baseURL}/logs/stats`, { headers });
+    if (!response.ok) return null;
+    return response.json();
+  }
+
+  async clearLogs() {
+    return this.request('DELETE', '/logs');
+  }
+
+  async exportLogs(params = {}) {
+    const query = new URLSearchParams(params).toString();
+    const headers = { 'Authorization': `Bearer ${this.token}` };
+    
+    const response = await fetch(`${this.baseURL}/logs/export?${query}`, { headers });
+    if (!response.ok) throw new Error('Export failed');
+    return response.blob();
+  }
+
   async streamSearch(params, onEntry) {
     const query = new URLSearchParams(params).toString();
     const headers = {};
