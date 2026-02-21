@@ -188,6 +188,8 @@ func (h *Handlers) HandleExportLogs(w http.ResponseWriter, r *http.Request) {
 		contentType = "application/json"
 	}
 
+	h.auditLog(r, "logs exported", "format", format)
+
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Content-Disposition", "attachment; filename=logs."+format)
 	w.WriteHeader(http.StatusOK)
