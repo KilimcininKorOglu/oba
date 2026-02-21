@@ -21,6 +21,10 @@ type ClusterBackend struct {
 	transport    Transport
 	snapStore    *SnapshotStore
 
+	// Config and ACL appliers for replication
+	configApplier ConfigApplier
+	aclApplier    ACLApplier
+
 	// Callbacks
 	onLeaderChange func(isLeader bool)
 
@@ -29,9 +33,9 @@ type ClusterBackend struct {
 
 // ClusterBackendConfig holds configuration for ClusterBackend.
 type ClusterBackendConfig struct {
-	Engine           storage.StorageEngine
-	ClusterConfig    *config.ClusterConfig
-	OnLeaderChange   func(isLeader bool)
+	Engine         storage.StorageEngine
+	ClusterConfig  *config.ClusterConfig
+	OnLeaderChange func(isLeader bool)
 }
 
 // NewClusterBackend creates a new cluster-aware backend.
@@ -115,6 +119,22 @@ func (cb *ClusterBackend) SetLogEngine(engine storage.StorageEngine) {
 	defer cb.mu.Unlock()
 	cb.logEngine = engine
 	cb.stateMachine.SetLogEngine(engine)
+}
+
+// SetConfigApplier sets the config applier for config replication.
+func (cb *ClusterBackend) SetConfigApplier(applier ConfigApplier) {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	cb.configApplier = applier
+	cb.stateMachine.SetConfigApplier(applier)
+}
+
+// SetACLApplier sets the ACL applier for ACL replication.
+func (cb *ClusterBackend) SetACLApplier(applier ACLApplier) {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	cb.aclApplier = applier
+	cb.stateMachine.SetACLApplier(applier)
 }
 
 // Start starts the cluster backend and Raft node.
@@ -253,13 +273,13 @@ func (cb *ClusterBackend) Search(baseDN string, scope storage.Scope) storage.Ite
 
 // ClusterStatus returns the current cluster status.
 type ClusterStatus struct {
-	NodeID      uint64 `json:"nodeId"`
-	State       string `json:"state"`
-	Term        uint64 `json:"term"`
-	LeaderID    uint64 `json:"leaderId"`
-	LeaderAddr  string `json:"leaderAddr"`
-	CommitIndex uint64 `json:"commitIndex"`
-	LastApplied uint64 `json:"lastApplied"`
+	NodeID      uint64       `json:"nodeId"`
+	State       string       `json:"state"`
+	Term        uint64       `json:"term"`
+	LeaderID    uint64       `json:"leaderId"`
+	LeaderAddr  string       `json:"leaderAddr"`
+	CommitIndex uint64       `json:"commitIndex"`
+	LastApplied uint64       `json:"lastApplied"`
 	Peers       []PeerStatus `json:"peers"`
 }
 
@@ -297,7 +317,97 @@ type emptyIterator struct {
 	err error
 }
 
-func (i *emptyIterator) Next() bool           { return false }
+func (i *emptyIterator) Next() bool            { return false }
 func (i *emptyIterator) Entry() *storage.Entry { return nil }
-func (i *emptyIterator) Error() error         { return i.err }
-func (i *emptyIterator) Close()               {}
+func (i *emptyIterator) Error() error          { return i.err }
+func (i *emptyIterator) Close()                {}
+
+// ProposeConfigChange proposes a config change through Raft consensus.
+// Only the leader can accept config changes.
+func (cb *ClusterBackend) ProposeConfigChange(section string, data map[string]string, version uint64) error {
+	if !cb.IsLeader() {
+		return ErrNotLeader
+	}
+
+	cmd, err := CreateConfigUpdateCommand(section, data, version)
+	if err != nil {
+		return err
+	}
+
+	return cb.node.Propose(cmd)
+}
+
+// ProposeACLFullUpdate proposes a full ACL update through Raft consensus.
+// Only the leader can accept ACL changes.
+func (cb *ClusterBackend) ProposeACLFullUpdate(rules []ACLRuleData, defaultPolicy string, version uint64) error {
+	if !cb.IsLeader() {
+		return ErrNotLeader
+	}
+
+	cmd, err := CreateACLFullUpdateCommand(rules, defaultPolicy, version)
+	if err != nil {
+		return err
+	}
+
+	return cb.node.Propose(cmd)
+}
+
+// ProposeACLAddRule proposes adding an ACL rule through Raft consensus.
+// Only the leader can accept ACL changes.
+func (cb *ClusterBackend) ProposeACLAddRule(rule *ACLRuleData, index int, version uint64) error {
+	if !cb.IsLeader() {
+		return ErrNotLeader
+	}
+
+	cmd, err := CreateACLAddRuleCommand(rule, index, version)
+	if err != nil {
+		return err
+	}
+
+	return cb.node.Propose(cmd)
+}
+
+// ProposeACLUpdateRule proposes updating an ACL rule through Raft consensus.
+// Only the leader can accept ACL changes.
+func (cb *ClusterBackend) ProposeACLUpdateRule(rule *ACLRuleData, index int, version uint64) error {
+	if !cb.IsLeader() {
+		return ErrNotLeader
+	}
+
+	cmd, err := CreateACLUpdateRuleCommand(rule, index, version)
+	if err != nil {
+		return err
+	}
+
+	return cb.node.Propose(cmd)
+}
+
+// ProposeACLDeleteRule proposes deleting an ACL rule through Raft consensus.
+// Only the leader can accept ACL changes.
+func (cb *ClusterBackend) ProposeACLDeleteRule(index int, version uint64) error {
+	if !cb.IsLeader() {
+		return ErrNotLeader
+	}
+
+	cmd, err := CreateACLDeleteRuleCommand(index, version)
+	if err != nil {
+		return err
+	}
+
+	return cb.node.Propose(cmd)
+}
+
+// ProposeACLSetDefault proposes setting the default ACL policy through Raft consensus.
+// Only the leader can accept ACL changes.
+func (cb *ClusterBackend) ProposeACLSetDefault(defaultPolicy string, version uint64) error {
+	if !cb.IsLeader() {
+		return ErrNotLeader
+	}
+
+	cmd, err := CreateACLSetDefaultCommand(defaultPolicy, version)
+	if err != nil {
+		return err
+	}
+
+	return cb.node.Propose(cmd)
+}

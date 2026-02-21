@@ -583,7 +583,7 @@ func (s *LDAPServer) Stop(ctx context.Context) error {
 		return ErrServerNotRunning
 	}
 	s.running = false
-	
+
 	// Copy references while holding lock
 	listener := s.listener
 	tlsListener := s.tlsListener

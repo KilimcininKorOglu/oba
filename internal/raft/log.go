@@ -55,11 +55,17 @@ func DeserializeLogEntry(data []byte) (*LogEntry, error) {
 	}, nil
 }
 
-// Command types for LDAP operations.
+// Command types for LDAP operations and cluster config sync.
 const (
-	CmdPut      uint8 = iota // Add or modify entry
-	CmdDelete                // Delete entry
-	CmdModifyDN              // Rename/move entry
+	CmdPut           uint8 = iota // Add or modify entry
+	CmdDelete                     // Delete entry
+	CmdModifyDN                   // Rename/move entry
+	CmdConfigUpdate               // Config section update
+	CmdACLFullUpdate              // Full ACL config update
+	CmdACLAddRule                 // Add single ACL rule
+	CmdACLUpdateRule              // Update single ACL rule
+	CmdACLDeleteRule              // Delete single ACL rule
+	CmdACLSetDefault              // Set default ACL policy
 )
 
 // Database IDs for multi-database support.
@@ -68,14 +74,323 @@ const (
 	DBLog               // Log database
 )
 
-// Command represents an LDAP operation to be replicated.
+// ConfigCommand represents a config update command for Raft replication.
+type ConfigCommand struct {
+	Section string            // Config section: "logging", "server", "security.ratelimit", etc.
+	Data    map[string]string // Section data as string key-value pairs
+	Version uint64            // Config version for conflict detection
+}
+
+// SerializeConfigCommand encodes a ConfigCommand to bytes.
+func SerializeConfigCommand(cmd *ConfigCommand) ([]byte, error) {
+	var buf bytes.Buffer
+
+	// Section
+	if err := writeString(&buf, cmd.Section); err != nil {
+		return nil, err
+	}
+
+	// Version
+	if err := binary.Write(&buf, binary.LittleEndian, cmd.Version); err != nil {
+		return nil, err
+	}
+
+	// Data map length
+	if err := binary.Write(&buf, binary.LittleEndian, uint16(len(cmd.Data))); err != nil {
+		return nil, err
+	}
+
+	// Data key-value pairs
+	for k, v := range cmd.Data {
+		if err := writeString(&buf, k); err != nil {
+			return nil, err
+		}
+		if err := writeString(&buf, v); err != nil {
+			return nil, err
+		}
+	}
+
+	return buf.Bytes(), nil
+}
+
+// DeserializeConfigCommand decodes a ConfigCommand from bytes.
+func DeserializeConfigCommand(data []byte) (*ConfigCommand, error) {
+	if len(data) < 2 {
+		return nil, ErrLogCorrupted
+	}
+
+	buf := bytes.NewReader(data)
+	cmd := &ConfigCommand{
+		Data: make(map[string]string),
+	}
+
+	// Section
+	var err error
+	cmd.Section, err = readString(buf)
+	if err != nil {
+		return nil, ErrLogCorrupted
+	}
+
+	// Version
+	if err := binary.Read(buf, binary.LittleEndian, &cmd.Version); err != nil {
+		return nil, ErrLogCorrupted
+	}
+
+	// Data map length
+	var mapLen uint16
+	if err := binary.Read(buf, binary.LittleEndian, &mapLen); err != nil {
+		return nil, ErrLogCorrupted
+	}
+
+	// Data key-value pairs
+	for i := uint16(0); i < mapLen; i++ {
+		key, err := readString(buf)
+		if err != nil {
+			return nil, ErrLogCorrupted
+		}
+		value, err := readString(buf)
+		if err != nil {
+			return nil, ErrLogCorrupted
+		}
+		cmd.Data[key] = value
+	}
+
+	return cmd, nil
+}
+
+// ACLRuleData represents a single ACL rule for serialization.
+type ACLRuleData struct {
+	Target     string   // Target DN pattern
+	Subject    string   // Subject DN pattern
+	Scope      string   // Scope: "base", "one", "subtree"
+	Rights     []string // Rights: "read", "write", "add", "delete", "search", "compare", "all"
+	Attributes []string // Attribute filter (empty = all)
+	Deny       bool     // Deny rule flag
+}
+
+// ACLCommand represents an ACL update command for Raft replication.
+type ACLCommand struct {
+	DefaultPolicy string        // Default policy: "allow" or "deny"
+	Rules         []ACLRuleData // Full ruleset (for full update)
+	Rule          *ACLRuleData  // Single rule (for add/update)
+	RuleIndex     int           // Rule index (for update/delete)
+	Version       uint64        // ACL version for conflict detection
+}
+
+// SerializeACLCommand encodes an ACLCommand to bytes.
+func SerializeACLCommand(cmd *ACLCommand) ([]byte, error) {
+	var buf bytes.Buffer
+
+	// DefaultPolicy
+	if err := writeString(&buf, cmd.DefaultPolicy); err != nil {
+		return nil, err
+	}
+
+	// Version
+	if err := binary.Write(&buf, binary.LittleEndian, cmd.Version); err != nil {
+		return nil, err
+	}
+
+	// RuleIndex
+	if err := binary.Write(&buf, binary.LittleEndian, int32(cmd.RuleIndex)); err != nil {
+		return nil, err
+	}
+
+	// Rules count
+	if err := binary.Write(&buf, binary.LittleEndian, uint16(len(cmd.Rules))); err != nil {
+		return nil, err
+	}
+
+	// Rules
+	for _, rule := range cmd.Rules {
+		if err := serializeACLRule(&buf, &rule); err != nil {
+			return nil, err
+		}
+	}
+
+	// Single rule (for add/update)
+	hasRule := cmd.Rule != nil
+	if err := binary.Write(&buf, binary.LittleEndian, hasRule); err != nil {
+		return nil, err
+	}
+	if hasRule {
+		if err := serializeACLRule(&buf, cmd.Rule); err != nil {
+			return nil, err
+		}
+	}
+
+	return buf.Bytes(), nil
+}
+
+// DeserializeACLCommand decodes an ACLCommand from bytes.
+func DeserializeACLCommand(data []byte) (*ACLCommand, error) {
+	if len(data) < 2 {
+		return nil, ErrLogCorrupted
+	}
+
+	buf := bytes.NewReader(data)
+	cmd := &ACLCommand{}
+
+	// DefaultPolicy
+	var err error
+	cmd.DefaultPolicy, err = readString(buf)
+	if err != nil {
+		return nil, ErrLogCorrupted
+	}
+
+	// Version
+	if err := binary.Read(buf, binary.LittleEndian, &cmd.Version); err != nil {
+		return nil, ErrLogCorrupted
+	}
+
+	// RuleIndex
+	var ruleIndex int32
+	if err := binary.Read(buf, binary.LittleEndian, &ruleIndex); err != nil {
+		return nil, ErrLogCorrupted
+	}
+	cmd.RuleIndex = int(ruleIndex)
+
+	// Rules count
+	var rulesCount uint16
+	if err := binary.Read(buf, binary.LittleEndian, &rulesCount); err != nil {
+		return nil, ErrLogCorrupted
+	}
+
+	// Rules
+	cmd.Rules = make([]ACLRuleData, rulesCount)
+	for i := uint16(0); i < rulesCount; i++ {
+		rule, err := deserializeACLRule(buf)
+		if err != nil {
+			return nil, err
+		}
+		cmd.Rules[i] = *rule
+	}
+
+	// Single rule
+	var hasRule bool
+	if err := binary.Read(buf, binary.LittleEndian, &hasRule); err != nil {
+		return nil, ErrLogCorrupted
+	}
+	if hasRule {
+		cmd.Rule, err = deserializeACLRule(buf)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return cmd, nil
+}
+
+func serializeACLRule(buf *bytes.Buffer, rule *ACLRuleData) error {
+	// Target
+	if err := writeString(buf, rule.Target); err != nil {
+		return err
+	}
+
+	// Subject
+	if err := writeString(buf, rule.Subject); err != nil {
+		return err
+	}
+
+	// Scope
+	if err := writeString(buf, rule.Scope); err != nil {
+		return err
+	}
+
+	// Rights count and values
+	if err := binary.Write(buf, binary.LittleEndian, uint16(len(rule.Rights))); err != nil {
+		return err
+	}
+	for _, r := range rule.Rights {
+		if err := writeString(buf, r); err != nil {
+			return err
+		}
+	}
+
+	// Attributes count and values
+	if err := binary.Write(buf, binary.LittleEndian, uint16(len(rule.Attributes))); err != nil {
+		return err
+	}
+	for _, a := range rule.Attributes {
+		if err := writeString(buf, a); err != nil {
+			return err
+		}
+	}
+
+	// Deny flag
+	if err := binary.Write(buf, binary.LittleEndian, rule.Deny); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func deserializeACLRule(buf *bytes.Reader) (*ACLRuleData, error) {
+	rule := &ACLRuleData{}
+
+	// Target
+	var err error
+	rule.Target, err = readString(buf)
+	if err != nil {
+		return nil, ErrLogCorrupted
+	}
+
+	// Subject
+	rule.Subject, err = readString(buf)
+	if err != nil {
+		return nil, ErrLogCorrupted
+	}
+
+	// Scope
+	rule.Scope, err = readString(buf)
+	if err != nil {
+		return nil, ErrLogCorrupted
+	}
+
+	// Rights
+	var rightsCount uint16
+	if err := binary.Read(buf, binary.LittleEndian, &rightsCount); err != nil {
+		return nil, ErrLogCorrupted
+	}
+	rule.Rights = make([]string, rightsCount)
+	for i := uint16(0); i < rightsCount; i++ {
+		rule.Rights[i], err = readString(buf)
+		if err != nil {
+			return nil, ErrLogCorrupted
+		}
+	}
+
+	// Attributes
+	var attrsCount uint16
+	if err := binary.Read(buf, binary.LittleEndian, &attrsCount); err != nil {
+		return nil, ErrLogCorrupted
+	}
+	rule.Attributes = make([]string, attrsCount)
+	for i := uint16(0); i < attrsCount; i++ {
+		rule.Attributes[i], err = readString(buf)
+		if err != nil {
+			return nil, ErrLogCorrupted
+		}
+	}
+
+	// Deny flag
+	if err := binary.Read(buf, binary.LittleEndian, &rule.Deny); err != nil {
+		return nil, ErrLogCorrupted
+	}
+
+	return rule, nil
+}
+
+// Command represents an LDAP operation or config/ACL change to be replicated.
 type Command struct {
-	Type      uint8  // CmdPut, CmdDelete, CmdModifyDN
-	DatabaseID uint8 // Target database (DBMain, DBLog)
-	DN        string // Target DN
-	OldDN     string // Previous DN (for CmdModifyDN)
-	EntryDN   string // Entry DN
-	EntryData []byte // Serialized entry data (for CmdPut)
+	Type       uint8  // CmdPut, CmdDelete, CmdModifyDN, CmdConfigUpdate, CmdACL*
+	DatabaseID uint8  // Target database (DBMain, DBLog)
+	DN         string // Target DN
+	OldDN      string // Previous DN (for CmdModifyDN)
+	EntryDN    string // Entry DN
+	EntryData  []byte // Serialized entry data (for CmdPut)
+	ConfigData []byte // Serialized ConfigCommand (for CmdConfigUpdate)
+	ACLData    []byte // Serialized ACLCommand (for CmdACL*)
 }
 
 // Serialize encodes the command to bytes.
@@ -105,6 +420,16 @@ func (c *Command) Serialize() ([]byte, error) {
 
 	// EntryData
 	if err := writeBytes(&buf, c.EntryData); err != nil {
+		return nil, err
+	}
+
+	// ConfigData
+	if err := writeBytes(&buf, c.ConfigData); err != nil {
+		return nil, err
+	}
+
+	// ACLData
+	if err := writeBytes(&buf, c.ACLData); err != nil {
 		return nil, err
 	}
 
@@ -155,6 +480,20 @@ func DeserializeCommand(data []byte) (*Command, error) {
 	cmd.EntryData, err = readBytes(buf)
 	if err != nil {
 		return nil, ErrLogCorrupted
+	}
+
+	// ConfigData (may not exist in old format)
+	cmd.ConfigData, err = readBytes(buf)
+	if err != nil {
+		// Old format without ConfigData, ignore
+		cmd.ConfigData = nil
+	}
+
+	// ACLData (may not exist in old format)
+	cmd.ACLData, err = readBytes(buf)
+	if err != nil {
+		// Old format without ACLData, ignore
+		cmd.ACLData = nil
 	}
 
 	return cmd, nil
@@ -275,4 +614,116 @@ func (l *RaftLog) TermAt(index uint64) uint64 {
 		return 0
 	}
 	return l.entries[index].Term
+}
+
+// CreateConfigUpdateCommand creates a Raft command for config update.
+func CreateConfigUpdateCommand(section string, data map[string]string, version uint64) (*Command, error) {
+	configCmd := &ConfigCommand{
+		Section: section,
+		Data:    data,
+		Version: version,
+	}
+
+	configData, err := SerializeConfigCommand(configCmd)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Command{
+		Type:       CmdConfigUpdate,
+		ConfigData: configData,
+	}, nil
+}
+
+// CreateACLFullUpdateCommand creates a Raft command for full ACL update.
+func CreateACLFullUpdateCommand(rules []ACLRuleData, defaultPolicy string, version uint64) (*Command, error) {
+	aclCmd := &ACLCommand{
+		DefaultPolicy: defaultPolicy,
+		Rules:         rules,
+		Version:       version,
+	}
+
+	aclData, err := SerializeACLCommand(aclCmd)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Command{
+		Type:    CmdACLFullUpdate,
+		ACLData: aclData,
+	}, nil
+}
+
+// CreateACLAddRuleCommand creates a Raft command for adding an ACL rule.
+func CreateACLAddRuleCommand(rule *ACLRuleData, index int, version uint64) (*Command, error) {
+	aclCmd := &ACLCommand{
+		Rule:      rule,
+		RuleIndex: index,
+		Version:   version,
+	}
+
+	aclData, err := SerializeACLCommand(aclCmd)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Command{
+		Type:    CmdACLAddRule,
+		ACLData: aclData,
+	}, nil
+}
+
+// CreateACLUpdateRuleCommand creates a Raft command for updating an ACL rule.
+func CreateACLUpdateRuleCommand(rule *ACLRuleData, index int, version uint64) (*Command, error) {
+	aclCmd := &ACLCommand{
+		Rule:      rule,
+		RuleIndex: index,
+		Version:   version,
+	}
+
+	aclData, err := SerializeACLCommand(aclCmd)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Command{
+		Type:    CmdACLUpdateRule,
+		ACLData: aclData,
+	}, nil
+}
+
+// CreateACLDeleteRuleCommand creates a Raft command for deleting an ACL rule.
+func CreateACLDeleteRuleCommand(index int, version uint64) (*Command, error) {
+	aclCmd := &ACLCommand{
+		RuleIndex: index,
+		Version:   version,
+	}
+
+	aclData, err := SerializeACLCommand(aclCmd)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Command{
+		Type:    CmdACLDeleteRule,
+		ACLData: aclData,
+	}, nil
+}
+
+// CreateACLSetDefaultCommand creates a Raft command for setting default ACL policy.
+func CreateACLSetDefaultCommand(defaultPolicy string, version uint64) (*Command, error) {
+	aclCmd := &ACLCommand{
+		DefaultPolicy: defaultPolicy,
+		Version:       version,
+	}
+
+	aclData, err := SerializeACLCommand(aclCmd)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Command{
+		Type:    CmdACLSetDefault,
+		ACLData: aclData,
+	}, nil
 }

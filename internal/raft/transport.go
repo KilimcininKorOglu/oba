@@ -280,11 +280,11 @@ func (t *TCPTransport) RemovePeer(peerID uint64) {
 
 // InMemoryTransport implements Transport for testing.
 type InMemoryTransport struct {
-	addr     string
-	network  *InMemoryNetwork
-	handler  RPCHandler
-	closed   bool
-	mu       sync.RWMutex
+	addr    string
+	network *InMemoryNetwork
+	handler RPCHandler
+	closed  bool
+	mu      sync.RWMutex
 }
 
 // InMemoryNetwork simulates a network for testing.

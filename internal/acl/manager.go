@@ -1,6 +1,7 @@
 package acl
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -24,6 +25,9 @@ type Manager struct {
 	lastReload    time.Time
 	lastError     error
 	lastErrorTime time.Time
+
+	// Version for Raft sync
+	version uint64
 }
 
 // ManagerConfig holds configuration for ACLManager.
@@ -483,4 +487,282 @@ func ValidateRule(rule *ACL) error {
 		return ErrMissingRights
 	}
 	return nil
+}
+
+// GetVersion returns the current ACL version for Raft sync.
+func (m *Manager) GetVersion() uint64 {
+	return atomic.LoadUint64(&m.version)
+}
+
+// IncrementVersion increments and returns the new ACL version.
+func (m *Manager) IncrementVersion() uint64 {
+	return atomic.AddUint64(&m.version, 1)
+}
+
+// ACLRuleData represents a single ACL rule for Raft serialization.
+type ACLRuleData struct {
+	Target     string   `json:"target"`
+	Subject    string   `json:"subject"`
+	Scope      string   `json:"scope"`
+	Rights     []string `json:"rights"`
+	Attributes []string `json:"attributes"`
+	Deny       bool     `json:"deny"`
+}
+
+// ApplyFullConfigFromRaft applies a full ACL config from Raft replication.
+func (m *Manager) ApplyFullConfigFromRaft(rules []ACLRuleData, defaultPolicy string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Convert ACLRuleData to ACL
+	aclRules := make([]*ACL, len(rules))
+	for i, ruleData := range rules {
+		rule, err := ruleDataToACL(&ruleData)
+		if err != nil {
+			return fmt.Errorf("failed to convert rule %d: %w", i, err)
+		}
+		aclRules[i] = rule
+	}
+
+	m.config.Rules = aclRules
+	m.config.DefaultPolicy = defaultPolicy
+	m.evaluator = NewEvaluator(m.config)
+	m.lastReload = time.Now()
+	atomic.AddUint64(&m.reloadCount, 1)
+	atomic.AddUint64(&m.version, 1)
+
+	m.logInfo("ACL config applied from Raft",
+		"rules", len(rules),
+		"defaultPolicy", defaultPolicy,
+	)
+
+	return nil
+}
+
+// AddRuleFromRaft adds a rule from Raft replication.
+func (m *Manager) AddRuleFromRaft(ruleData *ACLRuleData, index int) error {
+	if ruleData == nil {
+		return fmt.Errorf("rule data cannot be nil")
+	}
+
+	rule, err := ruleDataToACL(ruleData)
+	if err != nil {
+		return err
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if index < 0 || index >= len(m.config.Rules) {
+		m.config.Rules = append(m.config.Rules, rule)
+	} else {
+		m.config.Rules = append(m.config.Rules[:index],
+			append([]*ACL{rule}, m.config.Rules[index:]...)...)
+	}
+
+	m.evaluator = NewEvaluator(m.config)
+	atomic.AddUint64(&m.version, 1)
+
+	m.logInfo("ACL rule added from Raft", "index", index, "target", rule.Target)
+
+	return nil
+}
+
+// UpdateRuleFromRaft updates a rule from Raft replication.
+func (m *Manager) UpdateRuleFromRaft(ruleData *ACLRuleData, index int) error {
+	if ruleData == nil {
+		return fmt.Errorf("rule data cannot be nil")
+	}
+
+	rule, err := ruleDataToACL(ruleData)
+	if err != nil {
+		return err
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if index < 0 || index >= len(m.config.Rules) {
+		return fmt.Errorf("rule index %d out of range", index)
+	}
+
+	m.config.Rules[index] = rule
+	m.evaluator = NewEvaluator(m.config)
+	atomic.AddUint64(&m.version, 1)
+
+	m.logInfo("ACL rule updated from Raft", "index", index, "target", rule.Target)
+
+	return nil
+}
+
+// DeleteRuleFromRaft deletes a rule from Raft replication.
+func (m *Manager) DeleteRuleFromRaft(index int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if index < 0 || index >= len(m.config.Rules) {
+		return nil // Already deleted or invalid, ignore
+	}
+
+	m.config.Rules = append(m.config.Rules[:index], m.config.Rules[index+1:]...)
+	m.evaluator = NewEvaluator(m.config)
+	atomic.AddUint64(&m.version, 1)
+
+	m.logInfo("ACL rule deleted from Raft", "index", index)
+
+	return nil
+}
+
+// SetDefaultPolicyFromRaft sets default policy from Raft replication.
+func (m *Manager) SetDefaultPolicyFromRaft(policy string) error {
+	policy = strings.ToLower(policy)
+	if policy != "allow" && policy != "deny" {
+		return fmt.Errorf("invalid policy: %s", policy)
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.config.DefaultPolicy = policy
+	m.evaluator = NewEvaluator(m.config)
+	atomic.AddUint64(&m.version, 1)
+
+	m.logInfo("ACL default policy set from Raft", "policy", policy)
+
+	return nil
+}
+
+// ACLSnapshot represents ACL data for Raft snapshot.
+type ACLSnapshot struct {
+	Version       uint64        `json:"version"`
+	DefaultPolicy string        `json:"defaultPolicy"`
+	Rules         []ACLRuleData `json:"rules"`
+}
+
+// GetACLSnapshot returns the current ACL config as a snapshot for Raft.
+func (m *Manager) GetACLSnapshot() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	snapshot := &ACLSnapshot{
+		Version:       atomic.LoadUint64(&m.version),
+		DefaultPolicy: m.config.DefaultPolicy,
+		Rules:         make([]ACLRuleData, len(m.config.Rules)),
+	}
+
+	for i, rule := range m.config.Rules {
+		snapshot.Rules[i] = aclToRuleData(rule)
+	}
+
+	return json.Marshal(snapshot)
+}
+
+// RestoreACLSnapshot restores ACL from a Raft snapshot.
+func (m *Manager) RestoreACLSnapshot(data []byte) error {
+	var snapshot ACLSnapshot
+	if err := json.Unmarshal(data, &snapshot); err != nil {
+		return fmt.Errorf("failed to unmarshal ACL snapshot: %w", err)
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Convert rules
+	rules := make([]*ACL, len(snapshot.Rules))
+	for i, ruleData := range snapshot.Rules {
+		rule, err := ruleDataToACL(&ruleData)
+		if err != nil {
+			return fmt.Errorf("failed to convert rule %d: %w", i, err)
+		}
+		rules[i] = rule
+	}
+
+	m.config.Rules = rules
+	m.config.DefaultPolicy = snapshot.DefaultPolicy
+	m.evaluator = NewEvaluator(m.config)
+	atomic.StoreUint64(&m.version, snapshot.Version)
+
+	m.logInfo("ACL restored from Raft snapshot",
+		"rules", len(rules),
+		"defaultPolicy", snapshot.DefaultPolicy,
+	)
+
+	return nil
+}
+
+// ruleDataToACL converts ACLRuleData to ACL.
+func ruleDataToACL(data *ACLRuleData) (*ACL, error) {
+	rule := &ACL{
+		Target:     data.Target,
+		Subject:    data.Subject,
+		Attributes: data.Attributes,
+		Deny:       data.Deny,
+	}
+
+	// Parse scope
+	switch strings.ToLower(data.Scope) {
+	case "base", "":
+		rule.Scope = ScopeBase
+	case "one", "onelevel":
+		rule.Scope = ScopeOne
+	case "sub", "subtree":
+		rule.Scope = ScopeSubtree
+	default:
+		return nil, fmt.Errorf("invalid scope: %s", data.Scope)
+	}
+
+	// Parse rights
+	for _, r := range data.Rights {
+		switch strings.ToLower(r) {
+		case "read":
+			rule.Rights |= Read
+		case "write":
+			rule.Rights |= Write
+		case "add":
+			rule.Rights |= Add
+		case "delete":
+			rule.Rights |= Delete
+		case "search":
+			rule.Rights |= Search
+		case "compare":
+			rule.Rights |= Compare
+		case "all":
+			rule.Rights = All
+		default:
+			return nil, fmt.Errorf("invalid right: %s", r)
+		}
+	}
+
+	return rule, nil
+}
+
+// aclToRuleData converts ACL to ACLRuleData.
+func aclToRuleData(rule *ACL) ACLRuleData {
+	return ACLRuleData{
+		Target:     rule.Target,
+		Subject:    rule.Subject,
+		Scope:      rule.Scope.String(),
+		Rights:     rightsToStrings(rule.Rights),
+		Attributes: rule.Attributes,
+		Deny:       rule.Deny,
+	}
+}
+
+// ToRuleDataSlice converts ACL rules to ACLRuleData slice for Raft commands.
+func (m *Manager) ToRuleDataSlice() []ACLRuleData {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	result := make([]ACLRuleData, len(m.config.Rules))
+	for i, rule := range m.config.Rules {
+		result[i] = aclToRuleData(rule)
+	}
+	return result
+}
+
+// GetDefaultPolicy returns the current default policy.
+func (m *Manager) GetDefaultPolicy() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.config.DefaultPolicy
 }
