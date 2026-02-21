@@ -17,6 +17,8 @@ server:
   readTimeout: 30s
   # Write timeout per operation
   writeTimeout: 30s
+  # PID file path (for reload command)
+  pidFile: "/var/run/oba.pid"
 
 # Directory configuration
 directory:
@@ -90,6 +92,7 @@ security:
     keyFile: ""
 
 # Access Control List configuration
+# Option 1: Inline ACL (no hot reload)
 acl:
   # Default policy when no rule matches: allow, deny
   defaultPolicy: "deny"
@@ -113,6 +116,10 @@ acl:
       subject: "anonymous"
       rights: ["search"]
       attributes: ["cn", "uid"]
+
+# Option 2: External ACL file (hot reload supported)
+# Uncomment to use external file instead of inline config above
+# aclFile: "/etc/oba/acl.yaml"
 
 # REST API configuration
 rest:

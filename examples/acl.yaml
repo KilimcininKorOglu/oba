@@ -1,0 +1,41 @@
+# Oba ACL Configuration
+# This file can be reloaded without restarting the server.
+# Reload with: kill -SIGHUP $(cat /var/run/oba.pid)
+#          or: oba reload acl
+
+version: 1
+
+# Default policy when no rule matches: allow | deny
+defaultPolicy: "deny"
+
+rules:
+  # Rule 1: Admin has full access to everything
+  - target: "*"
+    subject: "cn=admin,dc=example,dc=com"
+    rights: ["read", "write", "add", "delete", "search", "compare"]
+
+  # Rule 2: Authenticated users can read and search
+  - target: "dc=example,dc=com"
+    subject: "authenticated"
+    scope: "subtree"
+    rights:
+      - read
+      - search
+
+  # Rule 3: Users can modify their own entry
+  - target: "ou=users,dc=example,dc=com"
+    subject: "self"
+    rights: ["read", "write"]
+    attributes: ["userPassword", "mail", "telephoneNumber"]
+
+  # Rule 4: Anonymous can only read public attributes
+  - target: "ou=users,dc=example,dc=com"
+    subject: "anonymous"
+    rights: ["search"]
+    attributes: ["cn", "uid"]
+
+  # Rule 5: Deny anonymous access to sensitive subtree
+  - target: "ou=sensitive,dc=example,dc=com"
+    subject: "anonymous"
+    rights: ["read", "search"]
+    deny: true

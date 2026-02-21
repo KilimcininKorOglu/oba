@@ -30,6 +30,8 @@ func run(args []string) int {
 		return userCmd(args[2:])
 	case "config":
 		return configCmd(args[2:])
+	case "reload":
+		return reloadCmd(args[2:])
 	case "version":
 		return versionCmd(args[2:])
 	case "help", "-h", "--help":

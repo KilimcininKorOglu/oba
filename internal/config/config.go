@@ -14,6 +14,7 @@ type Config struct {
 	Logging   LogConfig       `yaml:"logging"`
 	Security  SecurityConfig  `yaml:"security"`
 	ACL       ACLConfig       `yaml:"acl"`
+	ACLFile   string          `yaml:"aclFile"`
 	REST      RESTConfig      `yaml:"rest"`
 }
 
@@ -61,6 +62,22 @@ func (c *Config) ResolvePaths() error {
 		}
 	}
 
+	// Resolve ACL file path
+	if c.ACLFile != "" {
+		c.ACLFile, err = filepath.Abs(c.ACLFile)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Resolve PID file path
+	if c.Server.PIDFile != "" {
+		c.Server.PIDFile, err = filepath.Abs(c.Server.PIDFile)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -73,6 +90,7 @@ type ServerConfig struct {
 	MaxConnections int           `yaml:"maxConnections"`
 	ReadTimeout    time.Duration `yaml:"readTimeout"`
 	WriteTimeout   time.Duration `yaml:"writeTimeout"`
+	PIDFile        string        `yaml:"pidFile"`
 }
 
 // DirectoryConfig holds directory-related configuration.

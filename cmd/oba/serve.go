@@ -10,10 +10,12 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/oba-ldap/oba/internal/acl"
 	"github.com/oba-ldap/oba/internal/backend"
 	"github.com/oba-ldap/oba/internal/config"
 	"github.com/oba-ldap/oba/internal/filter"
@@ -44,6 +46,8 @@ type LDAPServer struct {
 	tlsConfig               *tls.Config
 	persistentSearchHandler *server.PersistentSearchHandler
 	restServer              *rest.Server
+	aclManager              *acl.Manager
+	pidFile                 string
 	running                 bool
 	mu                      sync.Mutex
 	wg                      sync.WaitGroup
@@ -101,6 +105,35 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 	// Create persistent search handler
 	psHandler := server.NewPersistentSearchHandler(be)
 
+	// Create ACL manager
+	var aclManager *acl.Manager
+	if cfg.ACLFile != "" {
+		// Load ACL from external file (hot reload supported)
+		var err error
+		aclManager, err = acl.NewManager(&acl.ManagerConfig{
+			FilePath: cfg.ACLFile,
+			Logger:   logger,
+		})
+		if err != nil {
+			db.Close()
+			return nil, fmt.Errorf("failed to load ACL file: %w", err)
+		}
+		logger.Info("ACL loaded from file", "file", cfg.ACLFile)
+	} else if len(cfg.ACL.Rules) > 0 {
+		// Load ACL from embedded config (no hot reload)
+		embeddedConfig := convertACLConfig(&cfg.ACL)
+		var err error
+		aclManager, err = acl.NewManager(&acl.ManagerConfig{
+			EmbeddedConfig: embeddedConfig,
+			Logger:         logger,
+		})
+		if err != nil {
+			db.Close()
+			return nil, fmt.Errorf("failed to create ACL manager: %w", err)
+		}
+		logger.Info("ACL loaded from config", "rules", len(cfg.ACL.Rules))
+	}
+
 	// Create REST server if enabled
 	var restServer *rest.Server
 	if cfg.REST.Enabled {
@@ -130,6 +163,7 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 		tlsConfig:               tlsConfig,
 		persistentSearchHandler: psHandler,
 		restServer:              restServer,
+		aclManager:              aclManager,
 		ctx:                     ctx,
 		cancel:                  cancel,
 	}, nil
@@ -593,9 +627,18 @@ func serveCmd(args []string) int {
 		return 1
 	}
 
-	// Handle signals for graceful shutdown
+	// Write PID file
+	if cfg.Server.PIDFile != "" {
+		if err := srv.writePIDFile(); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to write PID file: %v\n", err)
+			return 1
+		}
+		defer srv.removePIDFile()
+	}
+
+	// Handle signals for graceful shutdown and reload
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
 	// Start server in a goroutine
 	errCh := make(chan error, 1)
@@ -604,25 +647,103 @@ func serveCmd(args []string) int {
 	}()
 
 	// Wait for signal or error
-	select {
-	case sig := <-sigCh:
-		srv.logger.Info("received signal, shutting down", "signal", sig.String())
+	for {
+		select {
+		case sig := <-sigCh:
+			switch sig {
+			case syscall.SIGHUP:
+				srv.handleSIGHUP()
+			case syscall.SIGINT, syscall.SIGTERM:
+				srv.logger.Info("received signal, shutting down", "signal", sig.String())
 
-		// Create shutdown context with timeout
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
+				// Create shutdown context with timeout
+				shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
 
-		if err := srv.Stop(shutdownCtx); err != nil {
-			fmt.Fprintf(os.Stderr, "Shutdown error: %v\n", err)
-			return 1
+				if err := srv.Stop(shutdownCtx); err != nil {
+					fmt.Fprintf(os.Stderr, "Shutdown error: %v\n", err)
+					return 1
+				}
+				return 0
+			}
+
+		case err := <-errCh:
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Server error: %v\n", err)
+				return 1
+			}
+			return 0
 		}
-		return 0
-
-	case err := <-errCh:
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Server error: %v\n", err)
-			return 1
-		}
-		return 0
 	}
+}
+
+// handleSIGHUP handles the SIGHUP signal for ACL reload.
+func (s *LDAPServer) handleSIGHUP() {
+	s.logger.Info("received SIGHUP, reloading ACL configuration")
+
+	if s.aclManager == nil {
+		s.logger.Warn("ACL manager not configured, nothing to reload")
+		return
+	}
+
+	if !s.aclManager.IsFileMode() {
+		s.logger.Warn("ACL loaded from embedded config, hot reload not supported")
+		return
+	}
+
+	if err := s.aclManager.Reload(); err != nil {
+		s.logger.Error("ACL reload failed", "error", err)
+		return
+	}
+
+	stats := s.aclManager.Stats()
+	s.logger.Info("ACL configuration reloaded successfully",
+		"rules", stats.RuleCount,
+		"defaultPolicy", stats.DefaultPolicy,
+		"reloadCount", stats.ReloadCount,
+	)
+}
+
+// writePIDFile writes the process ID to the configured PID file.
+func (s *LDAPServer) writePIDFile() error {
+	pidFile := s.config.Server.PIDFile
+	if pidFile == "" {
+		return nil
+	}
+
+	pid := os.Getpid()
+	data := []byte(strconv.Itoa(pid))
+
+	if err := os.WriteFile(pidFile, data, 0644); err != nil {
+		return fmt.Errorf("failed to write PID file: %w", err)
+	}
+
+	s.pidFile = pidFile
+	s.logger.Info("PID file written", "file", pidFile, "pid", pid)
+	return nil
+}
+
+// removePIDFile removes the PID file.
+func (s *LDAPServer) removePIDFile() {
+	if s.pidFile != "" {
+		os.Remove(s.pidFile)
+		s.logger.Debug("PID file removed", "file", s.pidFile)
+	}
+}
+
+// convertACLConfig converts config.ACLConfig to acl.Config.
+func convertACLConfig(cfg *config.ACLConfig) *acl.Config {
+	aclConfig := acl.NewConfig()
+	aclConfig.SetDefaultPolicy(cfg.DefaultPolicy)
+
+	for _, rule := range cfg.Rules {
+		rights, _ := acl.ParseRights(rule.Rights)
+		aclRule := acl.NewACL(rule.Target, rule.Subject, rights)
+		if len(rule.Attributes) > 0 {
+			aclRule.WithAttributes(rule.Attributes...)
+		}
+		aclConfig.AddRule(aclRule)
+	}
+
+	return aclConfig
 }

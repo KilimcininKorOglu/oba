@@ -294,6 +294,10 @@ func applyConfig(root *yamlNode, config *Config) error {
 			if err := applyACLConfig(node, &config.ACL); err != nil {
 				return err
 			}
+		case "aclFile":
+			if node.value != "" {
+				config.ACLFile = node.value
+			}
 		case "rest":
 			if err := applyRESTConfig(node, &config.REST); err != nil {
 				return err
@@ -346,6 +350,10 @@ func applyServerConfig(node *yamlNode, config *ServerConfig) error {
 					return err
 				}
 				config.WriteTimeout = dur
+			}
+		case "pidFile":
+			if child.value != "" {
+				config.PIDFile = child.value
 			}
 		}
 	}
