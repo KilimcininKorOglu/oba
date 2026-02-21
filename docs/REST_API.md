@@ -96,15 +96,15 @@ rest:
 
 ### Configuration Options
 
-| Option        | Type     | Default  | Description                                      |
-|---------------|----------|----------|--------------------------------------------------|
-| `enabled`     | bool     | `false`  | Enable or disable the REST API                   |
-| `address`     | string   | `:8080`  | HTTP listen address                              |
-| `tlsAddress`  | string   | `""`     | HTTPS listen address (empty to disable)          |
-| `jwtSecret`   | string   | `""`     | Secret key for JWT token signing                 |
-| `tokenTTL`    | duration | `24h`    | JWT token validity period                        |
-| `rateLimit`   | int      | `100`    | Max requests per second per IP (0 = disabled)    |
-| `corsOrigins` | []string | `["*"]`  | Allowed CORS origins                             |
+| Option        | Type     | Default | Description                                   |
+|---------------|----------|---------|-----------------------------------------------|
+| `enabled`     | bool     | `false` | Enable or disable the REST API                |
+| `address`     | string   | `:8080` | HTTP listen address                           |
+| `tlsAddress`  | string   | `""`    | HTTPS listen address (empty to disable)       |
+| `jwtSecret`   | string   | `""`    | Secret key for JWT token signing              |
+| `tokenTTL`    | duration | `24h`   | JWT token validity period                     |
+| `rateLimit`   | int      | `100`   | Max requests per second per IP (0 = disabled) |
+| `corsOrigins` | []string | `["*"]` | Allowed CORS origins                          |
 
 ---
 
@@ -203,15 +203,15 @@ No authentication required.
 
 #### Response Fields
 
-| Field         | Type   | Description                              |
-|---------------|--------|------------------------------------------|
-| `status`      | string | Server status (`ok`)                     |
-| `version`     | string | API version                              |
-| `uptime`      | string | Human-readable uptime                    |
-| `uptimeSecs`  | int    | Uptime in seconds                        |
-| `startTime`   | string | Server start time (ISO 8601)             |
-| `connections` | int    | Current active connections               |
-| `requests`    | int    | Total requests processed                 |
+| Field         | Type   | Description                  |
+|---------------|--------|------------------------------|
+| `status`      | string | Server status (`ok`)         |
+| `version`     | string | API version                  |
+| `uptime`      | string | Human-readable uptime        |
+| `uptimeSecs`  | int    | Uptime in seconds            |
+| `startTime`   | string | Server start time (ISO 8601) |
+| `connections` | int    | Current active connections   |
+| `requests`    | int    | Total requests processed     |
 
 #### Example
 
@@ -242,10 +242,10 @@ No authentication required.
 }
 ```
 
-| Field      | Type   | Required | Description                    |
-|------------|--------|----------|--------------------------------|
-| `dn`       | string | Yes      | Distinguished Name to bind as  |
-| `password` | string | Yes      | Password for authentication    |
+| Field      | Type   | Required | Description                   |
+|------------|--------|----------|-------------------------------|
+| `dn`       | string | Yes      | Distinguished Name to bind as |
+| `password` | string | Yes      | Password for authentication   |
 
 #### Response (Success)
 
@@ -326,23 +326,23 @@ GET /api/v1/search
 
 #### Query Parameters
 
-| Parameter    | Type   | Default | Description                                    |
-|--------------|--------|---------|------------------------------------------------|
-| `baseDN`     | string | -       | Base DN for the search (required)              |
-| `scope`      | string | `sub`   | Search scope: `base`, `one`, or `sub`          |
-| `filter`     | string | -       | LDAP filter (not yet implemented)              |
-| `attributes` | string | -       | Comma-separated list of attributes to return   |
-| `offset`     | int    | `0`     | Number of entries to skip (pagination)         |
-| `limit`      | int    | `0`     | Maximum entries to return (0 = unlimited)      |
-| `timeLimit`  | int    | `0`     | Search timeout in seconds (0 = no limit)       |
+| Parameter    | Type   | Default | Description                                  |
+|--------------|--------|---------|----------------------------------------------|
+| `baseDN`     | string | -       | Base DN for the search (required)            |
+| `scope`      | string | `sub`   | Search scope: `base`, `one`, or `sub`        |
+| `filter`     | string | -       | LDAP filter (not yet implemented)            |
+| `attributes` | string | -       | Comma-separated list of attributes to return |
+| `offset`     | int    | `0`     | Number of entries to skip (pagination)       |
+| `limit`      | int    | `0`     | Maximum entries to return (0 = unlimited)    |
+| `timeLimit`  | int    | `0`     | Search timeout in seconds (0 = no limit)     |
 
 #### Search Scopes
 
-| Scope  | Description                                      |
-|--------|--------------------------------------------------|
-| `base` | Search only the base DN entry                    |
-| `one`  | Search one level below the base DN               |
-| `sub`  | Search the entire subtree below the base DN      |
+| Scope  | Description                                 |
+|--------|---------------------------------------------|
+| `base` | Search only the base DN entry               |
+| `one`  | Search one level below the base DN          |
+| `sub`  | Search the entire subtree below the base DN |
 
 #### Response
 
@@ -375,13 +375,13 @@ GET /api/v1/search
 
 #### Response Fields
 
-| Field        | Type    | Description                                |
-|--------------|---------|--------------------------------------------|
-| `entries`    | array   | Array of matching entries                  |
-| `totalCount` | int     | Total number of matching entries           |
-| `offset`     | int     | Current offset                             |
-| `limit`      | int     | Current limit                              |
-| `hasMore`    | bool    | Whether more entries exist beyond limit    |
+| Field        | Type  | Description                             |
+|--------------|-------|-----------------------------------------|
+| `entries`    | array | Array of matching entries               |
+| `totalCount` | int   | Total number of matching entries        |
+| `offset`     | int   | Current offset                          |
+| `limit`      | int   | Current limit                           |
+| `hasMore`    | bool  | Whether more entries exist beyond limit |
 
 #### Examples
 
@@ -427,11 +427,11 @@ GET /api/v1/search/stream
 
 #### Query Parameters
 
-| Parameter | Type   | Default | Description                               |
-|-----------|--------|---------|-------------------------------------------|
-| `baseDN`  | string | -       | Base DN for the search (required)         |
-| `scope`   | string | `sub`   | Search scope: `base`, `one`, or `sub`     |
-| `filter`  | string | -       | LDAP filter (not yet implemented)         |
+| Parameter | Type   | Default | Description                           |
+|-----------|--------|---------|---------------------------------------|
+| `baseDN`  | string | -       | Base DN for the search (required)     |
+| `scope`   | string | `sub`   | Search scope: `base`, `one`, or `sub` |
+| `filter`  | string | -       | LDAP filter (not yet implemented)     |
 
 #### Response Headers
 
@@ -542,10 +542,10 @@ POST /api/v1/entries
 }
 ```
 
-| Field        | Type   | Required | Description                    |
-|--------------|--------|----------|--------------------------------|
-| `dn`         | string | Yes      | Distinguished Name for entry   |
-| `attributes` | object | Yes      | Map of attribute name to values|
+| Field        | Type   | Required | Description                     |
+|--------------|--------|----------|---------------------------------|
+| `dn`         | string | Yes      | Distinguished Name for entry    |
+| `attributes` | object | Yes      | Map of attribute name to values |
 
 #### Response
 
@@ -633,11 +633,11 @@ The `{dn}` parameter must be URL-encoded.
 
 #### Change Object Fields
 
-| Field       | Type     | Required | Description                              |
-|-------------|----------|----------|------------------------------------------|
-| `operation` | string   | Yes      | Operation type: `add`, `delete`, `replace`|
-| `attribute` | string   | Yes      | Attribute name to modify                 |
-| `values`    | []string | Yes      | Values to add/delete/replace             |
+| Field       | Type     | Required | Description                                |
+|-------------|----------|----------|--------------------------------------------|
+| `operation` | string   | Yes      | Operation type: `add`, `delete`, `replace` |
+| `attribute` | string   | Yes      | Attribute name to modify                   |
+| `values`    | []string | Yes      | Values to add/delete/replace               |
 
 #### Response
 
@@ -762,11 +762,11 @@ The `{dn}` parameter must be URL-encoded.
 }
 ```
 
-| Field          | Type   | Required | Description                                    |
-|----------------|--------|----------|------------------------------------------------|
-| `newRDN`       | string | Yes      | New Relative Distinguished Name                |
-| `deleteOldRDN` | bool   | No       | Delete old RDN attribute value (default: false)|
-| `newSuperior`  | string | No       | New parent DN (for moving entry)               |
+| Field          | Type   | Required | Description                                     |
+|----------------|--------|----------|-------------------------------------------------|
+| `newRDN`       | string | Yes      | New Relative Distinguished Name                 |
+| `deleteOldRDN` | bool   | No       | Delete old RDN attribute value (default: false) |
+| `newSuperior`  | string | No       | New parent DN (for moving entry)                |
 
 #### Response
 
@@ -835,11 +835,11 @@ POST /api/v1/compare
 }
 ```
 
-| Field       | Type   | Required | Description                    |
-|-------------|--------|----------|--------------------------------|
-| `dn`        | string | Yes      | DN of the entry to compare     |
-| `attribute` | string | Yes      | Attribute name to compare      |
-| `value`     | string | Yes      | Value to compare against       |
+| Field       | Type   | Required | Description                |
+|-------------|--------|----------|----------------------------|
+| `dn`        | string | Yes      | DN of the entry to compare |
+| `attribute` | string | Yes      | Attribute name to compare  |
+| `value`     | string | Yes      | Value to compare against   |
 
 #### Response
 
@@ -849,9 +849,9 @@ POST /api/v1/compare
 }
 ```
 
-| Field   | Type | Description                                    |
-|---------|------|------------------------------------------------|
-| `match` | bool | `true` if value matches, `false` otherwise     |
+| Field   | Type | Description                                |
+|---------|------|--------------------------------------------|
+| `match` | bool | `true` if value matches, `false` otherwise |
 
 #### Example
 
@@ -919,18 +919,18 @@ POST /api/v1/bulk
 
 #### Request Fields
 
-| Field         | Type    | Required | Description                                    |
-|---------------|---------|----------|------------------------------------------------|
-| `stopOnError` | bool    | No       | Stop processing on first error (default: false)|
-| `operations`  | array   | Yes      | Array of operations to perform                 |
+| Field         | Type  | Required | Description                                     |
+|---------------|-------|----------|-------------------------------------------------|
+| `stopOnError` | bool  | No       | Stop processing on first error (default: false) |
+| `operations`  | array | Yes      | Array of operations to perform                  |
 
 #### Operation Types
 
-| Operation | Required Fields                    | Description          |
-|-----------|------------------------------------|----------------------|
-| `add`     | `dn`, `attributes`                 | Create a new entry   |
-| `modify`  | `dn`, `changes`                    | Modify an entry      |
-| `delete`  | `dn`                               | Delete an entry      |
+| Operation | Required Fields    | Description        |
+|-----------|--------------------|--------------------|
+| `add`     | `dn`, `attributes` | Create a new entry |
+| `modify`  | `dn`, `changes`    | Modify an entry    |
+| `delete`  | `dn`               | Delete an entry    |
 
 #### Response
 
@@ -976,24 +976,24 @@ HTTP Status varies based on results:
 
 #### Response Fields
 
-| Field        | Type    | Description                              |
-|--------------|---------|------------------------------------------|
-| `success`    | bool    | `true` if all operations succeeded       |
-| `totalCount` | int     | Total number of operations               |
-| `succeeded`  | int     | Number of successful operations          |
-| `failed`     | int     | Number of failed operations              |
-| `results`    | array   | Detailed result for each operation       |
+| Field        | Type  | Description                        |
+|--------------|-------|------------------------------------|
+| `success`    | bool  | `true` if all operations succeeded |
+| `totalCount` | int   | Total number of operations         |
+| `succeeded`  | int   | Number of successful operations    |
+| `failed`     | int   | Number of failed operations        |
+| `results`    | array | Detailed result for each operation |
 
 #### Result Object Fields
 
-| Field        | Type   | Description                              |
-|--------------|--------|------------------------------------------|
-| `index`      | int    | Operation index (0-based)                |
-| `dn`         | string | DN of the entry                          |
-| `operation`  | string | Operation type                           |
-| `success`    | bool   | Whether operation succeeded              |
-| `error`      | string | Error message (if failed)                |
-| `resultCode` | int    | LDAP result code (if failed)             |
+| Field        | Type   | Description                  |
+|--------------|--------|------------------------------|
+| `index`      | int    | Operation index (0-based)    |
+| `dn`         | string | DN of the entry              |
+| `operation`  | string | Operation type               |
+| `success`    | bool   | Whether operation succeeded  |
+| `error`      | string | Error message (if failed)    |
+| `resultCode` | int    | LDAP result code (if failed) |
 
 #### Example with Mixed Results
 
@@ -1103,67 +1103,67 @@ All errors are returned as JSON with consistent structure.
 }
 ```
 
-| Field        | Type   | Description                              |
-|--------------|--------|------------------------------------------|
-| `error`      | string | Machine-readable error code              |
-| `code`       | int    | HTTP status code                         |
-| `message`    | string | Human-readable error description         |
-| `resultCode` | int    | LDAP result code (when applicable)       |
+| Field        | Type   | Description                        |
+|--------------|--------|------------------------------------|
+| `error`      | string | Machine-readable error code        |
+| `code`       | int    | HTTP status code                   |
+| `message`    | string | Human-readable error description   |
+| `resultCode` | int    | LDAP result code (when applicable) |
 
 ### Error Codes
 
-| Error Code                  | HTTP Status | Description                              |
-|-----------------------------|-------------|------------------------------------------|
-| `invalid_request`           | 400         | Malformed JSON or missing required field |
-| `missing_dn`                | 400         | DN parameter is required                 |
-| `missing_base_dn`           | 400         | baseDN query parameter is required       |
-| `invalid_dn`                | 400         | Invalid DN syntax or encoding            |
-| `invalid_scope`             | 400         | Invalid search scope                     |
-| `invalid_operation`         | 400         | Invalid modify operation                 |
-| `missing_new_rdn`           | 400         | newRDN is required for modifyDN          |
-| `empty_operations`          | 400         | Bulk request has no operations           |
-| `unauthorized`              | 401         | Missing or invalid authentication        |
-| `invalid_credentials`       | 401         | Invalid DN or password                   |
-| `forbidden`                 | 403         | Insufficient access rights               |
-| `not_found`                 | 404         | Entry not found                          |
-| `entry_exists`              | 409         | Entry already exists                     |
-| `not_allowed_on_non_leaf`   | 409         | Cannot delete entry with children        |
-| `time_limit_exceeded`       | 408         | Search time limit exceeded               |
-| `rate_limited`              | 429         | Too many requests                        |
-| `internal_error`            | 500         | Internal server error                    |
+| Error Code                | HTTP Status | Description                              |
+|---------------------------|-------------|------------------------------------------|
+| `invalid_request`         | 400         | Malformed JSON or missing required field |
+| `missing_dn`              | 400         | DN parameter is required                 |
+| `missing_base_dn`         | 400         | baseDN query parameter is required       |
+| `invalid_dn`              | 400         | Invalid DN syntax or encoding            |
+| `invalid_scope`           | 400         | Invalid search scope                     |
+| `invalid_operation`       | 400         | Invalid modify operation                 |
+| `missing_new_rdn`         | 400         | newRDN is required for modifyDN          |
+| `empty_operations`        | 400         | Bulk request has no operations           |
+| `unauthorized`            | 401         | Missing or invalid authentication        |
+| `invalid_credentials`     | 401         | Invalid DN or password                   |
+| `forbidden`               | 403         | Insufficient access rights               |
+| `not_found`               | 404         | Entry not found                          |
+| `entry_exists`            | 409         | Entry already exists                     |
+| `not_allowed_on_non_leaf` | 409         | Cannot delete entry with children        |
+| `time_limit_exceeded`     | 408         | Search time limit exceeded               |
+| `rate_limited`            | 429         | Too many requests                        |
+| `internal_error`          | 500         | Internal server error                    |
 
 ### LDAP Result Code to HTTP Status Mapping
 
-| LDAP Result Code                  | HTTP Status | Description                    |
-|-----------------------------------|-------------|--------------------------------|
-| 0 (Success)                       | 200         | Operation successful           |
-| 1 (Operations Error)              | 500         | Internal server error          |
-| 2 (Protocol Error)                | 400         | Bad request                    |
-| 3 (Time Limit Exceeded)           | 408         | Request timeout                |
-| 4 (Size Limit Exceeded)           | 413         | Payload too large              |
-| 7 (Auth Method Not Supported)     | 501         | Not implemented                |
-| 8 (Stronger Auth Required)        | 401         | Unauthorized                   |
-| 16 (No Such Attribute)            | 400         | Bad request                    |
-| 17 (Undefined Attribute Type)     | 400         | Bad request                    |
-| 19 (Constraint Violation)         | 400         | Bad request                    |
-| 20 (Attribute Or Value Exists)    | 409         | Conflict                       |
-| 21 (Invalid Attribute Syntax)     | 400         | Bad request                    |
-| 32 (No Such Object)               | 404         | Not found                      |
-| 34 (Invalid DN Syntax)            | 400         | Bad request                    |
-| 48 (Inappropriate Authentication) | 401         | Unauthorized                   |
-| 49 (Invalid Credentials)          | 401         | Unauthorized                   |
-| 50 (Insufficient Access Rights)   | 403         | Forbidden                      |
-| 51 (Busy)                         | 503         | Service unavailable            |
-| 52 (Unavailable)                  | 503         | Service unavailable            |
-| 53 (Unwilling To Perform)         | 400         | Bad request                    |
-| 54 (Loop Detect)                  | 508         | Loop detected                  |
-| 64 (Naming Violation)             | 400         | Bad request                    |
-| 65 (Object Class Violation)       | 400         | Bad request                    |
-| 66 (Not Allowed On Non-Leaf)      | 409         | Conflict                       |
-| 67 (Not Allowed On RDN)           | 400         | Bad request                    |
-| 68 (Entry Already Exists)         | 409         | Conflict                       |
-| 69 (Object Class Mods Prohibited) | 400         | Bad request                    |
-| 80 (Other)                        | 500         | Internal server error          |
+| LDAP Result Code                  | HTTP Status | Description           |
+|-----------------------------------|-------------|-----------------------|
+| 0 (Success)                       | 200         | Operation successful  |
+| 1 (Operations Error)              | 500         | Internal server error |
+| 2 (Protocol Error)                | 400         | Bad request           |
+| 3 (Time Limit Exceeded)           | 408         | Request timeout       |
+| 4 (Size Limit Exceeded)           | 413         | Payload too large     |
+| 7 (Auth Method Not Supported)     | 501         | Not implemented       |
+| 8 (Stronger Auth Required)        | 401         | Unauthorized          |
+| 16 (No Such Attribute)            | 400         | Bad request           |
+| 17 (Undefined Attribute Type)     | 400         | Bad request           |
+| 19 (Constraint Violation)         | 400         | Bad request           |
+| 20 (Attribute Or Value Exists)    | 409         | Conflict              |
+| 21 (Invalid Attribute Syntax)     | 400         | Bad request           |
+| 32 (No Such Object)               | 404         | Not found             |
+| 34 (Invalid DN Syntax)            | 400         | Bad request           |
+| 48 (Inappropriate Authentication) | 401         | Unauthorized          |
+| 49 (Invalid Credentials)          | 401         | Unauthorized          |
+| 50 (Insufficient Access Rights)   | 403         | Forbidden             |
+| 51 (Busy)                         | 503         | Service unavailable   |
+| 52 (Unavailable)                  | 503         | Service unavailable   |
+| 53 (Unwilling To Perform)         | 400         | Bad request           |
+| 54 (Loop Detect)                  | 508         | Loop detected         |
+| 64 (Naming Violation)             | 400         | Bad request           |
+| 65 (Object Class Violation)       | 400         | Bad request           |
+| 66 (Not Allowed On Non-Leaf)      | 409         | Conflict              |
+| 67 (Not Allowed On RDN)           | 400         | Bad request           |
+| 68 (Entry Already Exists)         | 409         | Conflict              |
+| 69 (Object Class Mods Prohibited) | 400         | Bad request           |
+| 80 (Other)                        | 500         | Internal server error |
 
 ---
 
@@ -1434,17 +1434,17 @@ curl -X POST http://localhost:8080/api/v1/compare \
 
 ## API Reference Summary
 
-| Method | Endpoint                      | Description                    | Auth Required |
-|--------|-------------------------------|--------------------------------|---------------|
-| GET    | `/api/v1/health`              | Health check                   | No            |
-| POST   | `/api/v1/auth/bind`           | Authenticate and get JWT       | No            |
-| GET    | `/api/v1/entries/{dn}`        | Get single entry               | Yes           |
-| GET    | `/api/v1/search`              | Search entries with pagination | Yes           |
-| GET    | `/api/v1/search/stream`       | Stream search results (NDJSON) | Yes           |
-| POST   | `/api/v1/entries`             | Create new entry               | Yes           |
-| PUT    | `/api/v1/entries/{dn}`        | Modify entry                   | Yes           |
-| PATCH  | `/api/v1/entries/{dn}`        | Modify entry                   | Yes           |
-| DELETE | `/api/v1/entries/{dn}`        | Delete entry                   | Yes           |
-| POST   | `/api/v1/entries/{dn}/move`   | Rename/move entry              | Yes           |
-| POST   | `/api/v1/compare`             | Compare attribute value        | Yes           |
-| POST   | `/api/v1/bulk`                | Bulk operations                | Yes           |
+| Method | Endpoint                    | Description                    | Auth Required |
+|--------|-----------------------------|--------------------------------|---------------|
+| GET    | `/api/v1/health`            | Health check                   | No            |
+| POST   | `/api/v1/auth/bind`         | Authenticate and get JWT       | No            |
+| GET    | `/api/v1/entries/{dn}`      | Get single entry               | Yes           |
+| GET    | `/api/v1/search`            | Search entries with pagination | Yes           |
+| GET    | `/api/v1/search/stream`     | Stream search results (NDJSON) | Yes           |
+| POST   | `/api/v1/entries`           | Create new entry               | Yes           |
+| PUT    | `/api/v1/entries/{dn}`      | Modify entry                   | Yes           |
+| PATCH  | `/api/v1/entries/{dn}`      | Modify entry                   | Yes           |
+| DELETE | `/api/v1/entries/{dn}`      | Delete entry                   | Yes           |
+| POST   | `/api/v1/entries/{dn}/move` | Rename/move entry              | Yes           |
+| POST   | `/api/v1/compare`           | Compare attribute value        | Yes           |
+| POST   | `/api/v1/bulk`              | Bulk operations                | Yes           |

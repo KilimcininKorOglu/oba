@@ -72,8 +72,8 @@ sudo certbot certonly --standalone -d ldap.example.com
 
 Oba enforces TLS 1.2 as the minimum version by default. The supported cipher suites are:
 
-| Cipher Suite                                | TLS Version |
-|---------------------------------------------|-------------|
+| Cipher Suite                                  | TLS Version |
+|-----------------------------------------------|-------------|
 | TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384       | TLS 1.2     |
 | TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384         | TLS 1.2     |
 | TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256       | TLS 1.2     |
@@ -165,26 +165,26 @@ oba restore --format ldif --input /backup/data.ldif
 
 ### Password Policy Parameters
 
-| Parameter        | Recommended Value | Description                          |
-|------------------|-------------------|--------------------------------------|
-| minLength        | 12+               | Minimum password length              |
-| requireUppercase | true              | At least one uppercase letter        |
-| requireLowercase | true              | At least one lowercase letter        |
-| requireDigit     | true              | At least one number                  |
-| requireSpecial   | true              | At least one special character       |
-| maxAge           | 90d               | Password expiration period           |
-| historyCount     | 5                 | Prevent reuse of recent passwords    |
+| Parameter        | Recommended Value | Description                       |
+|------------------|-------------------|-----------------------------------|
+| minLength        | 12+               | Minimum password length           |
+| requireUppercase | true              | At least one uppercase letter     |
+| requireLowercase | true              | At least one lowercase letter     |
+| requireDigit     | true              | At least one number               |
+| requireSpecial   | true              | At least one special character    |
+| maxAge           | 90d               | Password expiration period        |
+| historyCount     | 5                 | Prevent reuse of recent passwords |
 
 ### Password Storage
 
 Oba stores passwords using secure hashing algorithms:
 
-| Algorithm | Format                  | Description                              |
-|-----------|-------------------------|------------------------------------------|
-| SSHA      | `{SSHA}base64...`       | Salted SHA-1 (legacy compatibility)      |
-| SHA256    | `{SHA256}base64...`     | SHA-256 hash                             |
-| SHA512    | `{SHA512}base64...`     | SHA-512 hash                             |
-| PBKDF2    | `{PBKDF2}iterations$...`| PBKDF2-SHA256 with configurable iterations|
+| Algorithm | Format                   | Description                                |
+|-----------|--------------------------|--------------------------------------------|
+| SSHA      | `{SSHA}base64...`        | Salted SHA-1 (legacy compatibility)        |
+| SHA256    | `{SHA256}base64...`      | SHA-256 hash                               |
+| SHA512    | `{SHA512}base64...`      | SHA-512 hash                               |
+| PBKDF2    | `{PBKDF2}iterations$...` | PBKDF2-SHA256 with configurable iterations |
 
 **Security features:**
 - All hashes are salted to prevent rainbow table attacks
@@ -253,14 +253,14 @@ acl:
 
 ### ACL Rights
 
-| Right   | Description                              |
-|---------|------------------------------------------|
-| read    | Read entry attributes                    |
-| write   | Modify entry attributes                  |
-| add     | Create new entries                       |
-| delete  | Remove entries                           |
-| search  | Search for entries                       |
-| compare | Compare attribute values                 |
+| Right   | Description              |
+|---------|--------------------------|
+| read    | Read entry attributes    |
+| write   | Modify entry attributes  |
+| add     | Create new entries       |
+| delete  | Remove entries           |
+| search  | Search for entries       |
+| compare | Compare attribute values |
 
 ### ACL Subjects
 
@@ -370,13 +370,13 @@ logging:
 
 ### Log Events to Monitor
 
-| Event Type              | Log Level | Action                          |
-|-------------------------|-----------|----------------------------------|
-| Failed authentication   | warn      | Monitor for brute force attacks  |
-| Account lockout         | warn      | Investigate potential attacks    |
-| ACL denial              | info      | Review access patterns           |
-| Configuration change    | info      | Audit trail                      |
-| TLS handshake failure   | warn      | Check client compatibility       |
+| Event Type            | Log Level | Action                          |
+|-----------------------|-----------|---------------------------------|
+| Failed authentication | warn      | Monitor for brute force attacks |
+| Account lockout       | warn      | Investigate potential attacks   |
+| ACL denial            | info      | Review access patterns          |
+| Configuration change  | info      | Audit trail                     |
+| TLS handshake failure | warn      | Check client compatibility      |
 
 ### Log Analysis
 

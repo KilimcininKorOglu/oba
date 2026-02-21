@@ -126,38 +126,38 @@ EOF
 
 ## Makefile Commands
 
-| Command           | Description                    |
-|-------------------|--------------------------------|
-| `make build`      | Build the binary to bin/       |
-| `make test`       | Run all tests                  |
-| `make test-race`  | Run tests with race detector   |
-| `make test-cover` | Run tests with coverage        |
-| `make bench`      | Run benchmarks                 |
-| `make clean`      | Remove build artifacts         |
-| `make run`        | Build and run the server       |
+| Command           | Description                  |
+|-------------------|------------------------------|
+| `make build`      | Build the binary to bin/     |
+| `make test`       | Run all tests                |
+| `make test-race`  | Run tests with race detector |
+| `make test-cover` | Run tests with coverage      |
+| `make bench`      | Run benchmarks               |
+| `make clean`      | Remove build artifacts       |
+| `make run`        | Build and run the server     |
 
 ## CLI Commands
 
-| Command           | Description                              |
-|-------------------|------------------------------------------|
-| `oba serve`       | Start the LDAP server                    |
-| `oba backup`      | Create database backup                   |
-| `oba restore`     | Restore from backup                      |
-| `oba user`        | User management                          |
-| `oba config`      | Configuration management                 |
-| `oba reload acl`  | Reload ACL without restart               |
-| `oba version`     | Show version information                 |
+| Command          | Description                |
+|------------------|----------------------------|
+| `oba serve`      | Start the LDAP server      |
+| `oba backup`     | Create database backup     |
+| `oba restore`    | Restore from backup        |
+| `oba user`       | User management            |
+| `oba config`     | Configuration management   |
+| `oba reload acl` | Reload ACL without restart |
+| `oba version`    | Show version information   |
 
 ## Directory Structure
 
 After installation, Oba uses the following directory structure:
 
-| Path            | Description                  |
-|-----------------|------------------------------|
-| /var/lib/oba    | Default data directory       |
-| /var/lib/oba/wal| Write-ahead log files        |
-| /etc/oba        | Configuration files (optional)|
-| /var/log/oba    | Log files (if file logging)  |
+| Path             | Description                    |
+|------------------|--------------------------------|
+| /var/lib/oba     | Default data directory         |
+| /var/lib/oba/wal | Write-ahead log files          |
+| /etc/oba         | Configuration files (optional) |
+| /var/log/oba     | Log files (if file logging)    |
 
 ## Next Steps
 

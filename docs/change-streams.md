@@ -20,11 +20,11 @@ Persistent Search, LDAP protokolune eklenen bir control'dur. Normal bir search i
 
 ### Control Detaylari
 
-| Ozellik | Deger |
-|---------|-------|
-| OID | 2.16.840.1.113730.3.4.3 |
-| Criticality | true veya false |
-| Deger | changeTypes, changesOnly, returnECs |
+| Ozellik     | Deger                               |
+|-------------|-------------------------------------|
+| OID         | 2.16.840.1.113730.3.4.3             |
+| Criticality | true veya false                     |
+| Deger       | changeTypes, changesOnly, returnECs |
 
 ### Parametreler
 
@@ -32,27 +32,27 @@ Persistent Search, LDAP protokolune eklenen bir control'dur. Normal bir search i
 
 Hangi degisiklik turlerini izlemek istediginizi belirtir:
 
-| Deger | Anlam |
-|-------|-------|
-| 1 | Add (yeni entry) |
-| 2 | Delete (silinen entry) |
-| 4 | Modify (guncellenen entry) |
-| 8 | ModDN (DN degisikligi) |
-| 15 | Tumu (1+2+4+8) |
+| Deger | Anlam                      |
+|-------|----------------------------|
+| 1     | Add (yeni entry)           |
+| 2     | Delete (silinen entry)     |
+| 4     | Modify (guncellenen entry) |
+| 8     | ModDN (DN degisikligi)     |
+| 15    | Tumu (1+2+4+8)             |
 
 #### changesOnly
 
-| Deger | Anlam |
-|-------|-------|
-| true | Sadece degisiklikleri gonder (mevcut entry'leri gonderme) |
-| false | Once mevcut entry'leri gonder, sonra degisiklikleri izle |
+| Deger | Anlam                                                     |
+|-------|-----------------------------------------------------------|
+| true  | Sadece degisiklikleri gonder (mevcut entry'leri gonderme) |
+| false | Once mevcut entry'leri gonder, sonra degisiklikleri izle  |
 
 #### returnECs (Entry Change Notification)
 
-| Deger | Anlam |
-|-------|-------|
-| true | Her sonucla birlikte degisiklik bilgisi gonder |
-| false | Sadece entry'yi gonder |
+| Deger | Anlam                                          |
+|-------|------------------------------------------------|
+| true  | Her sonucla birlikte degisiklik bilgisi gonder |
+| false | Sadece entry'yi gonder                         |
 
 ### Kullanim Ornekleri
 
@@ -156,12 +156,12 @@ while (results.hasMore()) {
 
 returnECs=1 oldugunda, her SearchResultEntry ile birlikte bir control gonderilir:
 
-| Ozellik | Deger |
-|---------|-------|
-| OID | 2.16.840.1.113730.3.4.7 |
-| changeType | 1=add, 2=delete, 4=modify, 8=modDN |
-| previousDN | Sadece modDN icin, onceki DN |
-| changeNumber | Degisiklik sira numarasi |
+| Ozellik      | Deger                              |
+|--------------|------------------------------------|
+| OID          | 2.16.840.1.113730.3.4.7            |
+| changeType   | 1=add, 2=delete, 4=modify, 8=modDN |
+| previousDN   | Sadece modDN icin, onceki DN       |
+| changeNumber | Degisiklik sira numarasi           |
 
 ## Go Internal API
 
@@ -271,10 +271,10 @@ dropped = sub.ResetDropped()
 
 ### Limitler
 
-| Parametre | Varsayilan | Aciklama |
-|-----------|------------|----------|
-| Buffer Size | 256 | Subscriber basina event buffer boyutu |
-| Replay Buffer | 4096 | Resume icin saklanan event sayisi |
+| Parametre     | Varsayilan | Aciklama                              |
+|---------------|------------|---------------------------------------|
+| Buffer Size   | 256        | Subscriber basina event buffer boyutu |
+| Replay Buffer | 4096       | Resume icin saklanan event sayisi     |
 
 ### Oneriler
 

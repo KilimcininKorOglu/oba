@@ -138,13 +138,13 @@ ldapwhoami -x -H ldap://localhost:389 -D "cn=admin,dc=example,dc=com" -W -v
 
 #### Common Causes
 
-| Cause                    | Solution                                    |
-|--------------------------|---------------------------------------------|
-| Wrong password           | Verify password, reset if necessary         |
-| Wrong DN format          | Check DN syntax and case sensitivity        |
-| Account locked           | Unlock with `oba user unlock`               |
-| Password expired         | Reset password with `oba user passwd`       |
-| ACL denying access       | Review ACL configuration                    |
+| Cause              | Solution                              |
+|--------------------|---------------------------------------|
+| Wrong password     | Verify password, reset if necessary   |
+| Wrong DN format    | Check DN syntax and case sensitivity  |
+| Account locked     | Unlock with `oba user unlock`         |
+| Password expired   | Reset password with `oba user passwd` |
+| ACL denying access | Review ACL configuration              |
 
 ### Account Locked Out
 
@@ -178,12 +178,12 @@ openssl s_client -connect localhost:636 -showcerts
 
 #### Common TLS Errors
 
-| Error                          | Cause                        | Solution                     |
-|--------------------------------|------------------------------|------------------------------|
-| certificate has expired        | Certificate past expiry date | Renew certificate            |
-| certificate verify failed      | CA not trusted               | Add CA to trust store        |
-| no certificate provided        | Missing certificate config   | Configure tlsCert/tlsKey     |
-| private key does not match     | Key/cert mismatch            | Regenerate key pair          |
+| Error                      | Cause                        | Solution                 |
+|----------------------------|------------------------------|--------------------------|
+| certificate has expired    | Certificate past expiry date | Renew certificate        |
+| certificate verify failed  | CA not trusted               | Add CA to trust store    |
+| no certificate provided    | Missing certificate config   | Configure tlsCert/tlsKey |
+| private key does not match | Key/cert mismatch            | Regenerate key pair      |
 
 ### Search Returns No Results
 
@@ -207,12 +207,12 @@ grep "acl" /var/log/oba/oba.log | grep "denied"
 
 #### Common Causes
 
-| Cause              | Solution                                    |
-|--------------------|---------------------------------------------|
-| Wrong base DN      | Verify baseDN in configuration              |
-| ACL restrictions   | Check ACL rules for search permission       |
-| Filter syntax      | Verify LDAP filter syntax                   |
-| Empty directory    | Add entries to the directory                |
+| Cause            | Solution                              |
+|------------------|---------------------------------------|
+| Wrong base DN    | Verify baseDN in configuration        |
+| ACL restrictions | Check ACL rules for search permission |
+| Filter syntax    | Verify LDAP filter syntax             |
+| Empty directory  | Add entries to the directory          |
 
 ### Performance Issues
 
@@ -242,12 +242,12 @@ ps aux | grep oba
 
 #### Solutions
 
-| Issue                  | Solution                                    |
-|------------------------|---------------------------------------------|
-| Slow searches          | Add indexes for frequently searched attrs   |
-| High memory            | Reduce bufferPoolSize                       |
-| High disk I/O          | Increase checkpointInterval                 |
-| Many connections       | Increase maxConnections, check for leaks    |
+| Issue            | Solution                                  |
+|------------------|-------------------------------------------|
+| Slow searches    | Add indexes for frequently searched attrs |
+| High memory      | Reduce bufferPoolSize                     |
+| High disk I/O    | Increase checkpointInterval               |
+| Many connections | Increase maxConnections, check for leaks  |
 
 ### Data Corruption
 
@@ -274,34 +274,34 @@ oba restore --input /backup/latest.bak --verify
 
 ### LDAP Result Codes
 
-| Code | Name                      | Description                          |
-|------|---------------------------|--------------------------------------|
-| 0    | SUCCESS                   | Operation completed successfully     |
-| 1    | OPERATIONS_ERROR          | Internal server error                |
-| 2    | PROTOCOL_ERROR            | Protocol violation                   |
-| 3    | TIME_LIMIT_EXCEEDED       | Search time limit exceeded           |
-| 4    | SIZE_LIMIT_EXCEEDED       | Search size limit exceeded           |
-| 7    | AUTH_METHOD_NOT_SUPPORTED | Unsupported authentication method    |
-| 8    | STRONGER_AUTH_REQUIRED    | TLS required                         |
-| 32   | NO_SUCH_OBJECT            | Entry does not exist                 |
-| 34   | INVALID_DN_SYNTAX         | Malformed DN                         |
-| 49   | INVALID_CREDENTIALS       | Wrong password or DN                 |
-| 50   | INSUFFICIENT_ACCESS       | ACL denied access                    |
-| 53   | UNWILLING_TO_PERFORM      | Server refuses operation             |
-| 65   | OBJECT_CLASS_VIOLATION    | Schema violation                     |
-| 68   | ENTRY_ALREADY_EXISTS      | DN already exists                    |
+| Code | Name                      | Description                       |
+|------|---------------------------|-----------------------------------|
+| 0    | SUCCESS                   | Operation completed successfully  |
+| 1    | OPERATIONS_ERROR          | Internal server error             |
+| 2    | PROTOCOL_ERROR            | Protocol violation                |
+| 3    | TIME_LIMIT_EXCEEDED       | Search time limit exceeded        |
+| 4    | SIZE_LIMIT_EXCEEDED       | Search size limit exceeded        |
+| 7    | AUTH_METHOD_NOT_SUPPORTED | Unsupported authentication method |
+| 8    | STRONGER_AUTH_REQUIRED    | TLS required                      |
+| 32   | NO_SUCH_OBJECT            | Entry does not exist              |
+| 34   | INVALID_DN_SYNTAX         | Malformed DN                      |
+| 49   | INVALID_CREDENTIALS       | Wrong password or DN              |
+| 50   | INSUFFICIENT_ACCESS       | ACL denied access                 |
+| 53   | UNWILLING_TO_PERFORM      | Server refuses operation          |
+| 65   | OBJECT_CLASS_VIOLATION    | Schema violation                  |
+| 68   | ENTRY_ALREADY_EXISTS      | DN already exists                 |
 
 ### Common Error Messages
 
-| Message                              | Meaning                              | Solution                             |
-|--------------------------------------|--------------------------------------|--------------------------------------|
-| "connection refused"                 | Server not running or blocked        | Start server, check firewall         |
-| "invalid credentials"                | Wrong password or DN                 | Verify credentials                   |
-| "no such object"                     | Entry doesn't exist                  | Check DN spelling                    |
-| "insufficient access"                | ACL denied operation                 | Review ACL rules                     |
-| "certificate has expired"            | TLS cert expired                     | Renew certificate                    |
-| "account locked"                     | Too many failed attempts             | Unlock account                       |
-| "password expired"                   | Password past maxAge                 | Reset password                       |
+| Message                   | Meaning                       | Solution                     |
+|---------------------------|-------------------------------|------------------------------|
+| "connection refused"      | Server not running or blocked | Start server, check firewall |
+| "invalid credentials"     | Wrong password or DN          | Verify credentials           |
+| "no such object"          | Entry doesn't exist           | Check DN spelling            |
+| "insufficient access"     | ACL denied operation          | Review ACL rules             |
+| "certificate has expired" | TLS cert expired              | Renew certificate            |
+| "account locked"          | Too many failed attempts      | Unlock account               |
+| "password expired"        | Password past maxAge          | Reset password               |
 
 ## Getting Help
 
@@ -353,12 +353,12 @@ docker inspect oba-oba-1
 
 ### Common Docker Issues
 
-| Issue                        | Cause                              | Solution                              |
-|------------------------------|-------------------------------------|---------------------------------------|
-| Container exits immediately  | Configuration error                 | Check logs with `docker compose logs` |
-| Port already in use          | Host port conflict                  | Change port mapping in docker-compose |
-| Permission denied on volume  | Volume ownership mismatch           | Check volume permissions              |
-| Cannot connect from host     | Wrong port or network config        | Verify port mapping and network mode  |
+| Issue                       | Cause                        | Solution                              |
+|-----------------------------|------------------------------|---------------------------------------|
+| Container exits immediately | Configuration error          | Check logs with `docker compose logs` |
+| Port already in use         | Host port conflict           | Change port mapping in docker-compose |
+| Permission denied on volume | Volume ownership mismatch    | Check volume permissions              |
+| Cannot connect from host    | Wrong port or network config | Verify port mapping and network mode  |
 
 ### Volume Permissions
 

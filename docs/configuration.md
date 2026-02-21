@@ -25,16 +25,16 @@ Examples:
 
 ## Server Configuration
 
-| Parameter              | Type     | Default  | Description                          |
-|------------------------|----------|----------|--------------------------------------|
-| server.address         | string   | ":389"   | LDAP listen address                  |
-| server.tlsAddress      | string   | ":636"   | LDAPS listen address                 |
-| server.tlsCert         | string   | ""       | Path to TLS certificate file         |
-| server.tlsKey          | string   | ""       | Path to TLS private key file         |
-| server.maxConnections  | int      | 10000    | Maximum concurrent connections       |
-| server.readTimeout     | duration | 30s      | Read timeout per operation           |
-| server.writeTimeout    | duration | 30s      | Write timeout per operation          |
-| server.pidFile         | string   | ""       | PID file path (for reload command)   |
+| Parameter             | Type     | Default | Description                        |
+|-----------------------|----------|---------|------------------------------------|
+| server.address        | string   | ":389"  | LDAP listen address                |
+| server.tlsAddress     | string   | ":636"  | LDAPS listen address               |
+| server.tlsCert        | string   | ""      | Path to TLS certificate file       |
+| server.tlsKey         | string   | ""      | Path to TLS private key file       |
+| server.maxConnections | int      | 10000   | Maximum concurrent connections     |
+| server.readTimeout    | duration | 30s     | Read timeout per operation         |
+| server.writeTimeout   | duration | 30s     | Write timeout per operation        |
+| server.pidFile        | string   | ""      | PID file path (for reload command) |
 
 Example:
 
@@ -52,11 +52,11 @@ server:
 
 ## Directory Configuration
 
-| Parameter                | Type   | Default | Description                    |
-|--------------------------|--------|---------|--------------------------------|
-| directory.baseDN         | string | ""      | Base distinguished name        |
-| directory.rootDN         | string | ""      | Administrator DN               |
-| directory.rootPassword   | string | ""      | Administrator password         |
+| Parameter              | Type   | Default | Description             |
+|------------------------|--------|---------|-------------------------|
+| directory.baseDN       | string | ""      | Base distinguished name |
+| directory.rootDN       | string | ""      | Administrator DN        |
+| directory.rootPassword | string | ""      | Administrator password  |
 
 Example:
 
@@ -111,23 +111,23 @@ Oba creates the following files in the data directory:
 
 Oba automatically creates indexes for commonly searched attributes. The following indexes are created by default:
 
-| Attribute   | Index Type | Description                    |
-|-------------|------------|--------------------------------|
-| objectClass | Equality   | Fast objectClass filtering     |
-| uid         | Equality   | User identifier lookups        |
-| cn          | Equality   | Common name searches           |
-| mail        | Equality   | Email address lookups          |
-| member      | Equality   | Group membership queries       |
+| Attribute   | Index Type | Description                |
+|-------------|------------|----------------------------|
+| objectClass | Equality   | Fast objectClass filtering |
+| uid         | Equality   | User identifier lookups    |
+| cn          | Equality   | Common name searches       |
+| mail        | Equality   | Email address lookups      |
+| member      | Equality   | Group membership queries   |
 
 Custom indexes can be created programmatically using the storage engine API.
 
 ## Logging Configuration
 
-| Parameter        | Type   | Default  | Description                          |
-|------------------|--------|----------|--------------------------------------|
-| logging.level    | string | "info"   | Log level: debug, info, warn, error  |
-| logging.format   | string | "json"   | Log format: text, json               |
-| logging.output   | string | "stdout" | Output: stdout, stderr, or file path |
+| Parameter      | Type   | Default  | Description                          |
+|----------------|--------|----------|--------------------------------------|
+| logging.level  | string | "info"   | Log level: debug, info, warn, error  |
+| logging.format | string | "json"   | Log format: text, json               |
+| logging.output | string | "stdout" | Output: stdout, stderr, or file path |
 
 Example:
 
@@ -140,27 +140,27 @@ logging:
 
 ### Log Levels
 
-| Level | Description                                    |
-|-------|------------------------------------------------|
-| debug | Detailed debugging information                 |
-| info  | General operational information                |
-| warn  | Warning conditions                             |
-| error | Error conditions requiring attention           |
+| Level | Description                          |
+|-------|--------------------------------------|
+| debug | Detailed debugging information       |
+| info  | General operational information      |
+| warn  | Warning conditions                   |
+| error | Error conditions requiring attention |
 
 ## Security Configuration
 
 ### Password Policy
 
-| Parameter                              | Type     | Default | Description                          |
-|----------------------------------------|----------|---------|--------------------------------------|
-| security.passwordPolicy.enabled        | bool     | false   | Enable password policy enforcement   |
-| security.passwordPolicy.minLength      | int      | 8       | Minimum password length              |
-| security.passwordPolicy.requireUppercase | bool   | true    | Require uppercase letter             |
-| security.passwordPolicy.requireLowercase | bool   | true    | Require lowercase letter             |
-| security.passwordPolicy.requireDigit   | bool     | true    | Require numeric digit                |
-| security.passwordPolicy.requireSpecial | bool     | false   | Require special character            |
-| security.passwordPolicy.maxAge         | duration | 0       | Password expiration (0 = never)      |
-| security.passwordPolicy.historyCount   | int      | 0       | Number of old passwords to remember  |
+| Parameter                                | Type     | Default | Description                         |
+|------------------------------------------|----------|---------|-------------------------------------|
+| security.passwordPolicy.enabled          | bool     | false   | Enable password policy enforcement  |
+| security.passwordPolicy.minLength        | int      | 8       | Minimum password length             |
+| security.passwordPolicy.requireUppercase | bool     | true    | Require uppercase letter            |
+| security.passwordPolicy.requireLowercase | bool     | true    | Require lowercase letter            |
+| security.passwordPolicy.requireDigit     | bool     | true    | Require numeric digit               |
+| security.passwordPolicy.requireSpecial   | bool     | false   | Require special character           |
+| security.passwordPolicy.maxAge           | duration | 0       | Password expiration (0 = never)     |
+| security.passwordPolicy.historyCount     | int      | 0       | Number of old passwords to remember |
 
 Example:
 
@@ -179,11 +179,11 @@ security:
 
 ### Rate Limiting
 
-| Parameter                         | Type     | Default | Description                          |
-|-----------------------------------|----------|---------|--------------------------------------|
-| security.rateLimit.enabled        | bool     | false   | Enable rate limiting                 |
-| security.rateLimit.maxAttempts    | int      | 5       | Max failed attempts before lockout   |
-| security.rateLimit.lockoutDuration | duration | 15m    | Account lockout duration             |
+| Parameter                          | Type     | Default | Description                        |
+|------------------------------------|----------|---------|------------------------------------|
+| security.rateLimit.enabled         | bool     | false   | Enable rate limiting               |
+| security.rateLimit.maxAttempts     | int      | 5       | Max failed attempts before lockout |
+| security.rateLimit.lockoutDuration | duration | 15m     | Account lockout duration           |
 
 Example:
 
@@ -197,10 +197,10 @@ security:
 
 ### Encryption at Rest
 
-| Parameter                      | Type   | Default | Description                          |
-|--------------------------------|--------|---------|--------------------------------------|
-| security.encryption.enabled    | bool   | false   | Enable encryption for stored data    |
-| security.encryption.keyFile    | string | ""      | Path to encryption key file          |
+| Parameter                   | Type   | Default | Description                       |
+|-----------------------------|--------|---------|-----------------------------------|
+| security.encryption.enabled | bool   | false   | Enable encryption for stored data |
+| security.encryption.keyFile | string | ""      | Path to encryption key file       |
 
 Oba uses AES-256-GCM for encryption at rest. The key file must contain exactly 32 bytes (raw binary) or 64 hexadecimal characters.
 
@@ -228,9 +228,9 @@ Oba supports two ACL configuration methods:
 
 Use an external YAML file for ACL rules. This enables hot reload without server restart.
 
-| Parameter | Type   | Default | Description                          |
-|-----------|--------|---------|--------------------------------------|
-| aclFile   | string | ""      | Path to external ACL file            |
+| Parameter | Type   | Default | Description               |
+|-----------|--------|---------|---------------------------|
+| aclFile   | string | ""      | Path to external ACL file |
 
 ```yaml
 aclFile: "/etc/oba/acl.yaml"
@@ -262,19 +262,19 @@ oba reload acl
 
 ### Option 2: Inline ACL (No Hot Reload)
 
-| Parameter          | Type   | Default | Description                          |
-|--------------------|--------|---------|--------------------------------------|
-| acl.defaultPolicy  | string | "deny"  | Default policy: allow, deny          |
-| acl.rules          | array  | []      | List of ACL rules                    |
+| Parameter         | Type   | Default | Description                 |
+|-------------------|--------|---------|-----------------------------|
+| acl.defaultPolicy | string | "deny"  | Default policy: allow, deny |
+| acl.rules         | array  | []      | List of ACL rules           |
 
 ### ACL Rule Structure
 
-| Field      | Type     | Description                              |
-|------------|----------|------------------------------------------|
-| target     | string   | DN pattern or "*" for all entries        |
-| subject    | string   | Who: DN, "anonymous", "authenticated"    |
+| Field      | Type     | Description                                           |
+|------------|----------|-------------------------------------------------------|
+| target     | string   | DN pattern or "*" for all entries                     |
+| subject    | string   | Who: DN, "anonymous", "authenticated"                 |
 | rights     | []string | Operations: read, write, add, delete, search, compare |
-| attributes | []string | Specific attributes or "*" for all       |
+| attributes | []string | Specific attributes or "*" for all                    |
 
 Example:
 
@@ -367,15 +367,15 @@ Examples: `30s`, `5m`, `1h`, `90d`
 
 ## REST API Configuration
 
-| Parameter          | Type     | Default  | Description                          |
-|--------------------|----------|----------|--------------------------------------|
-| rest.enabled       | bool     | false    | Enable REST API                      |
-| rest.address       | string   | ":8080"  | HTTP listen address                  |
-| rest.tlsAddress    | string   | ""       | HTTPS listen address                 |
-| rest.jwtSecret     | string   | ""       | JWT secret for token signing         |
-| rest.tokenTTL      | duration | 24h      | JWT token validity period            |
-| rest.rateLimit     | int      | 100      | Requests per second per IP           |
-| rest.corsOrigins   | []string | ["*"]    | Allowed CORS origins                 |
+| Parameter        | Type     | Default | Description                  |
+|------------------|----------|---------|------------------------------|
+| rest.enabled     | bool     | false   | Enable REST API              |
+| rest.address     | string   | ":8080" | HTTP listen address          |
+| rest.tlsAddress  | string   | ""      | HTTPS listen address         |
+| rest.jwtSecret   | string   | ""      | JWT secret for token signing |
+| rest.tokenTTL    | duration | 24h     | JWT token validity period    |
+| rest.rateLimit   | int      | 100     | Requests per second per IP   |
+| rest.corsOrigins | []string | ["*"]   | Allowed CORS origins         |
 
 Example:
 

@@ -6,11 +6,11 @@ This guide covers backup strategies, procedures, and disaster recovery for Oba L
 
 Oba supports multiple backup methods:
 
-| Method      | Description                              | Use Case                    |
-|-------------|------------------------------------------|-----------------------------|
-| Native      | Binary backup of database files          | Fast backup and restore     |
-| LDIF        | LDAP Data Interchange Format export      | Portability, migration      |
-| Incremental | Changes since last backup                | Frequent backups, less space|
+| Method      | Description                         | Use Case                     |
+|-------------|-------------------------------------|------------------------------|
+| Native      | Binary backup of database files     | Fast backup and restore      |
+| LDIF        | LDAP Data Interchange Format export | Portability, migration       |
+| Incremental | Changes since last backup           | Frequent backups, less space |
 
 ## Backup Commands
 
@@ -333,12 +333,12 @@ rsync -avz /backup/oba/ backup-server:/backup/oba/
 
 ### Backup Retention Policy
 
-| Backup Type  | Retention Period | Storage Location |
-|--------------|------------------|------------------|
-| Daily        | 7 days           | Local            |
-| Weekly       | 4 weeks          | Local + Remote   |
-| Monthly      | 12 months        | Remote           |
-| Yearly       | 7 years          | Archive          |
+| Backup Type | Retention Period | Storage Location |
+|-------------|------------------|------------------|
+| Daily       | 7 days           | Local            |
+| Weekly      | 4 weeks          | Local + Remote   |
+| Monthly     | 12 months        | Remote           |
+| Yearly      | 7 years          | Archive          |
 
 ## Monitoring Backups
 

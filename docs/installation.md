@@ -10,11 +10,11 @@ Oba is a zero-dependency LDAP server written in pure Go. It uses only the Go sta
 
 ### Hardware Requirements
 
-| Component | Minimum    | Recommended    |
-|-----------|------------|----------------|
-| CPU       | 1 core     | 2+ cores       |
-| Memory    | 256 MB     | 1 GB+          |
-| Disk      | 100 MB     | 1 GB+ (for data)|
+| Component | Minimum | Recommended      |
+|-----------|---------|------------------|
+| CPU       | 1 core  | 2+ cores         |
+| Memory    | 256 MB  | 1 GB+            |
+| Disk      | 100 MB  | 1 GB+ (for data) |
 
 ### Software Requirements
 
@@ -24,13 +24,13 @@ Oba is a zero-dependency LDAP server written in pure Go. It uses only the Go sta
 
 ### Supported Platforms
 
-| Platform       | Architecture | Status     |
-|----------------|--------------|------------|
-| Linux          | amd64        | Supported  |
-| Linux          | arm64        | Supported  |
-| macOS          | amd64        | Supported  |
-| macOS          | arm64 (M1/M2)| Supported  |
-| Windows        | amd64        | Supported  |
+| Platform | Architecture  | Status    |
+|----------|---------------|-----------|
+| Linux    | amd64         | Supported |
+| Linux    | arm64         | Supported |
+| macOS    | amd64         | Supported |
+| macOS    | arm64 (M1/M2) | Supported |
+| Windows  | amd64         | Supported |
 
 ## Installation Methods
 
@@ -51,13 +51,13 @@ make build
 
 Available Makefile targets:
 
-| Target        | Description                  |
-|---------------|------------------------------|
-| `make build`  | Build the binary to bin/     |
-| `make clean`  | Remove build artifacts       |
-| `make test`   | Run all tests                |
-| `make bench`  | Run benchmarks               |
-| `make run`    | Build and run the server     |
+| Target       | Description              |
+|--------------|--------------------------|
+| `make build` | Build the binary to bin/ |
+| `make clean` | Remove build artifacts   |
+| `make test`  | Run all tests            |
+| `make bench` | Run benchmarks           |
+| `make run`   | Build and run the server |
 
 ### Building from Source (Manual)
 
