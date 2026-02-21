@@ -14,6 +14,7 @@ services:
       - ./docker-data:/var/lib/oba
     environment:
       - OBA_LOG_LEVEL=debug
+      - TZ=Europe/Istanbul
     command: ["serve", "--config", "/var/lib/oba/config.yaml"]
     restart: unless-stopped
 
@@ -25,6 +26,8 @@ services:
       - "3000:80"
     depends_on:
       - oba
+    environment:
+      - TZ=Europe/Istanbul
     restart: unless-stopped
 
   oba-dev:
