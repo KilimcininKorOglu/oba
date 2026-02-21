@@ -116,7 +116,7 @@ func TestNewServer(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	cfg := config.DefaultConfig()
-	cfg.Server.Address = "" // Disable plain listener
+	cfg.Server.Address = ""    // Disable plain listener
 	cfg.Server.TLSAddress = "" // Disable TLS listener
 	cfg.Storage.DataDir = tmpDir
 
@@ -192,7 +192,7 @@ func TestLDAPServer_StartStop(t *testing.T) {
 	// Find available ports
 	plainPort := findAvailablePort(t)
 	tmpDir := t.TempDir()
-	
+
 	cfg := config.DefaultConfig()
 	cfg.Server.Address = plainPort
 	cfg.Server.TLSAddress = "" // Disable TLS for this test
@@ -551,7 +551,7 @@ j80F/ATYaGPAEfH4dif9yev0BKDwSBnveJxvfpOb0w==
 // generateValidTestCert generates a valid self-signed certificate for testing
 func generateValidTestCert(t *testing.T) ([]byte, []byte) {
 	t.Helper()
-	
+
 	// Generate a proper RSA key pair
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {

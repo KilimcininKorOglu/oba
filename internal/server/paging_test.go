@@ -12,13 +12,13 @@ import (
 // TestParsePagedResultsControl tests parsing of PagedResultsControl.
 func TestParsePagedResultsControl(t *testing.T) {
 	tests := []struct {
-		name        string
-		control     ldap.Control
-		wantSize    int32
-		wantCookie  []byte
-		wantCrit    bool
-		wantNil     bool
-		wantErr     bool
+		name       string
+		control    ldap.Control
+		wantSize   int32
+		wantCookie []byte
+		wantCrit   bool
+		wantNil    bool
+		wantErr    bool
 	}{
 		{
 			name: "valid control with size and empty cookie",

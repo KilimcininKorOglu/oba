@@ -11,15 +11,15 @@ import (
 
 // Loader errors.
 var (
-	ErrFileNotFound    = errors.New("acl: file not found")
-	ErrInvalidYAML     = errors.New("acl: invalid YAML format")
-	ErrInvalidVersion  = errors.New("acl: invalid version")
-	ErrInvalidPolicy   = errors.New("acl: invalid default policy")
-	ErrInvalidRight    = errors.New("acl: invalid right")
-	ErrInvalidScope    = errors.New("acl: invalid scope")
-	ErrMissingTarget   = errors.New("acl: missing target")
-	ErrMissingSubject  = errors.New("acl: missing subject")
-	ErrMissingRights   = errors.New("acl: missing rights")
+	ErrFileNotFound   = errors.New("acl: file not found")
+	ErrInvalidYAML    = errors.New("acl: invalid YAML format")
+	ErrInvalidVersion = errors.New("acl: invalid version")
+	ErrInvalidPolicy  = errors.New("acl: invalid default policy")
+	ErrInvalidRight   = errors.New("acl: invalid right")
+	ErrInvalidScope   = errors.New("acl: invalid scope")
+	ErrMissingTarget  = errors.New("acl: missing target")
+	ErrMissingSubject = errors.New("acl: missing subject")
+	ErrMissingRights  = errors.New("acl: missing rights")
 )
 
 // FileConfig represents the ACL file structure.
@@ -138,7 +138,7 @@ func parseACLYAMLToFileConfig(data []byte) (*FileConfig, error) {
 			if strings.HasPrefix(trimmed, "- ") && indent <= 2 {
 				// Check if this is a new rule or a list item
 				rest := strings.TrimPrefix(trimmed, "- ")
-				
+
 				// If it contains ":" it's a new rule with inline key
 				if strings.Contains(rest, ":") && !strings.HasPrefix(rest, "[") {
 					// Save previous rule
@@ -153,7 +153,7 @@ func parseACLYAMLToFileConfig(data []byte) (*FileConfig, error) {
 					parseRuleKeyValue(currentRule, rest, &inAttributes, &inRights)
 					continue
 				}
-				
+
 				// It's a new rule without inline key
 				if currentRule != nil {
 					fc.Rules = append(fc.Rules, *currentRule)

@@ -32,13 +32,13 @@ const (
 
 // CompressWriter wraps an io.Writer and compresses data using LZ4-style compression.
 type CompressWriter struct {
-	w           io.Writer
-	buffer      []byte
-	bufferPos   int
-	hashTable   []int
-	written     int64
-	totalInput  int64
-	closed      bool
+	w          io.Writer
+	buffer     []byte
+	bufferPos  int
+	hashTable  []int
+	written    int64
+	totalInput int64
+	closed     bool
 }
 
 // NewCompressWriter creates a new compression writer.
@@ -204,7 +204,7 @@ func (cw *CompressWriter) hash4(data []byte) int {
 		return 0
 	}
 	v := binary.LittleEndian.Uint32(data)
-	return int((v * 2654435761) >> 18) & (HashTableSize - 1)
+	return int((v*2654435761)>>18) & (HashTableSize - 1)
 }
 
 // findMatchLength finds the length of a match.
@@ -303,12 +303,12 @@ func (cw *CompressWriter) encodeLiterals(dst, literals []byte) []byte {
 
 // DecompressReader wraps an io.Reader and decompresses LZ4-style compressed data.
 type DecompressReader struct {
-	r          io.Reader
-	buffer     []byte
-	bufferPos  int
-	bufferLen  int
-	totalRead  int64
-	eof        bool
+	r         io.Reader
+	buffer    []byte
+	bufferPos int
+	bufferLen int
+	totalRead int64
+	eof       bool
 }
 
 // NewDecompressReader creates a new decompression reader.

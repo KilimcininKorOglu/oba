@@ -20,12 +20,12 @@ const (
 
 // Errors returned by crypto operations.
 var (
-	ErrInvalidKey       = errors.New("invalid encryption key: must be 32 bytes")
-	ErrDecryptFailed    = errors.New("decryption failed: authentication error")
-	ErrInvalidNonce     = errors.New("invalid nonce: must be 12 bytes")
+	ErrInvalidKey        = errors.New("invalid encryption key: must be 32 bytes")
+	ErrDecryptFailed     = errors.New("decryption failed: authentication error")
+	ErrInvalidNonce      = errors.New("invalid nonce: must be 12 bytes")
 	ErrInvalidCiphertext = errors.New("invalid ciphertext: too short")
-	ErrKeyFileNotFound  = errors.New("encryption key file not found")
-	ErrInvalidKeyFormat = errors.New("invalid key format: must be 32 bytes or 64 hex chars")
+	ErrKeyFileNotFound   = errors.New("encryption key file not found")
+	ErrInvalidKeyFormat  = errors.New("invalid key format: must be 32 bytes or 64 hex chars")
 )
 
 // EncryptionKey holds the AES-256 key and cipher instance.

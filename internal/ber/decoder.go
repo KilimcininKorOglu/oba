@@ -87,7 +87,7 @@ func (d *BERDecoder) readBase128() (int, error) {
 		d.offset++
 
 		// Check for overflow before shifting
-		if result > (1<<24) {
+		if result > (1 << 24) {
 			// Prevent overflow for very large tag numbers
 			return 0, NewDecodeError(d.offset-1, "tag number overflow", nil)
 		}
@@ -157,11 +157,11 @@ func (d *BERDecoder) ReadBoolean() (bool, error) {
 
 	if class != ClassUniversal || constructed != TypePrimitive || number != TagBoolean {
 		return false, &TagMismatchError{
-			Offset:           startOffset,
-			ExpectedClass:    ClassUniversal,
-			ExpectedNumber:   TagBoolean,
-			ActualClass:      class,
-			ActualNumber:     number,
+			Offset:            startOffset,
+			ExpectedClass:     ClassUniversal,
+			ExpectedNumber:    TagBoolean,
+			ActualClass:       class,
+			ActualNumber:      number,
 			ActualConstructed: constructed,
 		}
 	}
@@ -201,11 +201,11 @@ func (d *BERDecoder) ReadInteger() (int64, error) {
 
 	if class != ClassUniversal || constructed != TypePrimitive || number != TagInteger {
 		return 0, &TagMismatchError{
-			Offset:           startOffset,
-			ExpectedClass:    ClassUniversal,
-			ExpectedNumber:   TagInteger,
-			ActualClass:      class,
-			ActualNumber:     number,
+			Offset:            startOffset,
+			ExpectedClass:     ClassUniversal,
+			ExpectedNumber:    TagInteger,
+			ActualClass:       class,
+			ActualNumber:      number,
 			ActualConstructed: constructed,
 		}
 	}
@@ -272,11 +272,11 @@ func (d *BERDecoder) ReadOctetString() ([]byte, error) {
 
 	if class != ClassUniversal || number != TagOctetString {
 		return nil, &TagMismatchError{
-			Offset:           startOffset,
-			ExpectedClass:    ClassUniversal,
-			ExpectedNumber:   TagOctetString,
-			ActualClass:      class,
-			ActualNumber:     number,
+			Offset:            startOffset,
+			ExpectedClass:     ClassUniversal,
+			ExpectedNumber:    TagOctetString,
+			ActualClass:       class,
+			ActualNumber:      number,
 			ActualConstructed: constructed,
 		}
 	}
@@ -318,11 +318,11 @@ func (d *BERDecoder) ReadEnumerated() (int64, error) {
 
 	if class != ClassUniversal || constructed != TypePrimitive || number != TagEnumerated {
 		return 0, &TagMismatchError{
-			Offset:           startOffset,
-			ExpectedClass:    ClassUniversal,
-			ExpectedNumber:   TagEnumerated,
-			ActualClass:      class,
-			ActualNumber:     number,
+			Offset:            startOffset,
+			ExpectedClass:     ClassUniversal,
+			ExpectedNumber:    TagEnumerated,
+			ActualClass:       class,
+			ActualNumber:      number,
 			ActualConstructed: constructed,
 		}
 	}
@@ -363,11 +363,11 @@ func (d *BERDecoder) ReadNull() error {
 
 	if class != ClassUniversal || constructed != TypePrimitive || number != TagNull {
 		return &TagMismatchError{
-			Offset:           startOffset,
-			ExpectedClass:    ClassUniversal,
-			ExpectedNumber:   TagNull,
-			ActualClass:      class,
-			ActualNumber:     number,
+			Offset:            startOffset,
+			ExpectedClass:     ClassUniversal,
+			ExpectedNumber:    TagNull,
+			ActualClass:       class,
+			ActualNumber:      number,
 			ActualConstructed: constructed,
 		}
 	}
@@ -466,11 +466,11 @@ func (d *BERDecoder) ReadTaggedValue() (tagNumber int, constructed bool, value [
 	// Verify it's context-specific
 	if class != ClassContextSpecific {
 		return 0, false, nil, &TagMismatchError{
-			Offset:           startOffset,
-			ExpectedClass:    ClassContextSpecific,
-			ExpectedNumber:   -1, // Any number
-			ActualClass:      class,
-			ActualNumber:     number,
+			Offset:            startOffset,
+			ExpectedClass:     ClassContextSpecific,
+			ExpectedNumber:    -1, // Any number
+			ActualClass:       class,
+			ActualNumber:      number,
 			ActualConstructed: constructedFlag,
 		}
 	}

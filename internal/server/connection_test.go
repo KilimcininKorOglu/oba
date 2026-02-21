@@ -117,14 +117,14 @@ func createUnbindRequestMessage(messageID int) []byte {
 func createSearchRequestMessage(messageID int, baseDN string) []byte {
 	// Create search request content
 	searchEncoder := ber.NewBEREncoder(256)
-	searchEncoder.WriteOctetString([]byte(baseDN))       // baseObject
-	searchEncoder.WriteEnumerated(0)                     // scope: baseObject
-	searchEncoder.WriteEnumerated(0)                     // derefAliases: neverDerefAliases
-	searchEncoder.WriteInteger(0)                        // sizeLimit
-	searchEncoder.WriteInteger(0)                        // timeLimit
-	searchEncoder.WriteBoolean(false)                    // typesOnly
+	searchEncoder.WriteOctetString([]byte(baseDN))                  // baseObject
+	searchEncoder.WriteEnumerated(0)                                // scope: baseObject
+	searchEncoder.WriteEnumerated(0)                                // derefAliases: neverDerefAliases
+	searchEncoder.WriteInteger(0)                                   // sizeLimit
+	searchEncoder.WriteInteger(0)                                   // timeLimit
+	searchEncoder.WriteBoolean(false)                               // typesOnly
 	searchEncoder.WriteTaggedValue(7, false, []byte("objectClass")) // present filter
-	attrSeqPos := searchEncoder.BeginSequence()          // attributes
+	attrSeqPos := searchEncoder.BeginSequence()                     // attributes
 	searchEncoder.EndSequence(attrSeqPos)
 	searchData := searchEncoder.Bytes()
 

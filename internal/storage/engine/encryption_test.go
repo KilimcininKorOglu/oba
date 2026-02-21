@@ -42,8 +42,8 @@ func TestObaDBEncryption(t *testing.T) {
 	entry := &storage.Entry{
 		DN: "cn=test,dc=example,dc=com",
 		Attributes: map[string][][]byte{
-			"cn":          {[]byte("test")},
-			"objectClass": {[]byte("person")},
+			"cn":           {[]byte("test")},
+			"objectClass":  {[]byte("person")},
 			"userPassword": {[]byte("secret123")},
 		},
 	}

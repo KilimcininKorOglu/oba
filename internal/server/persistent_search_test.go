@@ -11,7 +11,7 @@ func TestParsePersistentSearchControl(t *testing.T) {
 	// Create a valid Persistent Search Control value
 	encoder := ber.NewBEREncoder(32)
 	seqPos := encoder.BeginSequence()
-	encoder.WriteInteger(15) // changeTypes: all (1+2+4+8)
+	encoder.WriteInteger(15)   // changeTypes: all (1+2+4+8)
 	encoder.WriteBoolean(true) // changesOnly
 	encoder.WriteBoolean(true) // returnECs
 	encoder.EndSequence(seqPos)

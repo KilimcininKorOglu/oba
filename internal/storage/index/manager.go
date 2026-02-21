@@ -14,12 +14,12 @@ import (
 
 // Index Manager errors.
 var (
-	ErrIndexExists       = errors.New("index already exists")
-	ErrIndexNotFound     = errors.New("index not found")
-	ErrInvalidAttribute  = errors.New("invalid attribute name")
-	ErrManagerClosed     = errors.New("index manager is closed")
+	ErrIndexExists        = errors.New("index already exists")
+	ErrIndexNotFound      = errors.New("index not found")
+	ErrInvalidAttribute   = errors.New("invalid attribute name")
+	ErrManagerClosed      = errors.New("index manager is closed")
 	ErrInvalidPageManager = errors.New("invalid page manager")
-	ErrMetadataCorrupted = errors.New("index metadata corrupted")
+	ErrMetadataCorrupted  = errors.New("index metadata corrupted")
 )
 
 // Metadata page constants.

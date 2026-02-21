@@ -11,13 +11,13 @@ import (
 
 // CoW manager errors.
 var (
-	ErrCoWManagerClosed    = errors.New("CoW manager is closed")
-	ErrTransactionNil      = errors.New("transaction is nil")
+	ErrCoWManagerClosed     = errors.New("CoW manager is closed")
+	ErrTransactionNil       = errors.New("transaction is nil")
 	ErrTransactionNotActive = errors.New("transaction is not active")
-	ErrPageNotFound        = errors.New("page not found")
-	ErrCommitFailed        = errors.New("commit failed")
-	ErrRollbackFailed      = errors.New("rollback failed")
-	ErrWALWriteFailed      = errors.New("failed to write WAL record")
+	ErrPageNotFound         = errors.New("page not found")
+	ErrCommitFailed         = errors.New("commit failed")
+	ErrRollbackFailed       = errors.New("rollback failed")
+	ErrWALWriteFailed       = errors.New("failed to write WAL record")
 )
 
 // CoWManager implements copy-on-write semantics for page modifications.

@@ -8,10 +8,10 @@ import (
 
 // Errors returned by the encoder
 var (
-	ErrInvalidTagClass   = errors.New("ber: invalid tag class")
-	ErrInvalidTagNumber  = errors.New("ber: invalid tag number")
-	ErrLengthOverflow    = errors.New("ber: length value overflow")
-	ErrNegativeLength    = errors.New("ber: negative length not allowed")
+	ErrInvalidTagClass  = errors.New("ber: invalid tag class")
+	ErrInvalidTagNumber = errors.New("ber: invalid tag number")
+	ErrLengthOverflow   = errors.New("ber: length value overflow")
+	ErrNegativeLength   = errors.New("ber: negative length not allowed")
 )
 
 // BEREncoder encodes ASN.1 values using BER (Basic Encoding Rules).

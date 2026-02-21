@@ -44,11 +44,11 @@ func (s TxState) String() string {
 
 // RecoveryTxInfo holds information about a transaction during recovery.
 type RecoveryTxInfo struct {
-	TxID       uint64
-	State      TxState
-	FirstLSN   uint64   // First LSN of this transaction
-	LastLSN    uint64   // Last LSN of this transaction
-	UndoNextLSN uint64  // Next LSN to undo (for rollback)
+	TxID        uint64
+	State       TxState
+	FirstLSN    uint64 // First LSN of this transaction
+	LastLSN     uint64 // Last LSN of this transaction
+	UndoNextLSN uint64 // Next LSN to undo (for rollback)
 }
 
 // Recovery implements crash recovery using the WAL.

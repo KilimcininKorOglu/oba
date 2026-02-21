@@ -30,17 +30,17 @@ var defaultCipherSuites = []uint16{
 
 // TLS configuration errors.
 var (
-	ErrNoCertificate       = errors.New("no certificate provided")
-	ErrNoPrivateKey        = errors.New("no private key provided")
-	ErrCertKeyMismatch     = errors.New("certificate and private key do not match")
-	ErrInvalidTLSVersion   = errors.New("invalid TLS version")
-	ErrMinVersionTooHigh   = errors.New("minimum TLS version is higher than maximum")
-	ErrInvalidCipherSuite  = errors.New("invalid cipher suite")
-	ErrCertFileNotFound    = errors.New("certificate file not found")
-	ErrKeyFileNotFound     = errors.New("private key file not found")
-	ErrInvalidCertPEM      = errors.New("invalid certificate PEM data")
-	ErrInvalidKeyPEM       = errors.New("invalid private key PEM data")
-	ErrInvalidClientCAPEM  = errors.New("invalid client CA PEM data")
+	ErrNoCertificate      = errors.New("no certificate provided")
+	ErrNoPrivateKey       = errors.New("no private key provided")
+	ErrCertKeyMismatch    = errors.New("certificate and private key do not match")
+	ErrInvalidTLSVersion  = errors.New("invalid TLS version")
+	ErrMinVersionTooHigh  = errors.New("minimum TLS version is higher than maximum")
+	ErrInvalidCipherSuite = errors.New("invalid cipher suite")
+	ErrCertFileNotFound   = errors.New("certificate file not found")
+	ErrKeyFileNotFound    = errors.New("private key file not found")
+	ErrInvalidCertPEM     = errors.New("invalid certificate PEM data")
+	ErrInvalidKeyPEM      = errors.New("invalid private key PEM data")
+	ErrInvalidClientCAPEM = errors.New("invalid client CA PEM data")
 )
 
 // TLSConfig holds the TLS configuration options.

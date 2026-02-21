@@ -304,7 +304,7 @@ func (t *BPlusTree) Search(key []byte) ([]EntryRef, error) {
 
 	// Collect all matching entries (there might be duplicates)
 	var refs []EntryRef
-	
+
 	// Collect from current position to end of leaf
 	for i := idx; i < len(leaf.Keys); i++ {
 		if compareKeys(leaf.Keys[i], key) == 0 {
@@ -417,11 +417,11 @@ func (t *BPlusTree) findLeftmostLeaf() (*BPlusNode, error) {
 
 // TreeStats holds statistics about the B+ tree.
 type TreeStats struct {
-	Height       int
+	Height        int
 	InternalNodes int
-	LeafNodes    int
-	TotalKeys    int
-	TotalEntries int
+	LeafNodes     int
+	TotalKeys     int
+	TotalEntries  int
 }
 
 // Stats returns statistics about the tree.

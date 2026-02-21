@@ -302,11 +302,11 @@ func TestBPlusNodeGetChildForKey(t *testing.T) {
 		key      string
 		wantPage storage.PageID
 	}{
-		{"a", 100},  // Before 'm' -> Children[0]
-		{"m", 200},  // At 'm' (>= Keys[0], < Keys[1]) -> Children[1]
-		{"p", 200},  // Between 'm' and 't' -> Children[1]
-		{"t", 300},  // At 't' (>= Keys[1]) -> Children[2]
-		{"z", 300},  // After 't' -> Children[2]
+		{"a", 100}, // Before 'm' -> Children[0]
+		{"m", 200}, // At 'm' (>= Keys[0], < Keys[1]) -> Children[1]
+		{"p", 200}, // Between 'm' and 't' -> Children[1]
+		{"t", 300}, // At 't' (>= Keys[1]) -> Children[2]
+		{"z", 300}, // After 't' -> Children[2]
 	}
 
 	for _, tt := range tests {

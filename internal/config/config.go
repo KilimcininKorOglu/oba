@@ -112,10 +112,10 @@ type StorageConfig struct {
 
 // LogConfig holds logging configuration.
 type LogConfig struct {
-	Level      string         `yaml:"level"`
-	Format     string         `yaml:"format"`
-	Output     string         `yaml:"output"`
-	Store      LogStoreConfig `yaml:"store"`
+	Level  string         `yaml:"level"`
+	Format string         `yaml:"format"`
+	Output string         `yaml:"output"`
+	Store  LogStoreConfig `yaml:"store"`
 }
 
 // LogStoreConfig holds log storage configuration.
@@ -159,7 +159,7 @@ type RateLimitConfig struct {
 
 // ACLConfig holds access control list configuration.
 type ACLConfig struct {
-	DefaultPolicy string        `yaml:"defaultPolicy"`
+	DefaultPolicy string          `yaml:"defaultPolicy"`
 	Rules         []ACLRuleConfig `yaml:"rules"`
 }
 

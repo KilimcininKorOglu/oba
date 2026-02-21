@@ -12,11 +12,11 @@ import (
 
 // Snapshot errors.
 var (
-	ErrSnapshotNotFound   = errors.New("snapshot not found")
-	ErrSnapshotReleased   = errors.New("snapshot has been released")
-	ErrInvalidSnapshot    = errors.New("invalid snapshot")
-	ErrNilTxManager       = errors.New("transaction manager is nil")
-	ErrSnapshotInUse      = errors.New("snapshot is still in use")
+	ErrSnapshotNotFound = errors.New("snapshot not found")
+	ErrSnapshotReleased = errors.New("snapshot has been released")
+	ErrInvalidSnapshot  = errors.New("invalid snapshot")
+	ErrNilTxManager     = errors.New("transaction manager is nil")
+	ErrSnapshotInUse    = errors.New("snapshot is still in use")
 )
 
 // Snapshot represents a consistent view of the database at a specific point in time.

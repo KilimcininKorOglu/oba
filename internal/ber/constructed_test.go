@@ -500,7 +500,7 @@ func TestApplicationTags(t *testing.T) {
 
 	t.Run("ReadApplicationTagContents", func(t *testing.T) {
 		enc := NewBEREncoder(64)
-		pos := enc.WriteApplicationTag(1, true) // BindResponse
+		pos := enc.WriteApplicationTag(1, true)        // BindResponse
 		if err := enc.WriteEnumerated(0); err != nil { // resultCode = success
 			t.Fatalf("WriteEnumerated failed: %v", err)
 		}

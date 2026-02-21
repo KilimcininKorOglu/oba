@@ -474,13 +474,13 @@ func (vs *VersionStore) GarbageCollect(oldestActiveSnapshot uint64) int {
 
 // Stats returns statistics about the version store.
 type VersionStoreStats struct {
-	EntryCount        int
-	TotalVersions     int
-	ActiveWriters     int
-	AverageChainLen   float64
-	MaxChainLen       int
-	DeletedEntries    int
-	UncommittedCount  int
+	EntryCount       int
+	TotalVersions    int
+	ActiveWriters    int
+	AverageChainLen  float64
+	MaxChainLen      int
+	DeletedEntries   int
+	UncommittedCount int
 }
 
 // Stats returns current statistics about the version store.

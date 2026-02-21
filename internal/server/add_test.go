@@ -11,9 +11,9 @@ import (
 
 // mockAddBackend implements the AddBackend interface for testing.
 type mockAddBackend struct {
-	entries     map[string]*storage.Entry
-	getErr      error
-	addErr      error
+	entries map[string]*storage.Entry
+	getErr  error
+	addErr  error
 }
 
 func newMockAddBackend() *mockAddBackend {

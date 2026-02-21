@@ -340,9 +340,9 @@ func (e *Expiration) Status(warningPeriod time.Duration) ExpirationStatus {
 
 // ExpirationManager manages password expiration for multiple users.
 type ExpirationManager struct {
-	mu                sync.RWMutex
-	expirations       map[string]*Expiration // DN -> Expiration
-	defaultMaxAge     time.Duration
+	mu                 sync.RWMutex
+	expirations        map[string]*Expiration // DN -> Expiration
+	defaultMaxAge      time.Duration
 	defaultGraceLogins int
 }
 

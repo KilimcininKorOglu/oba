@@ -144,9 +144,9 @@ func main() {
 
 // simpleBackend is a minimal backend implementation for the example.
 type simpleBackend struct {
-	entries  map[string]*backend.Entry
-	rootDN   string
-	rootPW   string
+	entries map[string]*backend.Entry
+	rootDN  string
+	rootPW  string
 }
 
 func newSimpleBackend(cfg *config.Config) *simpleBackend {

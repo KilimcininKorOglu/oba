@@ -43,9 +43,9 @@ func (m *mockSearchBackend) addEntry(entry *storage.Entry) {
 // SearchByDN implements SearchBackend.SearchByDN for testing.
 func (m *mockSearchBackend) SearchByDN(baseDN string, scope storage.Scope) storage.Iterator {
 	normalizedBaseDN := normalizeDN(baseDN)
-	
+
 	var entries []*storage.Entry
-	
+
 	switch scope {
 	case storage.ScopeBase:
 		// Return only the base entry
@@ -71,7 +71,7 @@ func (m *mockSearchBackend) SearchByDN(baseDN string, scope storage.Scope) stora
 			}
 		}
 	}
-	
+
 	return &mockIterator{entries: entries, index: -1}
 }
 
@@ -82,16 +82,16 @@ func isImmediateChild(parentDN, childDN string) bool {
 		parts := strings.Split(childDN, ",")
 		return len(parts) == 1 && childDN != ""
 	}
-	
+
 	// childDN should end with ",parentDN" and have exactly one more component
 	suffix := "," + parentDN
 	if !strings.HasSuffix(childDN, suffix) {
 		return false
 	}
-	
+
 	// Get the prefix (the part before the parent DN)
 	prefix := strings.TrimSuffix(childDN, suffix)
-	
+
 	// The prefix should not contain any commas (single component)
 	return prefix != "" && !strings.Contains(prefix, ",")
 }
@@ -101,7 +101,7 @@ func isDescendant(parentDN, childDN string) bool {
 	if parentDN == "" {
 		return childDN != ""
 	}
-	
+
 	suffix := "," + parentDN
 	return strings.HasSuffix(childDN, suffix)
 }
@@ -151,14 +151,14 @@ func TestSearchHandlerImpl_Handle_BaseScope(t *testing.T) {
 	handler := NewSearchHandler(config)
 
 	tests := []struct {
-		name           string
-		baseDN         string
-		filter         *ldap.SearchFilter
-		attributes     []string
-		typesOnly      bool
-		expectedCode   ldap.ResultCode
-		expectedCount  int
-		checkEntry     func(t *testing.T, entries []*SearchEntry)
+		name          string
+		baseDN        string
+		filter        *ldap.SearchFilter
+		attributes    []string
+		typesOnly     bool
+		expectedCode  ldap.ResultCode
+		expectedCount int
+		checkEntry    func(t *testing.T, entries []*SearchEntry)
 	}{
 		{
 			name:          "base scope - entry exists, no filter",

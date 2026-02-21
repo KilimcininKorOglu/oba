@@ -16,24 +16,24 @@ func TestIsVersionVisibleUncommitted(t *testing.T) {
 	// CommitTS is 0 (uncommitted)
 
 	tests := []struct {
-		name        string
+		name         string
 		snapshotTxID uint64
-		wantVisible bool
+		wantVisible  bool
 	}{
 		{
-			name:        "visible to creating transaction",
+			name:         "visible to creating transaction",
 			snapshotTxID: 100,
-			wantVisible: true,
+			wantVisible:  true,
 		},
 		{
-			name:        "not visible to other transaction",
+			name:         "not visible to other transaction",
 			snapshotTxID: 101,
-			wantVisible: false,
+			wantVisible:  false,
 		},
 		{
-			name:        "not visible to transaction 0",
+			name:         "not visible to transaction 0",
 			snapshotTxID: 0,
-			wantVisible: false,
+			wantVisible:  false,
 		},
 	}
 
@@ -54,10 +54,10 @@ func TestIsVersionVisibleCommittedBeforeSnapshot(t *testing.T) {
 	version.Commit(150) // Committed at timestamp 150
 
 	tests := []struct {
-		name            string
-		snapshotTS      uint64
-		activeTxIDs     []uint64
-		wantVisible     bool
+		name        string
+		snapshotTS  uint64
+		activeTxIDs []uint64
+		wantVisible bool
 	}{
 		{
 			name:        "visible when snapshot after commit",
@@ -298,12 +298,12 @@ func TestVisibilityCheckerGetVisibleDataNoVisible(t *testing.T) {
 // TestCheckVisibilityWithReason tests detailed visibility checking.
 func TestCheckVisibilityWithReason(t *testing.T) {
 	tests := []struct {
-		name           string
-		setupVersion   func() *Version
-		snapshotTS     uint64
-		snapshotTxID   uint64
-		activeTxIDs    []uint64
-		wantVisible    bool
+		name               string
+		setupVersion       func() *Version
+		snapshotTS         uint64
+		snapshotTxID       uint64
+		activeTxIDs        []uint64
+		wantVisible        bool
 		wantReasonContains string
 	}{
 		{

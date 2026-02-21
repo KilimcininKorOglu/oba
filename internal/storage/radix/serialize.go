@@ -119,11 +119,11 @@ func (s *NodeSerializer) SerializeNode(node *Node, parentIndex uint16) ([]byte, 
 	if node.HasEntry {
 		flags |= 0x01
 	}
-	header[5] = flags                                               // Flags
+	header[5] = flags                                                // Flags
 	binary.LittleEndian.PutUint64(header[6:14], uint64(node.PageID)) // PageID
-	binary.LittleEndian.PutUint16(header[14:16], node.SlotID)       // SlotID
-	binary.LittleEndian.PutUint32(header[16:20], node.SubtreeCount) // SubtreeCount
-	binary.LittleEndian.PutUint16(header[20:22], parentIndex)       // ParentIndex
+	binary.LittleEndian.PutUint16(header[14:16], node.SlotID)        // SlotID
+	binary.LittleEndian.PutUint32(header[16:20], node.SubtreeCount)  // SubtreeCount
+	binary.LittleEndian.PutUint16(header[20:22], parentIndex)        // ParentIndex
 
 	// Serialize variable data (key + child entries)
 	varDataSize := len(node.Key) + childCount*ChildEntrySize

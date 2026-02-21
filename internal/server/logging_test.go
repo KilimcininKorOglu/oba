@@ -93,13 +93,14 @@ func (l *testLogger) log(level, msg string, keysAndValues ...interface{}) {
 	l.buf.WriteByte('\n')
 }
 
-func (l *testLogger) SetLevel(_ logging.Level)    {}
-func (l *testLogger) SetFormat(_ logging.Format)  {}
-func (l *testLogger) SetOutput(_ io.Writer)       {}
-func (l *testLogger) GetLevel() logging.Level     { return logging.LevelInfo }
-func (l *testLogger) GetFormat() logging.Format   { return logging.FormatJSON }
-func (l *testLogger) SetStore(_ *logging.LogStore) {}
-func (l *testLogger) GetStore() *logging.LogStore  { return nil }
+func (l *testLogger) SetLevel(_ logging.Level)           {}
+func (l *testLogger) SetFormat(_ logging.Format)         {}
+func (l *testLogger) SetOutput(_ io.Writer)              {}
+func (l *testLogger) GetLevel() logging.Level            { return logging.LevelInfo }
+func (l *testLogger) GetFormat() logging.Format          { return logging.FormatJSON }
+func (l *testLogger) SetStore(_ *logging.LogStore)       {}
+func (l *testLogger) GetStore() *logging.LogStore        { return nil }
+func (l *testLogger) CloseStore() error                  { return nil }
 func (l *testLogger) WithSource(_ string) logging.Logger { return l }
 func (l *testLogger) WithUser(_ string) logging.Logger   { return l }
 

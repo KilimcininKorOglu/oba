@@ -12,32 +12,32 @@ import (
 
 // Default options for PageManager.
 const (
-	DefaultPageSize       = PageSize
-	DefaultInitialPages   = 16
-	DefaultGrowthFactor   = 2
-	MinGrowthPages        = 8
+	DefaultPageSize     = PageSize
+	DefaultInitialPages = 16
+	DefaultGrowthFactor = 2
+	MinGrowthPages      = 8
 )
 
 // Errors for PageManager operations.
 var (
-	ErrFileNotOpen       = errors.New("file not open")
-	ErrInvalidPageID     = errors.New("invalid page ID")
-	ErrPageOutOfRange    = errors.New("page ID out of range")
-	ErrNoFreePages       = errors.New("no free pages available")
-	ErrPageAlreadyFree   = errors.New("page is already free")
-	ErrCannotFreeHeader  = errors.New("cannot free header page")
-	ErrFileClosed        = errors.New("page manager is closed")
-	ErrFileExists        = errors.New("file already exists")
-	ErrFileCorrupted     = errors.New("file is corrupted")
+	ErrFileNotOpen      = errors.New("file not open")
+	ErrInvalidPageID    = errors.New("invalid page ID")
+	ErrPageOutOfRange   = errors.New("page ID out of range")
+	ErrNoFreePages      = errors.New("no free pages available")
+	ErrPageAlreadyFree  = errors.New("page is already free")
+	ErrCannotFreeHeader = errors.New("cannot free header page")
+	ErrFileClosed       = errors.New("page manager is closed")
+	ErrFileExists       = errors.New("file already exists")
+	ErrFileCorrupted    = errors.New("file is corrupted")
 )
 
 // Options configures the PageManager.
 type Options struct {
-	PageSize      int    // Page size in bytes (default: 4096)
-	InitialPages  int    // Initial number of pages to allocate
-	CreateIfNew   bool   // Create file if it doesn't exist
-	ReadOnly      bool   // Open in read-only mode
-	SyncOnWrite   bool   // Sync to disk after each write
+	PageSize     int  // Page size in bytes (default: 4096)
+	InitialPages int  // Initial number of pages to allocate
+	CreateIfNew  bool // Create file if it doesn't exist
+	ReadOnly     bool // Open in read-only mode
+	SyncOnWrite  bool // Sync to disk after each write
 }
 
 // DefaultOptions returns the default PageManager options.
@@ -53,16 +53,16 @@ func DefaultOptions() Options {
 
 // PageManager handles page allocation, deallocation, and I/O operations.
 type PageManager struct {
-	file       *os.File
-	header     *FileHeader
-	pageSize   int
-	totalPages uint64
-	freeList   *FreeList
-	mu         sync.RWMutex
-	path       string
-	readOnly   bool
+	file        *os.File
+	header      *FileHeader
+	pageSize    int
+	totalPages  uint64
+	freeList    *FreeList
+	mu          sync.RWMutex
+	path        string
+	readOnly    bool
 	syncOnWrite bool
-	closed     bool
+	closed      bool
 }
 
 // OpenPageManager opens or creates a page manager for the given file path.
@@ -496,13 +496,13 @@ func (pm *PageManager) ReadPages(ids []PageID) ([]*Page, error) {
 	}
 
 	pages := make([]*Page, len(ids))
-	
+
 	// Read all pages
 	for i, id := range ids {
 		if id == 0 {
 			continue // Skip invalid IDs
 		}
-		
+
 		page, err := pm.readPageInternal(id)
 		if err != nil {
 			continue // Skip failed reads

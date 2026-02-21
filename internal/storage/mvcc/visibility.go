@@ -199,11 +199,11 @@ func CheckVisibilityWithReason(version *Version, snapshot *Snapshot) VisibilityR
 
 // VisibilityStats tracks visibility check statistics for monitoring.
 type VisibilityStats struct {
-	TotalChecks           uint64
-	VisibleCount          uint64
-	InvisibleUncommitted  uint64
-	InvisibleFuture       uint64
-	InvisibleActiveTx     uint64
+	TotalChecks          uint64
+	VisibleCount         uint64
+	InvisibleUncommitted uint64
+	InvisibleFuture      uint64
+	InvisibleActiveTx    uint64
 }
 
 // TrackedVisibilityChecker wraps VisibilityChecker with statistics tracking.

@@ -19,13 +19,13 @@ import (
 
 // File names for ObaDB storage.
 const (
-	DataFileName        = "data.oba"
-	IndexFileName       = "index.oba"
-	WALFileName         = "wal.oba"
-	CacheDir            = "cache"
-	RadixCacheFileName  = "radix.cache"
-	BTreeCacheFileName  = "btree.cache"
-	EntryCacheFileName  = "entry.cache"
+	DataFileName       = "data.oba"
+	IndexFileName      = "index.oba"
+	WALFileName        = "wal.oba"
+	CacheDir           = "cache"
+	RadixCacheFileName = "radix.cache"
+	BTreeCacheFileName = "btree.cache"
+	EntryCacheFileName = "entry.cache"
 )
 
 // ObaDB errors.

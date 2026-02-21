@@ -10,9 +10,9 @@ import (
 
 // Checkpoint errors.
 var (
-	ErrCheckpointFailed    = errors.New("checkpoint failed")
+	ErrCheckpointFailed     = errors.New("checkpoint failed")
 	ErrCheckpointInProgress = errors.New("checkpoint is already in progress")
-	ErrNoActiveCheckpoint  = errors.New("no active checkpoint")
+	ErrNoActiveCheckpoint   = errors.New("no active checkpoint")
 )
 
 // CheckpointData contains the data stored in a checkpoint record.

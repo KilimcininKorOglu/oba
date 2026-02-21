@@ -591,13 +591,13 @@ func TestLDAPSListener_TLSVersions(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		serverMin      uint16
-		serverMax      uint16
-		clientMin      uint16
-		clientMax      uint16
-		expectVersion  uint16
-		expectError    bool
+		name          string
+		serverMin     uint16
+		serverMax     uint16
+		clientMin     uint16
+		clientMax     uint16
+		expectVersion uint16
+		expectError   bool
 	}{
 		{
 			name:          "TLS 1.2 only",

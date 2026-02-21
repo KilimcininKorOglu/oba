@@ -66,16 +66,16 @@ func (d DerefAliases) String() string {
 
 // Filter tag numbers (context-specific) per RFC 4511
 const (
-	FilterTagAnd             = 0  // [0] SET OF filter
-	FilterTagOr              = 1  // [1] SET OF filter
-	FilterTagNot             = 2  // [2] Filter
-	FilterTagEquality        = 3  // [3] AttributeValueAssertion
-	FilterTagSubstrings      = 4  // [4] SubstringFilter
-	FilterTagGreaterOrEqual  = 5  // [5] AttributeValueAssertion
-	FilterTagLessOrEqual     = 6  // [6] AttributeValueAssertion
-	FilterTagPresent         = 7  // [7] AttributeDescription
-	FilterTagApproxMatch     = 8  // [8] AttributeValueAssertion
-	FilterTagExtensibleMatch = 9  // [9] MatchingRuleAssertion
+	FilterTagAnd             = 0 // [0] SET OF filter
+	FilterTagOr              = 1 // [1] SET OF filter
+	FilterTagNot             = 2 // [2] Filter
+	FilterTagEquality        = 3 // [3] AttributeValueAssertion
+	FilterTagSubstrings      = 4 // [4] SubstringFilter
+	FilterTagGreaterOrEqual  = 5 // [5] AttributeValueAssertion
+	FilterTagLessOrEqual     = 6 // [6] AttributeValueAssertion
+	FilterTagPresent         = 7 // [7] AttributeDescription
+	FilterTagApproxMatch     = 8 // [8] AttributeValueAssertion
+	FilterTagExtensibleMatch = 9 // [9] MatchingRuleAssertion
 )
 
 // Substring filter component tags

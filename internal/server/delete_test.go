@@ -11,11 +11,11 @@ import (
 
 // mockDeleteBackend implements the DeleteBackend interface for testing.
 type mockDeleteBackend struct {
-	entries      map[string]*storage.Entry
-	children     map[string]bool
-	getErr       error
-	deleteErr    error
-	hasChildErr  error
+	entries     map[string]*storage.Entry
+	children    map[string]bool
+	getErr      error
+	deleteErr   error
+	hasChildErr error
 }
 
 func newMockDeleteBackend() *mockDeleteBackend {
@@ -71,11 +71,11 @@ func (m *mockDeleteBackend) setHasChildren(dn string, hasChildren bool) {
 // TestDeleteHandlerImpl_Handle tests the delete handler.
 func TestDeleteHandlerImpl_Handle(t *testing.T) {
 	tests := []struct {
-		name           string
-		setupBackend   func(*mockDeleteBackend)
-		dn             string
-		expectedCode   ldap.ResultCode
-		expectedMsg    string
+		name         string
+		setupBackend func(*mockDeleteBackend)
+		dn           string
+		expectedCode ldap.ResultCode
+		expectedMsg  string
 	}{
 		{
 			name: "successful delete",

@@ -115,13 +115,13 @@ func TestStrictSecurityPolicy(t *testing.T) {
 
 func TestSecurityEnforcerCheckTLS(t *testing.T) {
 	tests := []struct {
-		name        string
-		policy      *SecurityPolicy
-		isTLS       bool
-		tlsVersion  uint16
-		cipherSuite uint16
+		name          string
+		policy        *SecurityPolicy
+		isTLS         bool
+		tlsVersion    uint16
+		cipherSuite   uint16
 		hasClientCert bool
-		wantErr     error
+		wantErr       error
 	}{
 		{
 			name:    "no TLS required, no TLS connection",

@@ -8,11 +8,11 @@ import (
 
 // Buffer pool errors.
 var (
-	ErrBufferPoolFull     = errors.New("buffer pool is full and no pages can be evicted")
-	ErrPageNotFound       = errors.New("page not found in buffer pool")
-	ErrPagePinned         = errors.New("page is pinned and cannot be evicted")
-	ErrInvalidCapacity    = errors.New("buffer pool capacity must be positive")
-	ErrNegativePinCount   = errors.New("pin count cannot be negative")
+	ErrBufferPoolFull   = errors.New("buffer pool is full and no pages can be evicted")
+	ErrPageNotFound     = errors.New("page not found in buffer pool")
+	ErrPagePinned       = errors.New("page is pinned and cannot be evicted")
+	ErrInvalidCapacity  = errors.New("buffer pool capacity must be positive")
+	ErrNegativePinCount = errors.New("pin count cannot be negative")
 )
 
 // BufferPage represents a page cached in the buffer pool.

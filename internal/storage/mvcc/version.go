@@ -212,10 +212,11 @@ func (v *Version) GetLocation() (storage.PageID, uint16) {
 //   - Visible only to the transaction that created it (txID == snapshot)
 //
 // 2. If the version is committed (CommitTS > 0):
+//
 //   - Visible if CommitTS <= snapshot
 //
-// 3. Deleted versions are visible (to indicate the entry was deleted)
-//    but GetVisible will return an error for deleted entries.
+//     3. Deleted versions are visible (to indicate the entry was deleted)
+//     but GetVisible will return an error for deleted entries.
 func (v *Version) IsVisibleTo(snapshot uint64, activeTxID uint64) bool {
 	v.mu.RLock()
 	defer v.mu.RUnlock()

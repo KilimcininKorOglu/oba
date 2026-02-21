@@ -13,7 +13,7 @@ import (
 
 // Persistent Search Control OID (draft-ietf-ldapext-psearch)
 const (
-	PersistentSearchOID      = "2.16.840.1.113730.3.4.3"
+	PersistentSearchOID        = "2.16.840.1.113730.3.4.3"
 	EntryChangeNotificationOID = "2.16.840.1.113730.3.4.7"
 )
 
@@ -26,11 +26,12 @@ const (
 )
 
 // PersistentSearchControl represents the Persistent Search Control.
-// PersistentSearch ::= SEQUENCE {
-//     changeTypes INTEGER,
-//     changesOnly BOOLEAN,
-//     returnECs   BOOLEAN
-// }
+//
+//	PersistentSearch ::= SEQUENCE {
+//	    changeTypes INTEGER,
+//	    changesOnly BOOLEAN,
+//	    returnECs   BOOLEAN
+//	}
 type PersistentSearchControl struct {
 	ChangeTypes int  // Bitmask: 1=add, 2=delete, 4=modify, 8=modDN
 	ChangesOnly bool // If true, only return changes (not initial entries)
@@ -98,11 +99,12 @@ func FindPersistentSearchControl(controls []ldap.Control) (*PersistentSearchCont
 }
 
 // EntryChangeNotification represents the Entry Change Notification control.
-// EntryChangeNotification ::= SEQUENCE {
-//     changeType ENUMERATED { add(1), delete(2), modify(4), modDN(8) },
-//     previousDN LDAPDN OPTIONAL,
-//     changeNumber INTEGER OPTIONAL
-// }
+//
+//	EntryChangeNotification ::= SEQUENCE {
+//	    changeType ENUMERATED { add(1), delete(2), modify(4), modDN(8) },
+//	    previousDN LDAPDN OPTIONAL,
+//	    changeNumber INTEGER OPTIONAL
+//	}
 type EntryChangeNotification struct {
 	ChangeType   int
 	PreviousDN   string // Only for modDN

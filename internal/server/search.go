@@ -62,12 +62,12 @@ func NewSearchHandler(config *SearchConfig) *SearchHandlerImpl {
 	if config == nil {
 		config = NewSearchConfig()
 	}
-	
+
 	handler := &SearchHandlerImpl{
 		config:    config,
 		evaluator: filter.NewEvaluator(nil),
 	}
-	
+
 	// Initialize searchers if SearchBackend is available
 	if config.SearchBackend != nil {
 		handler.oneLevelSearcher = NewOneLevelSearcher(config.SearchBackend)
@@ -76,7 +76,7 @@ func NewSearchHandler(config *SearchConfig) *SearchHandlerImpl {
 		handler.oneLevelSearcher = NewOneLevelSearcher(sb)
 		handler.subtreeSearcher = NewSubtreeSearcher(sb)
 	}
-	
+
 	return handler
 }
 
@@ -405,15 +405,15 @@ func selectAttributes(entry *storage.Entry, requestedAttrs []string) map[string]
 func isOperationalAttribute(name string) bool {
 	// List of common operational attributes
 	operationalAttrs := map[string]bool{
-		"createtimestamp":    true,
-		"modifytimestamp":    true,
-		"creatorsname":       true,
-		"modifiersname":      true,
-		"entrydn":            true,
-		"entryuuid":          true,
-		"subschemasubentry":  true,
-		"hassubordinates":    true,
-		"numsubordinates":    true,
+		"createtimestamp":       true,
+		"modifytimestamp":       true,
+		"creatorsname":          true,
+		"modifiersname":         true,
+		"entrydn":               true,
+		"entryuuid":             true,
+		"subschemasubentry":     true,
+		"hassubordinates":       true,
+		"numsubordinates":       true,
 		"structuralobjectclass": true,
 	}
 

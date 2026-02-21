@@ -110,6 +110,8 @@ type Logger interface {
 	SetStore(store *LogStore)
 	// GetStore returns the log store.
 	GetStore() *LogStore
+	// CloseStore closes the log store if it exists.
+	CloseStore() error
 }
 
 // logger is the default implementation of Logger.
@@ -323,6 +325,18 @@ func (l *logger) GetStore() *LogStore {
 	return l.store
 }
 
+// CloseStore closes the log store if it exists.
+func (l *logger) CloseStore() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.store != nil {
+		err := l.store.Close()
+		l.store = nil
+		return err
+	}
+	return nil
+}
+
 // clone creates a copy of the logger.
 func (l *logger) clone() *logger {
 	newFields := make(map[string]interface{}, len(l.fields))
@@ -442,3 +456,4 @@ func (n *nopLogger) GetLevel() Level                    { return LevelInfo }
 func (n *nopLogger) GetFormat() Format                  { return FormatText }
 func (n *nopLogger) SetStore(_ *LogStore)               {}
 func (n *nopLogger) GetStore() *LogStore                { return nil }
+func (n *nopLogger) CloseStore() error                  { return nil }

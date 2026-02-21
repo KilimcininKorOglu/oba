@@ -290,7 +290,7 @@ func (o *Optimizer) optimizeRange(filter *Filter) *QueryPlan {
 			attr,
 			index.IndexEquality,
 			filter.Value,
-			filter, // Post-filter to verify range condition
+			filter,            // Post-filter to verify range condition
 			CostIndexLookup*2, // Range scans are more expensive
 			filter,
 		)

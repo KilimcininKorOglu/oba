@@ -10,12 +10,12 @@ import (
 // If the key is not found, returns ErrKeyNotFound.
 //
 // Algorithm:
-// 1. Find the leaf node containing the key
-// 2. Remove the key-value pair
-// 3. If the leaf underflows (< 50% full):
-//    a. Try to borrow from a sibling
-//    b. If borrowing fails, merge with a sibling
-// 4. Propagate changes up to the parent
+//  1. Find the leaf node containing the key
+//  2. Remove the key-value pair
+//  3. If the leaf underflows (< 50% full):
+//     a. Try to borrow from a sibling
+//     b. If borrowing fails, merge with a sibling
+//  4. Propagate changes up to the parent
 func (t *BPlusTree) Delete(key []byte, ref EntryRef) error {
 	if len(key) == 0 {
 		return ErrEmptyKey

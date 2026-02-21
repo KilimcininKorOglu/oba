@@ -132,23 +132,23 @@ func IsOperationalAttribute(name string) bool {
 		"modifytimestamp": true,
 
 		// Creator/modifier
-		"creatorsname": true,
+		"creatorsname":  true,
 		"modifiersname": true,
 
 		// Entry metadata
-		"entrydn":            true,
-		"entryuuid":          true,
-		"subschemasubentry":  true,
-		"hassubordinates":    true,
-		"numsubordinates":    true,
+		"entrydn":               true,
+		"entryuuid":             true,
+		"subschemasubentry":     true,
+		"hassubordinates":       true,
+		"numsubordinates":       true,
 		"structuralobjectclass": true,
 
 		// DSA-specific
-		"namingcontexts":       true,
-		"supportedcontrol":     true,
-		"supportedextension":   true,
-		"supportedfeatures":    true,
-		"supportedldapversion": true,
+		"namingcontexts":          true,
+		"supportedcontrol":        true,
+		"supportedextension":      true,
+		"supportedfeatures":       true,
+		"supportedldapversion":    true,
 		"supportedsaslmechanisms": true,
 
 		// Password policy

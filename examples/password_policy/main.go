@@ -50,13 +50,13 @@ func main() {
 
 	// Test various passwords
 	testPasswords := []string{
-		"short",           // Too short
-		"alllowercase",    // No uppercase
-		"ALLUPPERCASE",    // No lowercase
-		"NoDigitsHere!",   // No digit
-		"NoSpecial123",    // No special character
-		"Valid@Pass123",   // Valid password
-		"Another$ecure1",  // Valid password
+		"short",          // Too short
+		"alllowercase",   // No uppercase
+		"ALLUPPERCASE",   // No lowercase
+		"NoDigitsHere!",  // No digit
+		"NoSpecial123",   // No special character
+		"Valid@Pass123",  // Valid password
+		"Another$ecure1", // Valid password
 	}
 
 	fmt.Println("Password Validation:")

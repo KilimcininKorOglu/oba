@@ -63,11 +63,11 @@ func NewDecodeError(offset int, message string, err error) *DecodeError {
 
 // TagMismatchError provides detailed information about a tag mismatch.
 type TagMismatchError struct {
-	Offset           int
-	ExpectedClass    int
-	ExpectedNumber   int
-	ActualClass      int
-	ActualNumber     int
+	Offset            int
+	ExpectedClass     int
+	ExpectedNumber    int
+	ActualClass       int
+	ActualNumber      int
 	ActualConstructed int
 }
 

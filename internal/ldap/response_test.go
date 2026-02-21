@@ -620,9 +620,9 @@ func TestSearchResultEntry_EncodeRoundTrip(t *testing.T) {
 
 func TestAllResponseTypes_CanBeWrappedInLDAPMessage(t *testing.T) {
 	tests := []struct {
-		name    string
-		encode  func() ([]byte, error)
-		appTag  int
+		name   string
+		encode func() ([]byte, error)
+		appTag int
 	}{
 		{
 			name: "BindResponse",

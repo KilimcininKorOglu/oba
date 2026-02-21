@@ -24,7 +24,7 @@ func TestAttributeUsageString(t *testing.T) {
 
 func TestAttributeUsageIsOperational(t *testing.T) {
 	tests := []struct {
-		usage      AttributeUsage
+		usage       AttributeUsage
 		operational bool
 	}{
 		{UserApplications, false},

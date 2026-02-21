@@ -23,9 +23,9 @@ type ACLRuleJSON struct {
 
 // ACLConfigJSON represents ACL configuration in JSON format.
 type ACLConfigJSON struct {
-	DefaultPolicy string         `json:"defaultPolicy"`
-	Rules         []ACLRuleJSON  `json:"rules"`
-	Stats         *ACLStatsJSON  `json:"stats,omitempty"`
+	DefaultPolicy string        `json:"defaultPolicy"`
+	Rules         []ACLRuleJSON `json:"rules"`
+	Stats         *ACLStatsJSON `json:"stats,omitempty"`
 }
 
 // ACLStatsJSON represents ACL statistics.

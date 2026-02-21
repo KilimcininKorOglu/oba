@@ -145,6 +145,7 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 		})
 		if err != nil {
 			db.Close()
+			cancel()
 			return nil, fmt.Errorf("failed to load ACL file: %w", err)
 		}
 		logger.Info("ACL loaded from file", "file", cfg.ACLFile)
@@ -157,6 +158,7 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 		})
 		if err != nil {
 			db.Close()
+			cancel()
 			return nil, fmt.Errorf("failed to create ACL watcher: %w", err)
 		}
 	} else if len(cfg.ACL.Rules) > 0 {
@@ -169,6 +171,7 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 		})
 		if err != nil {
 			db.Close()
+			cancel()
 			return nil, fmt.Errorf("failed to create ACL manager: %w", err)
 		}
 		logger.Info("ACL loaded from config", "rules", len(cfg.ACL.Rules))
@@ -535,6 +538,10 @@ func (s *LDAPServer) Stop(ctx context.Context) error {
 
 	select {
 	case <-done:
+		// Close log store first to flush pending writes
+		if s.logger != nil {
+			s.logger.CloseStore()
+		}
 		// Close storage engine
 		if s.engine != nil {
 			s.engine.Close()
@@ -542,6 +549,10 @@ func (s *LDAPServer) Stop(ctx context.Context) error {
 		s.logger.Info("server stopped gracefully")
 		return nil
 	case <-ctx.Done():
+		// Close log store first to flush pending writes
+		if s.logger != nil {
+			s.logger.CloseStore()
+		}
 		// Close storage engine even on timeout
 		if s.engine != nil {
 			s.engine.Close()

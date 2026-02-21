@@ -11,14 +11,14 @@ import (
 
 // Transaction manager errors.
 var (
-	ErrTxNotFound      = errors.New("transaction not found")
-	ErrTxNotActive     = errors.New("transaction is not active")
-	ErrTxAlreadyEnded  = errors.New("transaction has already ended")
-	ErrWALWriteFailed  = errors.New("failed to write WAL record")
-	ErrWALSyncFailed   = errors.New("failed to sync WAL")
-	ErrWriteConflict   = errors.New("write conflict detected")
-	ErrNilWAL          = errors.New("WAL is nil")
-	ErrNilTransaction  = errors.New("transaction is nil")
+	ErrTxNotFound     = errors.New("transaction not found")
+	ErrTxNotActive    = errors.New("transaction is not active")
+	ErrTxAlreadyEnded = errors.New("transaction has already ended")
+	ErrWALWriteFailed = errors.New("failed to write WAL record")
+	ErrWALSyncFailed  = errors.New("failed to sync WAL")
+	ErrWriteConflict  = errors.New("write conflict detected")
+	ErrNilWAL         = errors.New("WAL is nil")
+	ErrNilTransaction = errors.New("transaction is nil")
 )
 
 // TxManager manages transaction lifecycle: begin, commit, and rollback.

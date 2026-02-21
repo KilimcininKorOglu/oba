@@ -171,8 +171,8 @@ func (h *History) Clone() *History {
 
 // HistoryManager manages password histories for multiple users.
 type HistoryManager struct {
-	mu            sync.RWMutex
-	histories     map[string]*History // DN -> History
+	mu              sync.RWMutex
+	histories       map[string]*History // DN -> History
 	defaultMaxCount int
 }
 

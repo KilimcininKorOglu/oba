@@ -61,8 +61,8 @@ type Filter struct {
 	Type      FilterType
 	Attribute string
 	Value     []byte
-	Children  []*Filter       // For AND/OR filters
-	Child     *Filter         // For NOT filter
+	Children  []*Filter        // For AND/OR filters
+	Child     *Filter          // For NOT filter
 	Substring *SubstringFilter // For substring filters
 }
 

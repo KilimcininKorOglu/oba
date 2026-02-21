@@ -51,12 +51,12 @@ func TestBERDecoder_SetData(t *testing.T) {
 
 func TestBERDecoder_ReadTag(t *testing.T) {
 	tests := []struct {
-		name        string
-		data        []byte
-		wantClass   int
-		wantConstr  int
-		wantNumber  int
-		wantErr     bool
+		name       string
+		data       []byte
+		wantClass  int
+		wantConstr int
+		wantNumber int
+		wantErr    bool
 	}{
 		// Universal class tags
 		{
@@ -945,12 +945,12 @@ func TestBERDecoder_ReadRawValue(t *testing.T) {
 
 func TestBERDecoder_ReadTaggedValue(t *testing.T) {
 	tests := []struct {
-		name          string
-		data          []byte
-		wantTag       int
-		wantConstr    bool
-		wantValue     []byte
-		wantErr       bool
+		name       string
+		data       []byte
+		wantTag    int
+		wantConstr bool
+		wantValue  []byte
+		wantErr    bool
 	}{
 		{
 			name:       "context tag 0 primitive",
@@ -1306,11 +1306,11 @@ func TestDecodeError_NoWrapped(t *testing.T) {
 
 func TestTagMismatchError(t *testing.T) {
 	err := &TagMismatchError{
-		Offset:           10,
-		ExpectedClass:    ClassUniversal,
-		ExpectedNumber:   TagInteger,
-		ActualClass:      ClassUniversal,
-		ActualNumber:     TagBoolean,
+		Offset:            10,
+		ExpectedClass:     ClassUniversal,
+		ExpectedNumber:    TagInteger,
+		ActualClass:       ClassUniversal,
+		ActualNumber:      TagBoolean,
 		ActualConstructed: TypePrimitive,
 	}
 

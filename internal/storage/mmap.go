@@ -9,14 +9,14 @@ import (
 
 // MmapManager errors.
 var (
-	ErrMmapNotMapped     = errors.New("file is not memory mapped")
-	ErrMmapAlreadyMapped = errors.New("file is already memory mapped")
-	ErrMmapInvalidSize   = errors.New("invalid mmap size")
-	ErrMmapClosed        = errors.New("mmap manager is closed")
-	ErrMmapReadOnly      = errors.New("mmap is read-only")
+	ErrMmapNotMapped      = errors.New("file is not memory mapped")
+	ErrMmapAlreadyMapped  = errors.New("file is already memory mapped")
+	ErrMmapInvalidSize    = errors.New("invalid mmap size")
+	ErrMmapClosed         = errors.New("mmap manager is closed")
+	ErrMmapReadOnly       = errors.New("mmap is read-only")
 	ErrMmapPageOutOfRange = errors.New("page ID out of mmap range")
-	ErrMmapRemapFailed   = errors.New("failed to remap file")
-	ErrMmapSyncFailed    = errors.New("failed to sync mmap")
+	ErrMmapRemapFailed    = errors.New("failed to remap file")
+	ErrMmapSyncFailed     = errors.New("failed to sync mmap")
 )
 
 // MmapManager provides memory-mapped file I/O for zero-copy reads.
@@ -24,10 +24,10 @@ var (
 // without explicit read/write system calls.
 type MmapManager struct {
 	file     *os.File
-	data     []byte      // mmap'd region
-	size     int64       // current mapped size
-	pageSize int         // page size for alignment
-	readOnly bool        // whether mapping is read-only
+	data     []byte // mmap'd region
+	size     int64  // current mapped size
+	pageSize int    // page size for alignment
+	readOnly bool   // whether mapping is read-only
 	mu       sync.RWMutex
 	closed   bool
 }

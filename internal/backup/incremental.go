@@ -33,12 +33,12 @@ var IncrementalMagic = [4]byte{IncrementalMagicByte0, IncrementalMagicByte1, Inc
 
 // Incremental backup errors.
 var (
-	ErrNoBaseBackup         = errors.New("no base backup found, run full backup first")
+	ErrNoBaseBackup            = errors.New("no base backup found, run full backup first")
 	ErrInvalidIncrementalMagic = errors.New("invalid incremental backup magic number")
-	ErrIncrementalCorrupted = errors.New("incremental backup is corrupted")
-	ErrWALNotAvailable      = errors.New("WAL is not available")
-	ErrMetadataNotFound     = errors.New("backup metadata not found")
-	ErrInvalidMetadata      = errors.New("invalid backup metadata")
+	ErrIncrementalCorrupted    = errors.New("incremental backup is corrupted")
+	ErrWALNotAvailable         = errors.New("WAL is not available")
+	ErrMetadataNotFound        = errors.New("backup metadata not found")
+	ErrInvalidMetadata         = errors.New("invalid backup metadata")
 )
 
 // IncrementalHeader represents the header of an incremental backup file.

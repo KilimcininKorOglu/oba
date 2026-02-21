@@ -7,11 +7,11 @@ import (
 
 // Parser errors
 var (
-	ErrInvalidObjectClass  = errors.New("invalid object class definition")
+	ErrInvalidObjectClass   = errors.New("invalid object class definition")
 	ErrInvalidAttributeType = errors.New("invalid attribute type definition")
-	ErrMissingOID          = errors.New("missing OID in definition")
-	ErrUnterminatedString  = errors.New("unterminated quoted string")
-	ErrUnterminatedParens  = errors.New("unterminated parentheses")
+	ErrMissingOID           = errors.New("missing OID in definition")
+	ErrUnterminatedString   = errors.New("unterminated quoted string")
+	ErrUnterminatedParens   = errors.New("unterminated parentheses")
 )
 
 // parseObjectClass parses an LDAP object class definition string.
