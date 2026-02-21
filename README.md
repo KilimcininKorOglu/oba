@@ -182,12 +182,12 @@ oba/
 ```bash
 make test        # Run tests
 make test-race   # Run tests with race detector
-make bench       # Run benchmarks
+make lint        # Run fmt and vet
 make build       # Build binary
-make docker      # Build Docker image
-make docker-run  # Run server in Docker
-make docker-stop # Stop Docker container
-make docker-logs # View container logs
+make up          # Build and start all services
+make down        # Stop all services
+make restart     # Restart all services
+make logs        # View server logs
 ```
 
 ## License
