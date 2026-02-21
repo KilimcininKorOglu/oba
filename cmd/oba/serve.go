@@ -79,10 +79,7 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 		Output: cfg.Logging.Output,
 	})
 
-	// System logger for non-audit operational logs
-	sysLogger := logger.WithSource("system")
-
-	// Create log store if enabled
+	// Create log store if enabled (before creating sysLogger)
 	if cfg.Logging.Store.Enabled && cfg.Logging.Store.DBPath != "" {
 		logStore, err := logging.NewLogStore(logging.LogStoreConfig{
 			Enabled:    true,
@@ -94,14 +91,27 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 			RetainDays: cfg.Logging.Store.RetainDays,
 		})
 		if err != nil {
-			sysLogger.Warn("failed to create log store", "error", err)
+			// Can't use sysLogger yet, use logger directly
+			logger.Warn("failed to create log store", "error", err)
 		} else {
-			logger.SetStore(logStore)
-			if cfg.Logging.Store.ArchiveDir != "" {
-				sysLogger.Info("log store enabled with archiving", "path", cfg.Logging.Store.DBPath, "archiveDir", cfg.Logging.Store.ArchiveDir)
-			} else {
-				sysLogger.Info("log store enabled", "path", cfg.Logging.Store.DBPath)
+			// Enable cluster mode buffering BEFORE setting store on logger
+			// This ensures all subsequent logs are buffered
+			if cfg.Cluster.Enabled {
+				logStore.EnableClusterMode()
 			}
+			logger.SetStore(logStore)
+		}
+	}
+
+	// System logger for non-audit operational logs (created AFTER store is set)
+	sysLogger := logger.WithSource("system")
+
+	// Log store status
+	if logger.GetStore() != nil {
+		if cfg.Logging.Store.ArchiveDir != "" {
+			sysLogger.Info("log store enabled with archiving", "path", cfg.Logging.Store.DBPath, "archiveDir", cfg.Logging.Store.ArchiveDir)
+		} else {
+			sysLogger.Info("log store enabled", "path", cfg.Logging.Store.DBPath)
 		}
 	}
 

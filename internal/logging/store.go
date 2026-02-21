@@ -36,6 +36,10 @@ type LogStore struct {
 	maxAge        time.Duration
 	dbPath        string
 	archiveDir    string
+
+	// Buffer for entries written before cluster writer is set
+	pendingEntries []*storage.Entry
+	clusterMode    bool // Flag to indicate cluster mode is enabled
 }
 
 // ClusterWriter interface for cluster-aware write operations.
@@ -115,10 +119,79 @@ func NewLogStore(cfg LogStoreConfig) (*LogStore, error) {
 }
 
 // SetClusterWriter sets the cluster writer for cluster-aware write operations.
+// It also flushes any pending entries that were buffered before the cluster writer was set.
 func (s *LogStore) SetClusterWriter(cw ClusterWriter) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	pending := s.pendingEntries
+	s.pendingEntries = nil
 	s.clusterWriter = cw
+	s.mu.Unlock()
+
+	// Flush pending entries through cluster writer (async to wait for Raft to be ready)
+	if len(pending) > 0 && cw != nil {
+		go s.flushPendingEntries(cw, pending)
+	}
+}
+
+// flushPendingEntries writes buffered entries to the cluster after Raft is ready.
+func (s *LogStore) flushPendingEntries(cw ClusterWriter, pending []*storage.Entry) {
+	// Wait for this node to become leader (only leader can write)
+	// If we're not leader after 30 seconds, skip flushing (follower will get entries via replication)
+	for i := 0; i < 300; i++ { // Max 30 seconds
+		if cw.IsLeader() {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Only flush if we're the leader
+	if !cw.IsLeader() {
+		return
+	}
+
+	// Ensure parent exists first
+	s.mu.Lock()
+	tx, err := s.db.Begin()
+	if err == nil {
+		parentDN := "ou=logs"
+		if _, err := s.db.Get(tx, parentDN); err != nil {
+			parent := &storage.Entry{
+				DN:         parentDN,
+				Attributes: make(map[string][][]byte),
+			}
+			parent.SetStringAttribute("objectclass", "organizationalUnit")
+			parent.SetStringAttribute("ou", "logs")
+			cw.PutLog(parent)
+		}
+		s.db.Rollback(tx)
+	}
+	s.mu.Unlock()
+
+	// Write pending entries
+	for _, entry := range pending {
+		cw.PutLog(entry)
+	}
+}
+
+// EnableClusterMode enables cluster mode buffering for log entries.
+// Call this before cluster writer is set to buffer early log entries.
+func (s *LogStore) EnableClusterMode() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.clusterMode = true
+	s.pendingEntries = make([]*storage.Entry, 0, 100)
+}
+
+// isClusterMode returns true if cluster mode is enabled.
+func (s *LogStore) isClusterMode() bool {
+	return s.clusterMode
+}
+
+// PendingCount returns the number of pending entries (for debugging).
+func (s *LogStore) PendingCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.pendingEntries)
 }
 
 // loadNextID finds the highest existing ID to continue from.
@@ -219,6 +292,16 @@ func (s *LogStore) Write(level, msg, source, user, requestID string, fields map[
 
 		// Trim old entries if needed (async)
 		go s.trimOldEntries()
+		return nil
+	}
+
+	// Check if we're in cluster mode but cluster writer not yet set
+	// Buffer the entry for later flush
+	if s.pendingEntries != nil || s.isClusterMode() {
+		// Limit buffer size to prevent memory issues
+		if len(s.pendingEntries) < 1000 {
+			s.pendingEntries = append(s.pendingEntries, entry)
+		}
 		return nil
 	}
 

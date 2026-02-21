@@ -33,6 +33,13 @@ logging:
   level: "info"
   format: "json"
   output: "stdout"
+  store:
+    enabled: true
+    dbPath: "/var/lib/oba/log"
+    maxEntries: 100
+    archiveDir: "/var/lib/oba/log/archive"
+    compress: true
+    retainDays: 30
 
 aclFile: "/var/lib/oba/acl.yaml"
 
