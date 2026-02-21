@@ -1,6 +1,15 @@
 package acl
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
+
+// Validation errors.
+var (
+	ErrNoFilePath    = errors.New("file path is required")
+	ErrInvalidConfig = errors.New("invalid configuration")
+)
 
 // ValidateConfig validates an ACL configuration.
 // Returns a slice of errors found during validation.

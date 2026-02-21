@@ -47,6 +47,7 @@ type LDAPServer struct {
 	persistentSearchHandler *server.PersistentSearchHandler
 	restServer              *rest.Server
 	aclManager              *acl.Manager
+	aclWatcher              *acl.FileWatcher
 	pidFile                 string
 	running                 bool
 	mu                      sync.Mutex
@@ -105,8 +106,9 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 	// Create persistent search handler
 	psHandler := server.NewPersistentSearchHandler(be)
 
-	// Create ACL manager
+	// Create ACL manager and watcher
 	var aclManager *acl.Manager
+	var aclWatcher *acl.FileWatcher
 	if cfg.ACLFile != "" {
 		// Load ACL from external file (hot reload supported)
 		var err error
@@ -119,6 +121,17 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 			return nil, fmt.Errorf("failed to load ACL file: %w", err)
 		}
 		logger.Info("ACL loaded from file", "file", cfg.ACLFile)
+
+		// Create file watcher for automatic reload
+		aclWatcher, err = acl.NewFileWatcher(&acl.WatcherConfig{
+			FilePath: cfg.ACLFile,
+			Manager:  aclManager,
+			Logger:   logger,
+		})
+		if err != nil {
+			db.Close()
+			return nil, fmt.Errorf("failed to create ACL watcher: %w", err)
+		}
 	} else if len(cfg.ACL.Rules) > 0 {
 		// Load ACL from embedded config (no hot reload)
 		embeddedConfig := convertACLConfig(&cfg.ACL)
@@ -164,6 +177,7 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 		persistentSearchHandler: psHandler,
 		restServer:              restServer,
 		aclManager:              aclManager,
+		aclWatcher:              aclWatcher,
 		ctx:                     ctx,
 		cancel:                  cancel,
 	}, nil
@@ -427,6 +441,11 @@ func (s *LDAPServer) Start() error {
 		}
 	}
 
+	// Start ACL file watcher if configured
+	if s.aclWatcher != nil {
+		s.aclWatcher.Start()
+	}
+
 	// Wait for all connections to finish
 	s.wg.Wait()
 	return nil
@@ -444,6 +463,11 @@ func (s *LDAPServer) Stop(ctx context.Context) error {
 
 	// Cancel the server context
 	s.cancel()
+
+	// Stop ACL file watcher
+	if s.aclWatcher != nil {
+		s.aclWatcher.Stop()
+	}
 
 	// Stop REST server
 	if s.restServer != nil {
