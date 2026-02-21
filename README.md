@@ -10,6 +10,8 @@ Oba is a lightweight, zero-dependency LDAP server implementation written in pure
 - TLS/LDAPS and StartTLS support
 - REST API with JWT authentication
 - Access Control Lists (ACL) with hot reload
+- Configuration hot reload without restart
+- REST API management for ACL and config
 - Password policy enforcement
 - Encryption at rest (AES-256-GCM)
 - Change streams via LDAP Persistent Search
