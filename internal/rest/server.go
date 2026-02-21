@@ -9,7 +9,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/oba-ldap/oba/internal/acl"
 	"github.com/oba-ldap/oba/internal/backend"
+	"github.com/oba-ldap/oba/internal/config"
 	"github.com/oba-ldap/oba/internal/logging"
 )
 
@@ -26,6 +28,7 @@ type ServerConfig struct {
 	IdleTimeout  time.Duration
 	RateLimit    int
 	CORSOrigins  []string
+	AdminDNs     []string
 }
 
 // DefaultServerConfig returns default configuration.
@@ -102,6 +105,26 @@ func (s *Server) setupRoutes() {
 	s.router.POST("/api/v1/bulk", s.handlers.HandleBulk)
 
 	s.router.POST("/api/v1/compare", s.handlers.HandleCompare)
+
+	// ACL management endpoints
+	s.router.GET("/api/v1/acl", s.handlers.HandleGetACL)
+	s.router.GET("/api/v1/acl/rules", s.handlers.HandleGetACLRules)
+	s.router.GET("/api/v1/acl/rules/{index}", s.handlers.HandleGetACLRule)
+	s.router.POST("/api/v1/acl/rules", s.handlers.HandleAddACLRule)
+	s.router.PUT("/api/v1/acl/rules/{index}", s.handlers.HandleUpdateACLRule)
+	s.router.DELETE("/api/v1/acl/rules/{index}", s.handlers.HandleDeleteACLRule)
+	s.router.PUT("/api/v1/acl/default", s.handlers.HandleSetDefaultPolicy)
+	s.router.POST("/api/v1/acl/reload", s.handlers.HandleReloadACL)
+	s.router.POST("/api/v1/acl/save", s.handlers.HandleSaveACL)
+	s.router.POST("/api/v1/acl/validate", s.handlers.HandleValidateACL)
+
+	// Config management endpoints
+	s.router.GET("/api/v1/config", s.handlers.HandleGetConfig)
+	s.router.GET("/api/v1/config/{section}", s.handlers.HandleGetConfigSection)
+	s.router.PATCH("/api/v1/config/{section}", s.handlers.HandleUpdateConfigSection)
+	s.router.POST("/api/v1/config/reload", s.handlers.HandleReloadConfig)
+	s.router.POST("/api/v1/config/save", s.handlers.HandleSaveConfig)
+	s.router.POST("/api/v1/config/validate", s.handlers.HandleValidateConfig)
 }
 
 func (s *Server) setupMiddleware() {
@@ -121,6 +144,14 @@ func (s *Server) setupMiddleware() {
 		"/api/v1/health",
 		"/api/v1/auth/bind",
 	}))
+
+	// Admin-only endpoints
+	if len(s.config.AdminDNs) > 0 {
+		s.router.Use(AdminOnlyMiddleware(s.config.AdminDNs, []string{
+			"/api/v1/acl",
+			"/api/v1/config",
+		}))
+	}
 }
 
 // Start starts the REST server.
@@ -230,4 +261,14 @@ func (s *Server) GetCORSOrigins() []string {
 	result := make([]string, len(s.corsOrigins))
 	copy(result, s.corsOrigins)
 	return result
+}
+
+// SetACLManager sets the ACL manager for ACL-related endpoints.
+func (s *Server) SetACLManager(m *acl.Manager) {
+	s.handlers.SetACLManager(m)
+}
+
+// SetConfigManager sets the config manager for config-related endpoints.
+func (s *Server) SetConfigManager(m *config.ConfigManager) {
+	s.handlers.SetConfigManager(m)
 }

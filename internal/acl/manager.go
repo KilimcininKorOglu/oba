@@ -2,6 +2,8 @@ package acl
 
 import (
 	"fmt"
+	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -266,4 +268,219 @@ func (m *Manager) logError(msg string, keysAndValues ...interface{}) {
 	if m.logger != nil {
 		m.logger.Error(msg, keysAndValues...)
 	}
+}
+
+// AddRule adds a new ACL rule at the specified index.
+// If index is -1 or >= len(rules), appends to the end.
+func (m *Manager) AddRule(rule *ACL, index int) error {
+	if rule == nil {
+		return fmt.Errorf("rule cannot be nil")
+	}
+	if rule.Target == "" {
+		return ErrMissingTarget
+	}
+	if rule.Subject == "" {
+		return ErrMissingSubject
+	}
+	if rule.Rights == 0 {
+		return ErrMissingRights
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if index < 0 || index >= len(m.config.Rules) {
+		m.config.Rules = append(m.config.Rules, rule)
+	} else {
+		m.config.Rules = append(m.config.Rules[:index], append([]*ACL{rule}, m.config.Rules[index:]...)...)
+	}
+
+	m.evaluator = NewEvaluator(m.config)
+	m.logInfo("ACL rule added", "index", index, "target", rule.Target, "subject", rule.Subject)
+
+	return nil
+}
+
+// UpdateRule updates an existing ACL rule at the specified index.
+func (m *Manager) UpdateRule(index int, rule *ACL) error {
+	if rule == nil {
+		return fmt.Errorf("rule cannot be nil")
+	}
+	if rule.Target == "" {
+		return ErrMissingTarget
+	}
+	if rule.Subject == "" {
+		return ErrMissingSubject
+	}
+	if rule.Rights == 0 {
+		return ErrMissingRights
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if index < 0 || index >= len(m.config.Rules) {
+		return fmt.Errorf("rule index %d out of range (0-%d)", index, len(m.config.Rules)-1)
+	}
+
+	m.config.Rules[index] = rule
+	m.evaluator = NewEvaluator(m.config)
+	m.logInfo("ACL rule updated", "index", index, "target", rule.Target, "subject", rule.Subject)
+
+	return nil
+}
+
+// DeleteRule removes an ACL rule at the specified index.
+func (m *Manager) DeleteRule(index int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if index < 0 || index >= len(m.config.Rules) {
+		return fmt.Errorf("rule index %d out of range (0-%d)", index, len(m.config.Rules)-1)
+	}
+
+	m.config.Rules = append(m.config.Rules[:index], m.config.Rules[index+1:]...)
+	m.evaluator = NewEvaluator(m.config)
+	m.logInfo("ACL rule deleted", "index", index)
+
+	return nil
+}
+
+// SetDefaultPolicy updates the default policy.
+func (m *Manager) SetDefaultPolicy(policy string) error {
+	policy = strings.ToLower(policy)
+	if policy != "allow" && policy != "deny" {
+		return fmt.Errorf("invalid policy: %s (must be allow or deny)", policy)
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.config.DefaultPolicy = policy
+	m.evaluator = NewEvaluator(m.config)
+	m.logInfo("ACL default policy changed", "policy", policy)
+
+	return nil
+}
+
+// GetRule returns a rule at the specified index.
+func (m *Manager) GetRule(index int) (*ACL, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if index < 0 || index >= len(m.config.Rules) {
+		return nil, fmt.Errorf("rule index %d out of range (0-%d)", index, len(m.config.Rules)-1)
+	}
+
+	return m.config.Rules[index], nil
+}
+
+// GetRules returns all rules.
+func (m *Manager) GetRules() []*ACL {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	rules := make([]*ACL, len(m.config.Rules))
+	copy(rules, m.config.Rules)
+	return rules
+}
+
+// SaveToFile saves current ACL config to file.
+func (m *Manager) SaveToFile() error {
+	if m.filePath == "" {
+		return fmt.Errorf("no ACL file configured")
+	}
+
+	m.mu.RLock()
+	data := m.configToYAML()
+	m.mu.RUnlock()
+
+	if err := os.WriteFile(m.filePath, []byte(data), 0644); err != nil {
+		return fmt.Errorf("failed to write ACL file: %w", err)
+	}
+
+	m.logInfo("ACL saved to file", "file", m.filePath)
+	return nil
+}
+
+// configToYAML converts current config to YAML string.
+func (m *Manager) configToYAML() string {
+	var sb strings.Builder
+
+	sb.WriteString("version: 1\n")
+	sb.WriteString(fmt.Sprintf("defaultPolicy: %s\n", m.config.DefaultPolicy))
+	sb.WriteString("rules:\n")
+
+	for _, rule := range m.config.Rules {
+		sb.WriteString(fmt.Sprintf("  - target: %q\n", rule.Target))
+		sb.WriteString(fmt.Sprintf("    subject: %q\n", rule.Subject))
+		sb.WriteString(fmt.Sprintf("    scope: %s\n", rule.Scope.String()))
+		sb.WriteString("    rights:\n")
+		for _, r := range rightsToStrings(rule.Rights) {
+			sb.WriteString(fmt.Sprintf("      - %s\n", r))
+		}
+		if len(rule.Attributes) > 0 {
+			sb.WriteString("    attributes:\n")
+			for _, a := range rule.Attributes {
+				sb.WriteString(fmt.Sprintf("      - %q\n", a))
+			}
+		}
+		if rule.Deny {
+			sb.WriteString("    deny: true\n")
+		}
+	}
+
+	return sb.String()
+}
+
+// rightsToStrings converts Right flags to string slice.
+func rightsToStrings(r Right) []string {
+	if r == All {
+		return []string{"all"}
+	}
+
+	var rights []string
+	if r.Has(Read) {
+		rights = append(rights, "read")
+	}
+	if r.Has(Write) {
+		rights = append(rights, "write")
+	}
+	if r.Has(Add) {
+		rights = append(rights, "add")
+	}
+	if r.Has(Delete) {
+		rights = append(rights, "delete")
+	}
+	if r.Has(Search) {
+		rights = append(rights, "search")
+	}
+	if r.Has(Compare) {
+		rights = append(rights, "compare")
+	}
+	return rights
+}
+
+// SetFilePath sets the ACL file path.
+func (m *Manager) SetFilePath(path string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.filePath = path
+}
+
+// ValidateRule validates a single ACL rule.
+func ValidateRule(rule *ACL) error {
+	if rule == nil {
+		return fmt.Errorf("rule cannot be nil")
+	}
+	if rule.Target == "" {
+		return ErrMissingTarget
+	}
+	if rule.Subject == "" {
+		return ErrMissingSubject
+	}
+	if rule.Rights == 0 {
+		return ErrMissingRights
+	}
+	return nil
 }

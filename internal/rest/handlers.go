@@ -11,17 +11,21 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/oba-ldap/oba/internal/acl"
 	"github.com/oba-ldap/oba/internal/backend"
+	"github.com/oba-ldap/oba/internal/config"
 	"github.com/oba-ldap/oba/internal/ldap"
 )
 
 // Handlers contains all REST API handlers.
 type Handlers struct {
-	backend      *backend.ObaBackend
-	auth         *Authenticator
-	startTime    time.Time
-	requestCount int64
-	activeConns  int64
+	backend       *backend.ObaBackend
+	auth          *Authenticator
+	aclManager    *acl.Manager
+	configManager *config.ConfigManager
+	startTime     time.Time
+	requestCount  int64
+	activeConns   int64
 }
 
 // NewHandlers creates new handlers.
@@ -31,6 +35,16 @@ func NewHandlers(be *backend.ObaBackend, auth *Authenticator) *Handlers {
 		auth:      auth,
 		startTime: time.Now(),
 	}
+}
+
+// SetACLManager sets the ACL manager for ACL-related endpoints.
+func (h *Handlers) SetACLManager(m *acl.Manager) {
+	h.aclManager = m
+}
+
+// SetConfigManager sets the config manager for config-related endpoints.
+func (h *Handlers) SetConfigManager(m *config.ConfigManager) {
+	h.configManager = m
 }
 
 // IncrementConnections increments active connection count.

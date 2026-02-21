@@ -235,3 +235,49 @@ func AuthMiddleware(auth *Authenticator, excludePaths []string) Middleware {
 		})
 	}
 }
+
+// AdminOnlyMiddleware restricts access to admin users only.
+// adminDNs is a list of DNs that are considered admins.
+func AdminOnlyMiddleware(adminDNs []string, adminPaths []string) Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Check if this path requires admin access
+			requiresAdmin := false
+			for _, path := range adminPaths {
+				if strings.HasPrefix(r.URL.Path, path) {
+					requiresAdmin = true
+					break
+				}
+			}
+
+			if !requiresAdmin {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Get authenticated DN from context
+			bindDN := BindDN(r)
+			if bindDN == "" {
+				writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
+				return
+			}
+
+			// Check if user is admin
+			isAdmin := false
+			normalizedBindDN := strings.ToLower(bindDN)
+			for _, adminDN := range adminDNs {
+				if strings.ToLower(adminDN) == normalizedBindDN {
+					isAdmin = true
+					break
+				}
+			}
+
+			if !isAdmin {
+				writeError(w, http.StatusForbidden, "forbidden", "admin access required")
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}

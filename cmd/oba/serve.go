@@ -39,6 +39,7 @@ var (
 type LDAPServer struct {
 	config                  *config.Config
 	configFile              string
+	configManager           *config.ConfigManager
 	logger                  logging.Logger
 	handler                 *server.Handler
 	backend                 *backend.ObaBackend
@@ -170,11 +171,18 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 			TokenTTL:     cfg.REST.TokenTTL,
 			RateLimit:    cfg.REST.RateLimit,
 			CORSOrigins:  cfg.REST.CORSOrigins,
+			AdminDNs:     []string{cfg.Directory.RootDN},
 			ReadTimeout:  30 * time.Second,
 			WriteTimeout: 30 * time.Second,
 			IdleTimeout:  120 * time.Second,
 		}
 		restServer = rest.NewServer(restCfg, be, logger)
+
+		// Set ACL manager for REST API
+		if aclManager != nil {
+			restServer.SetACLManager(aclManager)
+		}
+
 		logger.Info("REST API enabled", "address", cfg.REST.Address)
 	}
 
@@ -669,6 +677,15 @@ func serveCmd(args []string) int {
 
 	// Store config file path for watcher
 	srv.configFile = *configFile
+
+	// Create config manager and set it on REST server
+	if *configFile != "" {
+		srv.configManager = config.NewConfigManager(cfg, *configFile)
+		srv.configManager.SetOnUpdate(srv.handleConfigReload)
+		if srv.restServer != nil {
+			srv.restServer.SetConfigManager(srv.configManager)
+		}
+	}
 
 	// Write PID file
 	if cfg.Server.PIDFile != "" {
