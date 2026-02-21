@@ -299,7 +299,7 @@ func (s *LogStore) Query(opts QueryOptions) ([]LogEntry, int, error) {
 		if !opts.EndTime.IsZero() && logEntry.Timestamp.After(opts.EndTime) {
 			continue
 		}
-		if opts.Search != "" && !strings.Contains(strings.ToLower(logEntry.Message), strings.ToLower(opts.Search)) {
+		if opts.Search != "" && !s.matchesSearch(logEntry, opts.Search) {
 			continue
 		}
 
@@ -331,6 +331,33 @@ func (s *LogStore) Query(opts QueryOptions) ([]LogEntry, int, error) {
 	}
 
 	return allEntries, total, nil
+}
+
+// matchesSearch checks if a log entry matches the search term.
+// Searches in message, user, and field values.
+func (s *LogStore) matchesSearch(entry LogEntry, search string) bool {
+	search = strings.ToLower(search)
+
+	// Search in message
+	if strings.Contains(strings.ToLower(entry.Message), search) {
+		return true
+	}
+
+	// Search in user
+	if strings.Contains(strings.ToLower(entry.User), search) {
+		return true
+	}
+
+	// Search in fields
+	for _, v := range entry.Fields {
+		if str, ok := v.(string); ok {
+			if strings.Contains(strings.ToLower(str), search) {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // entryToLogEntry converts a storage entry to a LogEntry.
