@@ -1,33 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import LoadingSpinner from '../components/LoadingSpinner';
-import api from '../api/client';
 
 export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [baseDN, setBaseDN] = useState('');
+  const [baseDN, setBaseDN] = useState('dc=example,dc=com');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { login } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const fetchBaseDN = async () => {
-      try {
-        const config = await api.getConfig();
-        if (config?.directory?.baseDN) {
-          setBaseDN(config.directory.baseDN);
-        }
-      } catch {
-        setBaseDN('dc=example,dc=com');
-      }
-    };
-    fetchBaseDN();
-  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
