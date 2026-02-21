@@ -79,4 +79,5 @@ docker-cluster/node*/*.oba
 docker-data/
 temp/
 plan/
-*.piddocker-single/cache/
+*.pid
+docker-single/cache/
