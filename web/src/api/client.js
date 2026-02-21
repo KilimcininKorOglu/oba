@@ -85,6 +85,14 @@ class ObaAPI {
     });
   }
 
+  disableEntry(dn) {
+    return this.request('POST', `/entries/${encodeURIComponent(dn)}/disable`);
+  }
+
+  enableEntry(dn) {
+    return this.request('POST', `/entries/${encodeURIComponent(dn)}/enable`);
+  }
+
   compare(dn, attribute, value) {
     return this.request('POST', '/compare', { dn, attribute, value });
   }

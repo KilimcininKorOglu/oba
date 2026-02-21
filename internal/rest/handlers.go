@@ -358,6 +358,71 @@ func (h *Handlers) HandleDeleteEntry(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// HandleDisableEntry handles POST /api/v1/entries/{dn}/disable
+func (h *Handlers) HandleDisableEntry(w http.ResponseWriter, r *http.Request) {
+	atomic.AddInt64(&h.requestCount, 1)
+
+	dn := Param(r, "dn")
+	if dn == "" {
+		writeError(w, http.StatusBadRequest, "missing_dn", "DN is required")
+		return
+	}
+
+	decodedDN, err := url.PathUnescape(dn)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_dn", "invalid DN encoding")
+		return
+	}
+
+	bindDN := BindDN(r)
+	changes := []backend.Modification{
+		{Type: backend.ModReplace, Attribute: "obaDisabled", Values: []string{"TRUE"}},
+	}
+
+	err = h.backend.ModifyWithBindDN(decodedDN, changes, bindDN)
+	if err != nil {
+		status, code, msg := mapBackendError(err)
+		writeError(w, status, code, msg)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "disabled": true})
+}
+
+// HandleEnableEntry handles POST /api/v1/entries/{dn}/enable
+func (h *Handlers) HandleEnableEntry(w http.ResponseWriter, r *http.Request) {
+	atomic.AddInt64(&h.requestCount, 1)
+
+	dn := Param(r, "dn")
+	if dn == "" {
+		writeError(w, http.StatusBadRequest, "missing_dn", "DN is required")
+		return
+	}
+
+	decodedDN, err := url.PathUnescape(dn)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_dn", "invalid DN encoding")
+		return
+	}
+
+	bindDN := BindDN(r)
+	changes := []backend.Modification{
+		{Type: backend.ModDelete, Attribute: "obaDisabled", Values: nil},
+	}
+
+	err = h.backend.ModifyWithBindDN(decodedDN, changes, bindDN)
+	if err != nil {
+		// Ignore "no such attribute" error when enabling
+		if err != backend.ErrEntryNotFound {
+			status, code, msg := mapBackendError(err)
+			writeError(w, status, code, msg)
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "disabled": false})
+}
+
 // HandleModifyDN handles POST /api/v1/entries/{dn}/move
 func (h *Handlers) HandleModifyDN(w http.ResponseWriter, r *http.Request) {
 	atomic.AddInt64(&h.requestCount, 1)

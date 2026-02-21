@@ -99,6 +99,8 @@ func (s *Server) setupRoutes() {
 	s.router.PATCH("/api/v1/entries/{dn}", s.handlers.HandleModifyEntry)
 	s.router.DELETE("/api/v1/entries/{dn}", s.handlers.HandleDeleteEntry)
 	s.router.POST("/api/v1/entries/{dn}/move", s.handlers.HandleModifyDN)
+	s.router.POST("/api/v1/entries/{dn}/disable", s.handlers.HandleDisableEntry)
+	s.router.POST("/api/v1/entries/{dn}/enable", s.handlers.HandleEnableEntry)
 
 	s.router.GET("/api/v1/search", s.handlers.HandleSearch)
 	s.router.GET("/api/v1/search/stream", s.handlers.HandleStreamSearch)

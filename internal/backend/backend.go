@@ -36,10 +36,15 @@ var (
 	ErrStorageError = errors.New("backend: storage error")
 	// ErrNotAllowedOnNonLeaf is returned when trying to delete an entry with children.
 	ErrNotAllowedOnNonLeaf = errors.New("backend: operation not allowed on non-leaf entry")
+	// ErrAccountDisabled is returned when trying to bind with a disabled account.
+	ErrAccountDisabled = errors.New("backend: account is disabled")
 )
 
 // PasswordAttribute is the standard LDAP attribute name for user passwords.
 const PasswordAttribute = "userpassword"
+
+// AccountDisabledAttribute is the attribute name for account disabled status.
+const AccountDisabledAttribute = "obadisabled"
 
 // Backend defines the interface for LDAP backend operations.
 // It wraps the storage engine and provides LDAP-specific functionality.
@@ -218,6 +223,11 @@ func (b *ObaBackend) Bind(dn, password string) error {
 		return err
 	}
 
+	// Check if account is disabled
+	if b.isAccountDisabled(entry) {
+		return ErrAccountDisabled
+	}
+
 	// Verify password
 	return b.verifyEntryPassword(entry, password)
 }
@@ -252,6 +262,16 @@ func (b *ObaBackend) verifyEntryPassword(entry *Entry, password string) error {
 	}
 
 	return ErrInvalidCredentials
+}
+
+// isAccountDisabled checks if an account has the disabled attribute set to true.
+func (b *ObaBackend) isAccountDisabled(entry *Entry) bool {
+	disabled := entry.GetAttribute(AccountDisabledAttribute)
+	if len(disabled) == 0 {
+		return false
+	}
+	val := strings.ToLower(disabled[0])
+	return val == "true" || val == "1" || val == "yes"
 }
 
 // Search searches for entries matching the given criteria.

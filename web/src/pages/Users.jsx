@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Pencil } from 'lucide-react';
+import { Plus, Trash2, Pencil, UserX, UserCheck } from 'lucide-react';
 import api from '../api/client';
 import Header from '../components/Header';
 import Modal from '../components/Modal';
@@ -63,10 +63,33 @@ export default function Users() {
     }
   };
 
+  const handleToggleStatus = async (user) => {
+    const isDisabled = isUserDisabled(user);
+    try {
+      if (isDisabled) {
+        await api.enableEntry(user.dn);
+        showToast('User enabled', 'success');
+      } else {
+        await api.disableEntry(user.dn);
+        showToast('User disabled', 'success');
+      }
+      fetchData();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
   const getAttr = (entry, name) => {
     const attrs = entry.attributes || {};
     const val = attrs[name] || attrs[name.toLowerCase()];
     return Array.isArray(val) ? val : val ? [val] : [];
+  };
+
+  const isUserDisabled = (user) => {
+    const disabled = getAttr(user, 'obaDisabled')[0] || getAttr(user, 'obadisabled')[0];
+    if (!disabled) return false;
+    const val = disabled.toLowerCase();
+    return val === 'true' || val === '1' || val === 'yes';
   };
 
   const extractCN = (dn) => {
@@ -142,11 +165,9 @@ export default function Users() {
         });
       }
 
-      // Update group memberships
       const currentGroups = editUser ? getUserGroups(editUser.dn) : [];
       const newGroups = form.groups;
 
-      // Remove from groups user is no longer in
       for (const groupDN of currentGroups) {
         if (!newGroups.includes(groupDN)) {
           const group = allGroups.find(g => g.dn === groupDN);
@@ -159,7 +180,6 @@ export default function Users() {
         }
       }
 
-      // Add to new groups
       for (const groupDN of newGroups) {
         if (!currentGroups.includes(groupDN)) {
           const group = allGroups.find(g => g.dn === groupDN);
@@ -213,6 +233,7 @@ export default function Users() {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase">Name</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase">Email</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase">Status</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase">Groups</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-zinc-400 uppercase">Actions</th>
               </tr>
@@ -220,14 +241,24 @@ export default function Users() {
             <tbody className="divide-y divide-zinc-700">
               {users.map((user) => {
                 const userGroups = getUserGroups(user.dn);
+                const disabled = isUserDisabled(user);
                 return (
-                  <tr key={user.dn} className="hover:bg-zinc-700/50">
+                  <tr key={user.dn} className={`hover:bg-zinc-700/50 ${disabled ? 'opacity-60' : ''}`}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="font-medium text-zinc-100">{getAttr(user, 'cn')[0]}</div>
                       <div className="text-sm text-zinc-500">{getAttr(user, 'uid')[0]}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-zinc-400">
                       {getAttr(user, 'mail')[0] || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 py-1 text-xs rounded-full ${
+                        disabled 
+                          ? 'bg-red-500/20 text-red-400' 
+                          : 'bg-green-500/20 text-green-400'
+                      }`}>
+                        {disabled ? 'Disabled' : 'Active'}
+                      </span>
                     </td>
                     <td className="px-6 py-4">
                       {userGroups.length > 0 ? (
@@ -244,6 +275,13 @@ export default function Users() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
                       <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => handleToggleStatus(user)}
+                          className={disabled ? 'text-green-400 hover:text-green-300' : 'text-yellow-400 hover:text-yellow-300'}
+                          title={disabled ? 'Enable user' : 'Disable user'}
+                        >
+                          {disabled ? <UserCheck className="w-4 h-4" /> : <UserX className="w-4 h-4" />}
+                        </button>
                         <button
                           onClick={() => openEditModal(user)}
                           className="text-zinc-400 hover:text-zinc-200"
