@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search as SearchIcon, Download } from 'lucide-react';
 import api from '../api/client';
 import Header from '../components/Header';
@@ -18,6 +18,20 @@ export default function Search() {
   });
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchBaseDN = async () => {
+      try {
+        const config = await api.getConfig();
+        if (config?.directory?.baseDN) {
+          setParams(prev => ({ ...prev, baseDN: config.directory.baseDN }));
+        }
+      } catch (err) {
+        // ignore - user can enter manually
+      }
+    };
+    fetchBaseDN();
+  }, []);
 
   const handleSearch = async (e) => {
     e?.preventDefault();
