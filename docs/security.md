@@ -454,6 +454,10 @@ chown oba:oba /var/lib/oba
 
 ### Audit Logging
 
+Oba provides comprehensive audit logging for all operations, which is essential for security monitoring and compliance requirements.
+
+#### Configuration
+
 Enable detailed logging for security events:
 
 ```yaml
@@ -461,7 +465,72 @@ logging:
   level: "info"
   format: "json"
   output: "/var/log/oba/oba.log"
+  store:
+    enabled: true
+    path: "/var/lib/oba/log.oba"
+    maxSize: 100000
+    maxAge: "7d"
 ```
+
+#### Logged Operations
+
+All LDAP and REST API operations are logged with detailed context:
+
+| Operation     | Logged Details                                    |
+|---------------|---------------------------------------------------|
+| Bind (Login)  | User DN, client IP, success/failure               |
+| Search        | Base DN, filter, scope, result count, client IP   |
+| Add           | Entry DN, client IP                               |
+| Modify        | Entry DN, modified attributes, client IP          |
+| Delete        | Entry DN, client IP                               |
+| ModifyDN      | Old DN, new DN, client IP                         |
+| Compare       | Entry DN, attribute, client IP                    |
+| Disable/Enable| Entry DN, action, client IP                       |
+| ACL Changes   | Rule details, action (add/update/delete)          |
+| Config Changes| Section modified, new values                      |
+
+#### Log Entry Format
+
+Each audit log entry includes:
+
+```json
+{
+  "timestamp": "2026-02-21T10:30:00Z",
+  "level": "info",
+  "source": "rest",
+  "user": "cn=admin,dc=example,dc=com",
+  "message": "search completed",
+  "remoteAddr": "192.168.1.100",
+  "baseDN": "ou=users,dc=example,dc=com",
+  "filter": "(objectClass=person)",
+  "scope": "sub",
+  "results": 25
+}
+```
+
+#### Querying Audit Logs
+
+When persistent log storage is enabled, logs can be queried via REST API:
+
+```bash
+# Query recent logs
+curl "http://localhost:8080/api/v1/logs?limit=100" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Filter by user
+curl "http://localhost:8080/api/v1/logs?user=admin" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Filter by source (ldap or rest)
+curl "http://localhost:8080/api/v1/logs?source=ldap" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Export for compliance
+curl "http://localhost:8080/api/v1/logs/export?format=csv" \
+  -H "Authorization: Bearer $TOKEN" -o audit.csv
+```
+
+See [REST API Documentation](REST_API.md#log-management) for complete log query options.
 
 ### Log Events to Monitor
 
