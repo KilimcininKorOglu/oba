@@ -23,13 +23,14 @@ var (
 // It maps a file into memory, allowing direct access to file contents
 // without explicit read/write system calls.
 type MmapManager struct {
-	file     *os.File
-	data     []byte // mmap'd region
-	size     int64  // current mapped size
-	pageSize int    // page size for alignment
-	readOnly bool   // whether mapping is read-only
-	mu       sync.RWMutex
-	closed   bool
+	file      *os.File
+	data      []byte // mmap'd region
+	size      int64  // current mapped size
+	pageSize  int    // page size for alignment
+	readOnly  bool   // whether mapping is read-only
+	mu        sync.RWMutex
+	closed    bool
+	mapHandle uintptr // Windows file mapping handle (unused on Unix)
 }
 
 // MmapOptions configures the MmapManager.
