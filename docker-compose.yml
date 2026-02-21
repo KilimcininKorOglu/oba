@@ -5,11 +5,22 @@ services:
       dockerfile: Dockerfile
     ports:
       - "1389:1389"
+      - "8080:8080"
     volumes:
       - ./docker-data:/var/lib/oba
     environment:
       - OBA_LOG_LEVEL=debug
     command: ["./bin/oba", "serve", "--config", "/var/lib/oba/config.yaml"]
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - oba
     restart: unless-stopped
 
   oba-dev:
