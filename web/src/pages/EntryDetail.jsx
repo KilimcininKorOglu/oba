@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Edit, Trash2, Move } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Move, Key } from 'lucide-react';
 import api from '../api/client';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -16,7 +16,10 @@ export default function EntryDetail() {
   const [loading, setLoading] = useState(true);
   const [showDelete, setShowDelete] = useState(false);
   const [showMove, setShowMove] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [moveData, setMoveData] = useState({ newRDN: '', newSuperior: '', deleteOldRDN: true });
+  const [passwordData, setPasswordData] = useState({ newPassword: '', confirmPassword: '' });
+  const [passwordError, setPasswordError] = useState('');
 
   const decodedDN = decodeURIComponent(dn);
 
@@ -56,6 +59,35 @@ export default function EntryDetail() {
     setShowMove(false);
   };
 
+  const handlePasswordChange = async () => {
+    setPasswordError('');
+    
+    if (!passwordData.newPassword) {
+      setPasswordError('Password is required');
+      return;
+    }
+    
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      setPasswordError('Passwords do not match');
+      return;
+    }
+
+    try {
+      await api.modifyEntry(decodedDN, [
+        { operation: 'replace', attribute: 'userPassword', values: [passwordData.newPassword] }
+      ]);
+      showToast('Password changed successfully', 'success');
+      setShowPassword(false);
+      setPasswordData({ newPassword: '', confirmPassword: '' });
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const hasUserPassword = entry?.attributes?.userPassword || entry?.attributes?.objectClass?.some(oc => 
+    ['person', 'inetOrgPerson', 'organizationalPerson', 'account'].includes(oc.toLowerCase())
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -80,6 +112,15 @@ export default function EntryDetail() {
         title="Entry Detail"
         actions={
           <div className="flex items-center gap-2">
+            {hasUserPassword && (
+              <button
+                onClick={() => setShowPassword(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-sm"
+              >
+                <Key className="w-4 h-4" />
+                Change Password
+              </button>
+            )}
             <button
               onClick={() => setShowMove(true)}
               className="flex items-center gap-2 px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-sm"
@@ -195,6 +236,53 @@ export default function EntryDetail() {
             />
             Delete old RDN value
           </label>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showPassword}
+        onClose={() => { setShowPassword(false); setPasswordData({ newPassword: '', confirmPassword: '' }); setPasswordError(''); }}
+        title="Change Password"
+        footer={
+          <>
+            <button onClick={() => { setShowPassword(false); setPasswordData({ newPassword: '', confirmPassword: '' }); setPasswordError(''); }} className="px-4 py-2 text-sm text-zinc-400 hover:text-zinc-100">
+              Cancel
+            </button>
+            <button
+              onClick={handlePasswordChange}
+              className="px-4 py-2 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-lg"
+            >
+              Change Password
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          {passwordError && (
+            <div className="p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-500 text-sm">
+              {passwordError}
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-zinc-300 mb-2">New Password</label>
+            <input
+              type="password"
+              value={passwordData.newPassword}
+              onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+              placeholder="Enter new password"
+              className="w-full px-4 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-zinc-300 mb-2">Confirm Password</label>
+            <input
+              type="password"
+              value={passwordData.confirmPassword}
+              onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+              placeholder="Confirm new password"
+              className="w-full px-4 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-blue-500"
+            />
+          </div>
         </div>
       </Modal>
     </div>
