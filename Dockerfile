@@ -7,7 +7,11 @@ RUN apk add --no-cache git make
 COPY go.mod ./
 COPY . .
 
-RUN go build -o bin/oba ./cmd/oba
+ARG VERSION=1.0.0
+ARG COMMIT=unknown
+ARG BUILD_DATE=unknown
+
+RUN go build -ldflags "-s -w -X 'main.version=${VERSION}' -X 'main.commit=${COMMIT}' -X 'main.buildDate=${BUILD_DATE}'" -o bin/oba ./cmd/oba
 
 FROM alpine:latest
 

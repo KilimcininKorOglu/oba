@@ -6,10 +6,14 @@ CMD_DIR=cmd/oba
 DOCKER_IMAGE=oba:latest
 GOOS=$(shell go env GOOS)
 GOARCH=$(shell go env GOARCH)
+VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "1.0.0")
+COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_DATE=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS=-s -w -X 'main.version=$(VERSION)' -X 'main.commit=$(COMMIT)' -X 'main.buildDate=$(BUILD_DATE)'
 
 build:
 	@mkdir -p $(BUILD_DIR)
-	go build -o $(BUILD_DIR)/$(BINARY_NAME)_$(GOOS)_$(GOARCH) ./$(CMD_DIR)
+	go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME)_$(GOOS)_$(GOARCH) ./$(CMD_DIR)
 
 clean:
 	rm -rf $(BUILD_DIR)
