@@ -147,16 +147,14 @@ oba/
 ## Development
 
 ```bash
-make test       # Run tests
-make test-race  # Run tests with race detector
-make bench      # Run benchmarks
-make build      # Build binary
-```
-
-Docker build:
-
-```bash
-docker build -t oba:latest .
+make test        # Run tests
+make test-race   # Run tests with race detector
+make bench       # Run benchmarks
+make build       # Build binary
+make docker      # Build Docker image
+make docker-run  # Run server in Docker
+make docker-stop # Stop Docker container
+make docker-logs # View container logs
 ```
 
 ## License
