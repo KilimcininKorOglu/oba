@@ -22,11 +22,13 @@ builds:
 
 archives:
   - id: "oba"
-    format: tar.gz
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - tar.gz
     format_overrides:
       - goos: windows
-        format: zip
+        formats:
+          - zip
     files:
       - LICENSE
       - README.md
