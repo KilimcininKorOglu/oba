@@ -5,6 +5,28 @@ import api from '../api/client';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
 
+function formatUptime(uptime) {
+  if (!uptime) return 'N/A';
+  
+  const match = uptime.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:[\d.]+s)?$/);
+  if (!match) return uptime;
+  
+  const hours = parseInt(match[1] || '0');
+  const minutes = parseInt(match[2] || '0');
+  
+  if (hours > 24) {
+    const days = Math.floor(hours / 24);
+    const remainingHours = hours % 24;
+    return `${days}d ${remainingHours}h ${minutes}m`;
+  }
+  
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  
+  return `${minutes}m`;
+}
+
 export default function Dashboard() {
   const [health, setHealth] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -46,7 +68,7 @@ export default function Dashboard() {
 
   const stats = [
     { label: 'Status', value: health?.status?.toUpperCase() || 'N/A', icon: Activity, color: health?.status === 'ok' ? 'text-green-500' : 'text-red-500' },
-    { label: 'Uptime', value: health?.uptime || 'N/A', icon: Clock, color: 'text-blue-500' },
+    { label: 'Uptime', value: formatUptime(health?.uptime), icon: Clock, color: 'text-blue-500' },
     { label: 'Connections', value: health?.connections?.toString() || '0', icon: Users, color: 'text-yellow-500' },
     { label: 'Requests', value: health?.requests?.toString() || '0', icon: BarChart3, color: 'text-purple-500' },
   ];
