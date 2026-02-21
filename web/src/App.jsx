@@ -4,6 +4,10 @@ import { ToastProvider } from './context/ToastContext';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import Users from './pages/Users';
+import UserForm from './pages/UserForm';
+import Groups from './pages/Groups';
+import GroupForm from './pages/GroupForm';
 import Entries from './pages/Entries';
 import EntryDetail from './pages/EntryDetail';
 import EntryForm from './pages/EntryForm';
@@ -26,6 +30,10 @@ function AppRoutes() {
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route index element={<Dashboard />} />
+        <Route path="users" element={<Users />} />
+        <Route path="users/new" element={<UserForm />} />
+        <Route path="groups" element={<Groups />} />
+        <Route path="groups/new" element={<GroupForm />} />
         <Route path="entries" element={<Entries />} />
         <Route path="entries/new" element={<EntryForm />} />
         <Route path="entries/:dn" element={<EntryDetail />} />

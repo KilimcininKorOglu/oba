@@ -1,9 +1,11 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, FolderTree, Search, Layers, GitCompare, Shield, Settings, FileText, LogOut } from 'lucide-react';
+import { LayoutDashboard, FolderTree, Users, UsersRound, Search, Layers, GitCompare, Shield, Settings, FileText, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/users', icon: Users, label: 'Users' },
+  { to: '/groups', icon: UsersRound, label: 'Groups' },
   { to: '/entries', icon: FolderTree, label: 'Entries' },
   { to: '/search', icon: Search, label: 'Search' },
   { to: '/bulk', icon: Layers, label: 'Bulk Operations' },
