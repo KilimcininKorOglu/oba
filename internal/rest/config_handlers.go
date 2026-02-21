@@ -92,6 +92,7 @@ func (h *Handlers) HandleUpdateConfigSection(w http.ResponseWriter, r *http.Requ
 	// Get updated section
 	updated, _ := h.configManager.GetSection(section)
 
+	h.auditLog(r, "config updated", "section", section)
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "config section updated",
 		"section": section,
@@ -118,6 +119,7 @@ func (h *Handlers) HandleReloadConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.auditLog(r, "config reloaded")
 	writeJSON(w, http.StatusOK, map[string]string{
 		"message": "config reloaded",
 	})
@@ -142,6 +144,7 @@ func (h *Handlers) HandleSaveConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.auditLog(r, "config saved to file", "filePath", h.configManager.GetConfigFile())
 	writeJSON(w, http.StatusOK, map[string]string{
 		"message":  "config saved",
 		"filePath": h.configManager.GetConfigFile(),

@@ -134,6 +134,7 @@ func (h *Handlers) HandleAddACLRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.auditLog(r, "ACL rule added", "target", rule.Target, "subject", rule.Subject)
 	writeJSON(w, http.StatusCreated, map[string]interface{}{
 		"message": "rule added",
 		"rule":    aclRuleToJSON(rule),
@@ -173,6 +174,7 @@ func (h *Handlers) HandleUpdateACLRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.auditLog(r, "ACL rule updated", "index", index, "target", rule.Target, "subject", rule.Subject)
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "rule updated",
 		"rule":    aclRuleToJSON(rule),
@@ -200,6 +202,7 @@ func (h *Handlers) HandleDeleteACLRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.auditLog(r, "ACL rule deleted", "index", index)
 	writeJSON(w, http.StatusOK, map[string]string{
 		"message": "rule deleted",
 	})
@@ -227,6 +230,7 @@ func (h *Handlers) HandleSetDefaultPolicy(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	h.auditLog(r, "ACL default policy changed", "policy", req.Policy)
 	writeJSON(w, http.StatusOK, map[string]string{
 		"message": "default policy updated",
 		"policy":  req.Policy,
@@ -253,6 +257,7 @@ func (h *Handlers) HandleReloadACL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	stats := h.aclManager.Stats()
+	h.auditLog(r, "ACL reloaded", "ruleCount", stats.RuleCount)
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":     "ACL reloaded",
 		"ruleCount":   stats.RuleCount,
@@ -279,6 +284,7 @@ func (h *Handlers) HandleSaveACL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.auditLog(r, "ACL saved to file", "filePath", h.aclManager.FilePath())
 	writeJSON(w, http.StatusOK, map[string]string{
 		"message":  "ACL saved",
 		"filePath": h.aclManager.FilePath(),

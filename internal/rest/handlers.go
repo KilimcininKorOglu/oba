@@ -157,6 +157,7 @@ func (h *Handlers) HandleGetEntry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.auditLog(r, "get entry", "dn", decodedDN)
 	writeJSON(w, http.StatusOK, convertEntry(entries[0]))
 }
 
@@ -551,6 +552,7 @@ func (h *Handlers) HandleModifyDN(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.auditLog(r, "entry moved", "oldDN", decodedDN, "newDN", newDN)
 	w.Header().Set("Location", "/api/v1/entries/"+url.PathEscape(newDN))
 	writeJSON(w, http.StatusOK, convertEntry(newEntry))
 }
@@ -581,6 +583,7 @@ func (h *Handlers) HandleCompare(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	h.auditLog(r, "compare", "dn", req.DN, "attribute", req.Attribute, "match", match)
 	writeJSON(w, http.StatusOK, CompareResponse{Match: match})
 }
 
@@ -696,6 +699,8 @@ func (h *Handlers) HandleBulk(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusMultiStatus
 	}
 
+	h.auditLog(r, "bulk operation", "total", len(req.Operations), "succeeded", succeeded, "failed", failed)
+
 	writeJSON(w, status, BulkResponse{
 		Success:    failed == 0,
 		TotalCount: len(req.Operations),
@@ -762,6 +767,17 @@ func (h *Handlers) HandleStreamSearch(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		}
 	}
+
+	// Log with meaningful filter value
+	logFilter := filterStr
+	if logFilter == "" {
+		logFilter = "*"
+	}
+	logScope := scopeStr
+	if logScope == "" {
+		logScope = "sub"
+	}
+	h.auditLog(r, "stream search", "baseDN", baseDN, "scope", logScope, "filter", logFilter, "results", len(entries))
 
 	encoder.Encode(map[string]interface{}{"done": true, "count": len(entries)})
 }

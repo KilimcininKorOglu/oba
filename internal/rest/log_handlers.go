@@ -135,6 +135,7 @@ func (h *Handlers) HandleClearLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.auditLog(r, "logs cleared")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "logs cleared"})
 }
 
