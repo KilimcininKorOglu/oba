@@ -28,6 +28,7 @@ This document provides comprehensive documentation for the Oba LDAP Server REST 
    - [ACL Management](#acl-management)
    - [Config Management](#config-management)
    - [Log Management](#log-management)
+   - [Cluster Management](#cluster-management)
 5. [Error Handling](#error-handling)
 6. [Rate Limiting](#rate-limiting)
 7. [CORS Configuration](#cors-configuration)
@@ -1906,15 +1907,17 @@ GET /api/v1/logs
 
 #### Query Parameters
 
-| Parameter | Type   | Default | Description                                   |
-|-----------|--------|---------|-----------------------------------------------|
-| `level`   | string | -       | Filter by log level: debug, info, warn, error |
-| `source`  | string | -       | Filter by source: ldap, rest                  |
-| `user`    | string | -       | Filter by username                            |
-| `from`    | string | -       | Start time (RFC3339 format)                   |
-| `to`      | string | -       | End time (RFC3339 format)                     |
-| `limit`   | int    | 100     | Maximum entries to return                     |
-| `offset`  | int    | 0       | Number of entries to skip                     |
+| Parameter         | Type   | Default | Description                                   |
+|-------------------|--------|---------|-----------------------------------------------|
+| `level`           | string | -       | Filter by log level: debug, info, warn, error |
+| `source`          | string | -       | Filter by source: ldap, rest                  |
+| `user`            | string | -       | Filter by username                            |
+| `from`            | string | -       | Start time (RFC3339 format)                   |
+| `to`              | string | -       | End time (RFC3339 format)                     |
+| `search`          | string | -       | Search in message and fields                  |
+| `include_archive` | bool   | false   | Include archived logs in search               |
+| `limit`           | int    | 100     | Maximum entries to return                     |
+| `offset`          | int    | 0       | Number of entries to skip                     |
 
 #### Response
 
@@ -2018,6 +2021,161 @@ curl "http://localhost:8080/api/v1/logs/export?format=ndjson&level=error" \
 | `source`    | string | Log source: ldap, rest                |
 | `user`      | string | Username (if authenticated operation) |
 | `fields`    | object | Additional structured fields          |
+
+#### Log Archives
+
+When log archiving is enabled, old logs are automatically archived to compressed files.
+
+##### List Archives
+
+```
+GET /api/v1/logs/archives
+```
+
+Returns list of all archive files.
+
+```json
+{
+  "archives": [
+    {
+      "name": "logs_20240115_100000_20240118_235959.json.gz",
+      "path": "/var/lib/oba/log/archive/logs_20240115_100000_20240118_235959.json.gz",
+      "size": 1048576,
+      "start_time": "2024-01-15T10:00:00Z",
+      "end_time": "2024-01-18T23:59:59Z",
+      "count": 50000,
+      "compressed": true
+    }
+  ],
+  "count": 1
+}
+```
+
+##### Archive Statistics
+
+```
+GET /api/v1/logs/archives/stats
+```
+
+Returns statistics about all archives.
+
+```json
+{
+  "enabled": true,
+  "archive_count": 5,
+  "total_size": 5242880,
+  "total_entries": 250000,
+  "oldest_archive": "2024-01-01T00:00:00Z",
+  "newest_archive": "2024-01-15T00:00:00Z"
+}
+```
+
+##### Manual Archive
+
+```
+POST /api/v1/logs/archive
+```
+
+Force immediate archiving of all current logs.
+
+```json
+{
+  "success": true,
+  "archive": {
+    "name": "logs_20240120_000000_20240120_153000.json.gz",
+    "count": 15234
+  }
+}
+```
+
+##### Cleanup Old Archives
+
+```
+POST /api/v1/logs/archives/cleanup
+```
+
+Remove archives older than configured `retainDays`.
+
+```json
+{
+  "success": true,
+  "deleted": 3
+}
+```
+
+---
+
+### Cluster Management
+
+Cluster endpoints are available when running in cluster mode (`cluster.enabled: true`).
+
+#### Cluster Status
+
+```
+GET /api/v1/cluster/status
+```
+
+Returns current cluster state and configuration.
+
+```json
+{
+  "enabled": true,
+  "mode": "cluster",
+  "nodeId": 1,
+  "state": "leader",
+  "term": 5,
+  "leaderId": 1,
+  "leaderAddr": "node1:4445",
+  "commitIndex": 1234,
+  "lastApplied": 1234,
+  "peers": [
+    {"id": 1, "addr": "node1:4445"},
+    {"id": 2, "addr": "node2:4445"},
+    {"id": 3, "addr": "node3:4445"}
+  ]
+}
+```
+
+| Field         | Type   | Description                              |
+|---------------|--------|------------------------------------------|
+| `enabled`     | bool   | Whether cluster mode is enabled          |
+| `mode`        | string | "cluster" or "standalone"                |
+| `nodeId`      | int    | This node's ID                           |
+| `state`       | string | "leader", "follower", or "candidate"     |
+| `term`        | int    | Current Raft term                        |
+| `leaderId`    | int    | Current leader's node ID                 |
+| `leaderAddr`  | string | Current leader's Raft address            |
+| `commitIndex` | int    | Highest committed log index              |
+| `lastApplied` | int    | Highest applied log index                |
+| `peers`       | array  | List of all cluster peers                |
+
+#### Cluster Health
+
+```
+GET /api/v1/cluster/health
+```
+
+HAProxy-compatible health check endpoint.
+
+- Returns `200 OK` if this node is the leader
+- Returns `503 Service Unavailable` if this node is a follower
+
+Use this for load balancer health checks to route writes to the leader.
+
+#### Get Leader
+
+```
+GET /api/v1/cluster/leader
+```
+
+Returns information about the current leader.
+
+```json
+{
+  "leaderId": 1,
+  "leaderAddr": "node1:4445"
+}
+```
 
 ---
 
