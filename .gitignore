@@ -65,6 +65,6 @@ coverage/
 
 # Hermes
 .hermes/
-docker-data/
+docker-*/
 temp/
 plan/
