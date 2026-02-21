@@ -454,7 +454,9 @@ func (s *LDAPServer) Start() error {
 		if err != nil {
 			return fmt.Errorf("%w: %v", ErrListenerFailed, err)
 		}
+		s.mu.Lock()
 		s.listener = listener
+		s.mu.Unlock()
 		s.logger.WithSource("system").Info("LDAP server listening", "address", s.config.Server.Address)
 
 		s.wg.Add(1)
@@ -466,12 +468,16 @@ func (s *LDAPServer) Start() error {
 		listener, err := tls.Listen("tcp", s.config.Server.TLSAddress, s.tlsConfig)
 		if err != nil {
 			// Close plain listener if TLS fails
+			s.mu.Lock()
 			if s.listener != nil {
 				s.listener.Close()
 			}
+			s.mu.Unlock()
 			return fmt.Errorf("%w: %v", ErrListenerFailed, err)
 		}
+		s.mu.Lock()
 		s.tlsListener = listener
+		s.mu.Unlock()
 		s.logger.WithSource("system").Info("LDAPS server listening", "address", s.config.Server.TLSAddress)
 
 		s.wg.Add(1)
@@ -482,12 +488,14 @@ func (s *LDAPServer) Start() error {
 	if s.restServer != nil {
 		if err := s.restServer.Start(); err != nil {
 			// Close LDAP listeners if REST fails
+			s.mu.Lock()
 			if s.listener != nil {
 				s.listener.Close()
 			}
 			if s.tlsListener != nil {
 				s.tlsListener.Close()
 			}
+			s.mu.Unlock()
 			return fmt.Errorf("failed to start REST server: %w", err)
 		}
 	}
@@ -510,27 +518,33 @@ func (s *LDAPServer) Stop(ctx context.Context) error {
 		return ErrServerNotRunning
 	}
 	s.running = false
+	
+	// Copy references while holding lock
+	listener := s.listener
+	tlsListener := s.tlsListener
+	restServer := s.restServer
+	aclWatcher := s.aclWatcher
 	s.mu.Unlock()
 
 	// Cancel the server context
 	s.cancel()
 
 	// Stop ACL file watcher
-	if s.aclWatcher != nil {
-		s.aclWatcher.Stop()
+	if aclWatcher != nil {
+		aclWatcher.Stop()
 	}
 
 	// Stop REST server
-	if s.restServer != nil {
-		s.restServer.Stop(ctx)
+	if restServer != nil {
+		restServer.Stop(ctx)
 	}
 
 	// Close listeners
-	if s.listener != nil {
-		s.listener.Close()
+	if listener != nil {
+		listener.Close()
 	}
-	if s.tlsListener != nil {
-		s.tlsListener.Close()
+	if tlsListener != nil {
+		tlsListener.Close()
 	}
 
 	// Wait for connections to finish with timeout

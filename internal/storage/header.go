@@ -121,8 +121,8 @@ func (h *FileHeader) SerializeTo(buf []byte) error {
 
 	// Calculate and write checksum (checksum field is at bytes 44-47)
 	// Checksum is calculated over bytes 0-43 (before checksum field)
-	h.Checksum = h.calculateChecksumFromBuffer(buf)
-	binary.LittleEndian.PutUint32(buf[44:48], h.Checksum)
+	checksum := h.calculateChecksumFromBuffer(buf)
+	binary.LittleEndian.PutUint32(buf[44:48], checksum)
 
 	// Copy reserved bytes
 	copy(buf[48:], h.Reserved[:])

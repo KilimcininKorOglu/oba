@@ -2,6 +2,7 @@ package storage
 
 import (
 	"bytes"
+	"encoding/binary"
 	"testing"
 )
 
@@ -326,9 +327,10 @@ func TestFileHeaderSerializeUpdatesChecksum(t *testing.T) {
 		t.Fatalf("Serialize failed: %v", err)
 	}
 
-	// Checksum should be updated
-	if header.Checksum == 0 {
-		t.Error("Checksum should be updated after Serialize")
+	// Checksum should be written to buffer (bytes 44-47)
+	checksumInBuf := binary.LittleEndian.Uint32(buf[44:48])
+	if checksumInBuf == 0 {
+		t.Error("Checksum should be written to buffer after Serialize")
 	}
 
 	// Deserialize and verify

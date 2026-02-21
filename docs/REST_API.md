@@ -962,6 +962,78 @@ curl -X POST "http://localhost:8080/api/v1/entries/uid%3Djohn%2Cou%3Dusers%2Cdc%
 
 ---
 
+### Unlock Account
+
+Unlock a user account that was locked due to too many failed authentication attempts.
+
+#### Request
+
+```
+POST /api/v1/entries/{dn}/unlock
+```
+
+The `{dn}` parameter must be URL-encoded.
+
+#### Response
+
+```json
+{
+  "success": true,
+  "locked": false
+}
+```
+
+#### Example
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/entries/uid%3Djohn%2Cou%3Dusers%2Cdc%3Dexample%2Cdc%3Dcom/unlock" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+#### Notes
+
+- Clears the failed authentication attempt counter for the account
+- User can authenticate again immediately after unlocking
+- This is different from enabling a disabled account (see Enable Entry)
+
+---
+
+### Get Lock Status
+
+Check if a user account is locked due to too many failed authentication attempts.
+
+#### Request
+
+```
+GET /api/v1/entries/{dn}/lock-status
+```
+
+The `{dn}` parameter must be URL-encoded.
+
+#### Response
+
+```json
+{
+  "dn": "uid=john,ou=users,dc=example,dc=com",
+  "locked": true
+}
+```
+
+#### Example
+
+```bash
+curl "http://localhost:8080/api/v1/entries/uid%3Djohn%2Cou%3Dusers%2Cdc%3Dexample%2Cdc%3Dcom/lock-status" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+#### Notes
+
+- Returns `locked: true` if the account has exceeded the maximum failed authentication attempts
+- Lock status is separate from disabled status (obaDisabled attribute)
+- Accounts are automatically unlocked after the lockout duration expires
+
+---
+
 ### Compare
 
 Compare an attribute value in an entry.
@@ -2140,6 +2212,8 @@ curl -X POST http://localhost:8080/api/v1/compare \
 | POST   | `/api/v1/entries/{dn}/move`    | Rename/move entry              | Yes           |
 | POST   | `/api/v1/entries/{dn}/disable` | Disable user account           | Yes           |
 | POST   | `/api/v1/entries/{dn}/enable`  | Enable user account            | Yes           |
+| POST   | `/api/v1/entries/{dn}/unlock`  | Unlock locked account          | Yes           |
+| GET    | `/api/v1/entries/{dn}/lock-status` | Get account lock status    | Yes           |
 | POST   | `/api/v1/compare`              | Compare attribute value        | Yes           |
 | POST   | `/api/v1/bulk`                 | Bulk operations                | Yes           |
 | GET    | `/api/v1/acl`                  | Get ACL configuration          | Admin         |
