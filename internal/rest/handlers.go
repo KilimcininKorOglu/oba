@@ -62,11 +62,20 @@ func (h *Handlers) DecrementConnections() {
 
 // auditLog logs an audit message with user context and client IP
 func (h *Handlers) auditLog(r *http.Request, msg string, keyvals ...interface{}) {
+	h.auditLogWithUser(r, "", msg, keyvals...)
+}
+
+// auditLogWithUser logs an audit message with explicit user (for login)
+func (h *Handlers) auditLogWithUser(r *http.Request, user string, msg string, keyvals ...interface{}) {
 	if h.logger == nil {
 		return
 	}
 	logger := h.logger.WithSource("rest")
-	if user := BindDN(r); user != "" {
+	// Use explicit user if provided, otherwise get from context
+	if user == "" {
+		user = BindDN(r)
+	}
+	if user != "" {
 		logger = logger.WithUser(user)
 	}
 	// Add client IP
@@ -99,21 +108,21 @@ func (h *Handlers) HandleBind(w http.ResponseWriter, r *http.Request) {
 	token, err := h.auth.Authenticate(req.DN, req.Password)
 	if err != nil {
 		if err == backend.ErrInvalidCredentials {
-			h.auditLog(r, "login failed: invalid credentials", "dn", req.DN)
+			h.auditLogWithUser(r, req.DN, "login failed: invalid credentials")
 			writeError(w, http.StatusUnauthorized, "invalid_credentials", "invalid DN or password")
 			return
 		}
 		if err == backend.ErrAccountLocked {
-			h.auditLog(r, "login failed: account locked", "dn", req.DN)
+			h.auditLogWithUser(r, req.DN, "login failed: account locked")
 			writeError(w, http.StatusUnauthorized, "account_locked", "account is locked due to too many failed attempts")
 			return
 		}
-		h.auditLog(r, "login failed: "+err.Error(), "dn", req.DN)
+		h.auditLogWithUser(r, req.DN, "login failed: "+err.Error())
 		writeError(w, http.StatusInternalServerError, "auth_error", err.Error())
 		return
 	}
 
-	h.auditLog(r, "login successful", "dn", req.DN)
+	h.auditLogWithUser(r, req.DN, "login successful")
 	writeJSON(w, http.StatusOK, BindResponse{
 		Success: true,
 		Token:   token,
