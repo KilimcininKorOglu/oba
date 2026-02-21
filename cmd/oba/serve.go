@@ -77,6 +77,21 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 		Output: cfg.Logging.Output,
 	})
 
+	// Create log store if enabled
+	if cfg.Logging.Store.Enabled && cfg.Logging.Store.DBPath != "" {
+		logStore, err := logging.NewLogStore(logging.LogStoreConfig{
+			Enabled:    true,
+			DBPath:     cfg.Logging.Store.DBPath,
+			MaxEntries: cfg.Logging.Store.MaxEntries,
+		})
+		if err != nil {
+			logger.Warn("failed to create log store", "error", err)
+		} else {
+			logger.SetStore(logStore)
+			logger.Info("log store enabled", "path", cfg.Logging.Store.DBPath)
+		}
+	}
+
 	// Open storage engine
 	engineOpts := storage.DefaultEngineOptions().
 		WithPageSize(cfg.Storage.PageSize).
@@ -183,6 +198,9 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 			restServer.SetACLManager(aclManager)
 		}
 
+		// Set logger for log endpoints
+		restServer.SetLogger(logger)
+
 		logger.Info("REST API enabled", "address", cfg.REST.Address)
 	}
 
@@ -209,6 +227,8 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 
 // setupHandlers configures the LDAP operation handlers with backend integration.
 func setupHandlers(h *server.Handler, be backend.Backend, logger logging.Logger) {
+	ldapLogger := logger.WithSource("ldap")
+
 	// Bind handler
 	h.SetBindHandler(func(conn *server.Connection, req *ldap.BindRequest) *server.OperationResult {
 		if req.IsAnonymous() {
@@ -217,14 +237,14 @@ func setupHandlers(h *server.Handler, be backend.Backend, logger logging.Logger)
 
 		err := be.Bind(req.Name, string(req.SimplePassword))
 		if err != nil {
-			logger.Debug("bind failed", "dn", req.Name, "error", err.Error())
+			ldapLogger.Debug("bind failed", "dn", req.Name, "error", err.Error())
 			return &server.OperationResult{
 				ResultCode:        ldap.ResultInvalidCredentials,
 				DiagnosticMessage: "invalid credentials",
 			}
 		}
 
-		logger.Info("bind successful", "dn", req.Name)
+		ldapLogger.Info("bind successful", "dn", req.Name)
 		return &server.OperationResult{ResultCode: ldap.ResultSuccess}
 	})
 
@@ -238,7 +258,7 @@ func setupHandlers(h *server.Handler, be backend.Backend, logger logging.Logger)
 
 		entries, err := be.Search(req.BaseObject, int(req.Scope), f)
 		if err != nil {
-			logger.Debug("search failed", "baseDN", req.BaseObject, "error", err.Error())
+			ldapLogger.Debug("search failed", "baseDN", req.BaseObject, "error", err.Error())
 			return &server.SearchResult{
 				OperationResult: server.OperationResult{
 					ResultCode:        ldap.ResultOperationsError,
@@ -275,7 +295,7 @@ func setupHandlers(h *server.Handler, be backend.Backend, logger logging.Logger)
 
 		err := be.AddWithBindDN(entry, conn.BindDN())
 		if err != nil {
-			logger.Debug("add failed", "dn", req.Entry, "error", err.Error())
+			ldapLogger.Debug("add failed", "dn", req.Entry, "error", err.Error())
 			if err == backend.ErrEntryExists {
 				return &server.OperationResult{
 					ResultCode:        ldap.ResultEntryAlreadyExists,
@@ -288,7 +308,7 @@ func setupHandlers(h *server.Handler, be backend.Backend, logger logging.Logger)
 			}
 		}
 
-		logger.Info("entry added", "dn", req.Entry)
+		ldapLogger.Info("entry added", "dn", req.Entry)
 		return &server.OperationResult{ResultCode: ldap.ResultSuccess}
 	})
 
@@ -311,7 +331,7 @@ func setupHandlers(h *server.Handler, be backend.Backend, logger logging.Logger)
 
 		err = be.Delete(req.DN)
 		if err != nil {
-			logger.Debug("delete failed", "dn", req.DN, "error", err.Error())
+			ldapLogger.Debug("delete failed", "dn", req.DN, "error", err.Error())
 			if err == backend.ErrEntryNotFound {
 				return &server.OperationResult{
 					ResultCode:        ldap.ResultNoSuchObject,
@@ -324,7 +344,7 @@ func setupHandlers(h *server.Handler, be backend.Backend, logger logging.Logger)
 			}
 		}
 
-		logger.Info("entry deleted", "dn", req.DN)
+		ldapLogger.Info("entry deleted", "dn", req.DN)
 		return &server.OperationResult{ResultCode: ldap.ResultSuccess}
 	})
 
@@ -345,7 +365,7 @@ func setupHandlers(h *server.Handler, be backend.Backend, logger logging.Logger)
 
 		err := be.ModifyWithBindDN(req.Object, changes, conn.BindDN())
 		if err != nil {
-			logger.Debug("modify failed", "dn", req.Object, "error", err.Error())
+			ldapLogger.Debug("modify failed", "dn", req.Object, "error", err.Error())
 			if err == backend.ErrEntryNotFound {
 				return &server.OperationResult{
 					ResultCode:        ldap.ResultNoSuchObject,
@@ -358,7 +378,7 @@ func setupHandlers(h *server.Handler, be backend.Backend, logger logging.Logger)
 			}
 		}
 
-		logger.Info("entry modified", "dn", req.Object)
+		ldapLogger.Info("entry modified", "dn", req.Object)
 		return &server.OperationResult{ResultCode: ldap.ResultSuccess}
 	})
 }

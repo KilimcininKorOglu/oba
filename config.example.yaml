@@ -57,7 +57,7 @@ logging:
     # Enable log storage for querying via REST API
     enabled: false
     # Path to log database directory
-    dbPath: "./data/log.oba"
+    dbPath: "./data/log"
     # Maximum number of log entries to keep
     maxEntries: 100000
 

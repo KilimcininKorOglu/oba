@@ -18,6 +18,7 @@ type LogEntry struct {
 	Timestamp time.Time              `json:"timestamp"`
 	Level     string                 `json:"level"`
 	Message   string                 `json:"message"`
+	Source    string                 `json:"source,omitempty"`
 	RequestID string                 `json:"request_id,omitempty"`
 	Fields    map[string]interface{} `json:"fields,omitempty"`
 }
@@ -107,7 +108,7 @@ func (s *LogStore) loadNextID() error {
 }
 
 // Write adds a new log entry to the store.
-func (s *LogStore) Write(level, msg, requestID string, fields map[string]interface{}) error {
+func (s *LogStore) Write(level, msg, source, requestID string, fields map[string]interface{}) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -128,6 +129,10 @@ func (s *LogStore) Write(level, msg, requestID string, fields map[string]interfa
 	entry.SetStringAttribute("timestamp", time.Now().UTC().Format(time.RFC3339Nano))
 	entry.SetStringAttribute("level", level)
 	entry.SetStringAttribute("message", msg)
+
+	if source != "" {
+		entry.SetStringAttribute("source", source)
+	}
 
 	if requestID != "" {
 		entry.SetStringAttribute("requestid", requestID)
@@ -332,6 +337,9 @@ func (s *LogStore) entryToLogEntry(entry *storage.Entry) LogEntry {
 	}
 	if msgVals := entry.GetAttribute("message"); len(msgVals) > 0 {
 		logEntry.Message = string(msgVals[0])
+	}
+	if srcVals := entry.GetAttribute("source"); len(srcVals) > 0 {
+		logEntry.Source = string(srcVals[0])
 	}
 	if reqVals := entry.GetAttribute("requestid"); len(reqVals) > 0 {
 		logEntry.RequestID = string(reqVals[0])

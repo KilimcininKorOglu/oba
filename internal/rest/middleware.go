@@ -20,6 +20,7 @@ func BindDN(r *http.Request) string {
 
 // LoggingMiddleware logs HTTP requests.
 func LoggingMiddleware(logger logging.Logger) Middleware {
+	restLogger := logger.WithSource("rest")
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
@@ -28,7 +29,7 @@ func LoggingMiddleware(logger logging.Logger) Middleware {
 
 			next.ServeHTTP(wrapped, r)
 
-			logger.Info("http request",
+			restLogger.Info("http request",
 				"method", r.Method,
 				"path", r.URL.Path,
 				"status", wrapped.statusCode,

@@ -84,7 +84,7 @@ func NewConnection(conn net.Conn, server *Server) *Connection {
 	// Get logger from server or create a nop logger
 	var logger logging.Logger
 	if server != nil && server.Logger != nil {
-		logger = server.Logger.WithRequestID(requestID)
+		logger = server.Logger.WithSource("ldap").WithRequestID(requestID)
 	} else {
 		logger = logging.NewNop()
 	}

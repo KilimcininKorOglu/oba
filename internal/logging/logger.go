@@ -90,6 +90,8 @@ type Logger interface {
 	Error(msg string, keysAndValues ...interface{})
 	// WithRequestID returns a new logger with the given request ID.
 	WithRequestID(requestID string) Logger
+	// WithSource returns a new logger with the given source.
+	WithSource(source string) Logger
 	// WithFields returns a new logger with the given fields.
 	WithFields(keysAndValues ...interface{}) Logger
 	// SetLevel changes the log level at runtime.
@@ -116,6 +118,7 @@ type logger struct {
 	fields    map[string]interface{}
 	mu        sync.Mutex
 	requestID string
+	source    string
 	store     *LogStore
 }
 
@@ -194,6 +197,13 @@ func (l *logger) WithRequestID(requestID string) Logger {
 	return newLogger
 }
 
+// WithSource returns a new logger with the given source.
+func (l *logger) WithSource(source string) Logger {
+	newLogger := l.clone()
+	newLogger.source = source
+	return newLogger
+}
+
 // WithFields returns a new logger with the given fields.
 func (l *logger) WithFields(keysAndValues ...interface{}) Logger {
 	newLogger := l.clone()
@@ -266,6 +276,7 @@ func (l *logger) clone() *logger {
 		output:    l.output,
 		fields:    newFields,
 		requestID: l.requestID,
+		source:    l.source,
 		store:     l.store,
 	}
 }
@@ -306,11 +317,11 @@ func (l *logger) log(level Level, msg string, keysAndValues ...interface{}) {
 	if l.store != nil {
 		fields := make(map[string]interface{})
 		for k, v := range entry {
-			if k != "ts" && k != "level" && k != "msg" && k != "request_id" {
+			if k != "ts" && k != "level" && k != "msg" && k != "request_id" && k != "source" {
 				fields[k] = v
 			}
 		}
-		l.store.Write(level.String(), msg, l.requestID, fields)
+		l.store.Write(level.String(), msg, l.source, l.requestID, fields)
 	}
 
 	// Format and write
@@ -361,6 +372,7 @@ func (n *nopLogger) Info(_ string, _ ...interface{})    {}
 func (n *nopLogger) Warn(_ string, _ ...interface{})    {}
 func (n *nopLogger) Error(_ string, _ ...interface{})   {}
 func (n *nopLogger) WithRequestID(_ string) Logger      { return n }
+func (n *nopLogger) WithSource(_ string) Logger         { return n }
 func (n *nopLogger) WithFields(_ ...interface{}) Logger { return n }
 func (n *nopLogger) SetLevel(_ Level)                   {}
 func (n *nopLogger) SetFormat(_ Format)                 {}

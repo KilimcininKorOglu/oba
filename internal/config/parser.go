@@ -436,6 +436,33 @@ func applyLogConfig(node *yamlNode, config *LogConfig) error {
 			if child.value != "" {
 				config.Output = child.value
 			}
+		case "store":
+			if err := applyLogStoreConfig(child, &config.Store); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// applyLogStoreConfig applies log store configuration.
+func applyLogStoreConfig(node *yamlNode, config *LogStoreConfig) error {
+	for _, child := range node.children {
+		switch child.key {
+		case "enabled":
+			config.Enabled = parseBool(child.value)
+		case "dbPath":
+			if child.value != "" {
+				config.DBPath = child.value
+			}
+		case "maxEntries":
+			if child.value != "" {
+				n, err := strconv.Atoi(child.value)
+				if err != nil {
+					return err
+				}
+				config.MaxEntries = n
+			}
 		}
 	}
 	return nil

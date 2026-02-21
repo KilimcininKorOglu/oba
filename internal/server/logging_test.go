@@ -100,6 +100,7 @@ func (l *testLogger) GetLevel() logging.Level     { return logging.LevelInfo }
 func (l *testLogger) GetFormat() logging.Format   { return logging.FormatJSON }
 func (l *testLogger) SetStore(_ *logging.LogStore) {}
 func (l *testLogger) GetStore() *logging.LogStore  { return nil }
+func (l *testLogger) WithSource(_ string) logging.Logger { return l }
 
 func (l *testLogger) getOutput() string {
 	return l.buf.String()
