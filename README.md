@@ -8,11 +8,13 @@ Oba is a lightweight, zero-dependency LDAP server implementation written in pure
 - Custom embedded database engine (ObaDB) optimized for LDAP workloads
 - Full LDAP v3 protocol support
 - TLS/LDAPS and StartTLS support
-- Access Control Lists (ACL)
+- REST API with JWT authentication
+- Access Control Lists (ACL) with hot reload
 - Password policy enforcement
+- Encryption at rest (AES-256-GCM)
+- Change streams via LDAP Persistent Search
 - Write-Ahead Logging (WAL) for crash recovery
 - MVCC for concurrent access
-- Async preload with batch I/O for fast startup
 - Backup and restore with automatic timestamps
 
 ## Quick Start
@@ -45,6 +47,7 @@ oba backup      Create database backup (auto-timestamped)
 oba restore     Restore from backup
 oba user        User management (add, delete, passwd, list, lock, unlock)
 oba config      Configuration management (validate, init, show)
+oba reload      Reload configuration without restart (acl)
 oba version     Show version information
 ```
 
@@ -55,6 +58,7 @@ Create a `config.yaml` file (see `config.example.yaml` for all options):
 ```yaml
 server:
   address: ":1389"
+  pidFile: "/var/run/oba.pid"
 
 directory:
   baseDN: "dc=example,dc=com"
@@ -63,12 +67,22 @@ directory:
 
 storage:
   dataDir: "./data"
-  cacheSize: 10000
 
 logging:
   level: "info"
   format: "json"
+
+# External ACL file with hot reload support
+aclFile: "/etc/oba/acl.yaml"
+
+# Optional: REST API
+rest:
+  enabled: true
+  address: ":8080"
+  jwtSecret: "your-secret-key"
 ```
+
+See `examples/acl.example.yaml` for ACL configuration format.
 
 ## Supported Operations
 
@@ -90,21 +104,28 @@ logging:
 oba/
 ├── cmd/oba/           # CLI entry point
 ├── internal/
-│   ├── ber/           # ASN.1 BER codec
-│   ├── ldap/          # LDAP protocol messages
-│   ├── server/        # Connection handling
-│   ├── storage/       # ObaDB storage engine
-│   │   ├── btree/     # B+ tree indexing
-│   │   ├── radix/     # Radix tree for DN hierarchy
-│   │   ├── mvcc/      # Multi-version concurrency
-│   │   ├── cache/     # Index persistence cache
-│   │   └── engine/    # Storage engine interface
+│   ├── acl/           # Access control with hot reload
 │   ├── backend/       # LDAP backend
+│   ├── backup/        # Backup/restore
+│   ├── ber/           # ASN.1 BER codec
+│   ├── config/        # Configuration parsing
+│   ├── crypto/        # Encryption utilities
 │   ├── filter/        # Search filter evaluation
-│   ├── schema/        # LDAP schema validation
-│   ├── acl/           # Access control
+│   ├── ldap/          # LDAP protocol messages
+│   ├── logging/       # Structured logging
 │   ├── password/      # Password policy
-│   └── backup/        # Backup/restore
+│   ├── rest/          # REST API server
+│   ├── schema/        # LDAP schema validation
+│   ├── server/        # Connection handling
+│   └── storage/       # ObaDB storage engine
+│       ├── btree/     # B+ tree indexing
+│       ├── cache/     # LRU cache
+│       ├── engine/    # Storage engine interface
+│       ├── index/     # Index management
+│       ├── mvcc/      # Multi-version concurrency
+│       ├── radix/     # Radix tree for DN hierarchy
+│       ├── stream/    # Change streams
+│       └── tx/        # Transaction management
 ├── docs/              # Documentation
 └── examples/          # Usage examples
 ```
@@ -114,9 +135,11 @@ oba/
 - [Getting Started](docs/getting-started.md)
 - [Installation Guide](docs/installation.md)
 - [Configuration Reference](docs/configuration.md)
+- [REST API Reference](docs/REST_API.md)
 - [Operations Guide](docs/operations.md)
 - [Security Guide](docs/security.md)
 - [Backup and Restore](docs/backup-restore.md)
+- [Change Streams](docs/change-streams.md)
 - [Troubleshooting](docs/troubleshooting.md)
 
 ## Development
