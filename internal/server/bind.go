@@ -4,8 +4,8 @@ package server
 import (
 	"strings"
 
-	"github.com/oba-ldap/oba/internal/ldap"
-	"github.com/oba-ldap/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
 )
 
 // LDAPVersion3 is the required LDAP protocol version.

@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
 )
 
 // GC errors.

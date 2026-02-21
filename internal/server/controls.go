@@ -2,8 +2,8 @@
 package server
 
 import (
-	"github.com/oba-ldap/oba/internal/ber"
-	"github.com/oba-ldap/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/ber"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
 )
 
 // Control OIDs as defined in RFC 2696 and other RFCs.

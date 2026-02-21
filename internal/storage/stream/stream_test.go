@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
 )
 
 func TestOperationTypeString(t *testing.T) {

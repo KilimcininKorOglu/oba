@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/logging"
+	"github.com/KilimcininKorOglu/oba/internal/logging"
 )
 
 // FileWatcher watches an ACL file for changes and triggers reload.

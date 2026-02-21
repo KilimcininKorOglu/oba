@@ -2,7 +2,7 @@
 package btree
 
 import (
-	"github.com/oba-ldap/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
 )
 
 // Delete removes a key-value pair from the B+ tree.

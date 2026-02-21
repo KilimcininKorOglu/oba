@@ -3,7 +3,7 @@
 package ldap
 
 import (
-	"github.com/oba-ldap/oba/internal/ber"
+	"github.com/KilimcininKorOglu/oba/internal/ber"
 )
 
 // ParseLDAPMessage parses a BER-encoded LDAP message envelope.

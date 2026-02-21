@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/acl"
+	"github.com/KilimcininKorOglu/oba/internal/acl"
 )
 
 // ACLRuleJSON represents an ACL rule in JSON format.

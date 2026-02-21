@@ -4,8 +4,8 @@ package server
 import (
 	"strings"
 
-	"github.com/oba-ldap/oba/internal/acl"
-	"github.com/oba-ldap/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/acl"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
 )
 
 // ModificationType represents the type of modification operation.

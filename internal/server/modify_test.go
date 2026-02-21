@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/oba-ldap/oba/internal/ldap"
-	"github.com/oba-ldap/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
 )
 
 // mockModifyBackend implements the ModifyBackend interface for testing.

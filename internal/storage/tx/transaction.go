@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
 )
 
 // TxState represents the state of a transaction.

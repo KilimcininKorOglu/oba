@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
 )
 
 // Paging errors.

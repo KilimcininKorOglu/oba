@@ -3,7 +3,7 @@ package filter
 import (
 	"testing"
 
-	"github.com/oba-ldap/oba/internal/schema"
+	"github.com/KilimcininKorOglu/oba/internal/schema"
 )
 
 // Helper function to create a test entry

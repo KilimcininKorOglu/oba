@@ -174,8 +174,8 @@ package main
 
 import (
     "fmt"
-    "github.com/oba-ldap/oba/internal/backend"
-    "github.com/oba-ldap/oba/internal/storage/stream"
+    "github.com/KilimcininKorOglu/oba/internal/backend"
+    "github.com/KilimcininKorOglu/oba/internal/storage/stream"
 )
 
 func main() {

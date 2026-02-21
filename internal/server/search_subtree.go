@@ -4,9 +4,9 @@ package server
 import (
 	"time"
 
-	"github.com/oba-ldap/oba/internal/filter"
-	"github.com/oba-ldap/oba/internal/ldap"
-	"github.com/oba-ldap/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/filter"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
 )
 
 // SubtreeSearcher handles subtree scope search operations.

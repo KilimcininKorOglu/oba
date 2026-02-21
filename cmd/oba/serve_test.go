@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/config"
+	"github.com/KilimcininKorOglu/oba/internal/config"
 )
 
 func TestServeCmd_Help(t *testing.T) {

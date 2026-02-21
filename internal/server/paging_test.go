@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
 )
 
 // TestParsePagedResultsControl tests parsing of PagedResultsControl.

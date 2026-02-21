@@ -5,7 +5,7 @@ package ldap
 import (
 	"errors"
 
-	"github.com/oba-ldap/oba/internal/ber"
+	"github.com/KilimcininKorOglu/oba/internal/ber"
 )
 
 // ModifyOperation represents the type of modification operation

@@ -2,7 +2,7 @@
 package server
 
 import (
-	"github.com/oba-ldap/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
 )
 
 // ModifyDNRequest represents a request to rename or move an entry.

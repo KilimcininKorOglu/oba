@@ -7,7 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/oba-ldap/oba/internal/storage/tx"
+	"github.com/KilimcininKorOglu/oba/internal/storage/tx"
 )
 
 // Snapshot errors.

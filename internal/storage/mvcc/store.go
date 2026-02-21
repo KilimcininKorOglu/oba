@@ -4,8 +4,8 @@ package mvcc
 import (
 	"sync"
 
-	"github.com/oba-ldap/oba/internal/storage"
-	"github.com/oba-ldap/oba/internal/storage/tx"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage/tx"
 )
 
 // VersionStore manages version chains for all entries.

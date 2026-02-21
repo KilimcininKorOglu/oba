@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/oba-ldap/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
 )
 
 // SortRequestOID is the OID for the Server-Side Sorting Request Control (RFC 2891).

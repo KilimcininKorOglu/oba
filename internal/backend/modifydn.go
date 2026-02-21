@@ -7,8 +7,8 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/oba-ldap/oba/internal/storage"
-	"github.com/oba-ldap/oba/internal/storage/radix"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage/radix"
 )
 
 // ModifyDN errors.

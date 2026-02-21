@@ -6,7 +6,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/oba-ldap/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
 )
 
 // Extended operation errors

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/ber"
-	"github.com/oba-ldap/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/ber"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
 )
 
 // mockConn implements net.Conn for testing

@@ -2,7 +2,7 @@
 package btree
 
 import (
-	"github.com/oba-ldap/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
 )
 
 // Insert adds a key-value pair to the B+ tree.

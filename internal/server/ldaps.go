@@ -8,7 +8,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/oba-ldap/oba/internal/logging"
+	"github.com/KilimcininKorOglu/oba/internal/logging"
 )
 
 // LDAPS errors

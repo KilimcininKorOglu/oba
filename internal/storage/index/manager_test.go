@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/oba-ldap/oba/internal/storage"
-	"github.com/oba-ldap/oba/internal/storage/btree"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage/btree"
 )
 
 // Helper function to create a temporary page manager for testing.

@@ -6,7 +6,7 @@ package stream
 import (
 	"time"
 
-	"github.com/oba-ldap/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
 )
 
 // OperationType represents the type of change operation.

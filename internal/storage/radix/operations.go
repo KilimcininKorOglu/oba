@@ -1,7 +1,7 @@
 package radix
 
 import (
-	"github.com/oba-ldap/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
 )
 
 // Insert adds a new DN to the tree with the given page and slot location.

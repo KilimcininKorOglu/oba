@@ -9,13 +9,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/config"
-	"github.com/oba-ldap/oba/internal/filter"
-	"github.com/oba-ldap/oba/internal/password"
-	"github.com/oba-ldap/oba/internal/schema"
-	"github.com/oba-ldap/oba/internal/server"
-	"github.com/oba-ldap/oba/internal/storage"
-	"github.com/oba-ldap/oba/internal/storage/stream"
+	"github.com/KilimcininKorOglu/oba/internal/config"
+	"github.com/KilimcininKorOglu/oba/internal/filter"
+	"github.com/KilimcininKorOglu/oba/internal/password"
+	"github.com/KilimcininKorOglu/oba/internal/schema"
+	"github.com/KilimcininKorOglu/oba/internal/server"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage/stream"
 )
 
 // Backend errors.

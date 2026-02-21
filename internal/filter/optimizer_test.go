@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/oba-ldap/oba/internal/storage"
-	"github.com/oba-ldap/oba/internal/storage/index"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage/index"
 )
 
 // testSetup creates a temporary directory and page manager for testing.

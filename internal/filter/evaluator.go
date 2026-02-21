@@ -1,7 +1,7 @@
 package filter
 
 import (
-	"github.com/oba-ldap/oba/internal/schema"
+	"github.com/KilimcininKorOglu/oba/internal/schema"
 )
 
 // Evaluator evaluates LDAP search filters against entries.

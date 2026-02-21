@@ -4,7 +4,7 @@ package server
 import (
 	"sort"
 
-	"github.com/oba-ldap/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
 )
 
 // RootDSE represents the Root DSA-Specific Entry that provides information

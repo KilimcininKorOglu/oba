@@ -24,7 +24,7 @@ Oba is a lightweight, zero-dependency LDAP server implementation written in pure
 ### Using Docker
 
 ```bash
-git clone https://github.com/oba-ldap/oba.git
+git clone https://github.com/KilimcininKorOglu/oba.git
 cd oba
 docker compose up -d
 
@@ -35,7 +35,7 @@ ldapsearch -x -H ldap://localhost:1389 -b "dc=example,dc=com" "(objectClass=*)"
 ### Building from Source
 
 ```bash
-git clone https://github.com/oba-ldap/oba.git
+git clone https://github.com/KilimcininKorOglu/oba.git
 cd oba
 make build
 ./bin/oba serve --config config.yaml

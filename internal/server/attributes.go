@@ -4,7 +4,7 @@ package server
 import (
 	"strings"
 
-	"github.com/oba-ldap/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
 )
 
 // AttributeSelector handles attribute selection for search results.

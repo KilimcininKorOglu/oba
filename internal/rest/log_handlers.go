@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/logging"
+	"github.com/KilimcininKorOglu/oba/internal/logging"
 )
 
 // LogQueryRequest represents a log query request.

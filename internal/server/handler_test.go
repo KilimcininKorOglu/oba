@@ -4,7 +4,7 @@ package server
 import (
 	"testing"
 
-	"github.com/oba-ldap/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
 )
 
 func TestNewHandler(t *testing.T) {

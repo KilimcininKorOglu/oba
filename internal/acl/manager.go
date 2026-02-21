@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/logging"
+	"github.com/KilimcininKorOglu/oba/internal/logging"
 )
 
 // Manager manages ACL configuration with hot reload support.

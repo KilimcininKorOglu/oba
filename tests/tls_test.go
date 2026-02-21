@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/ldap"
-	"github.com/oba-ldap/oba/internal/logging"
-	"github.com/oba-ldap/oba/internal/server"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/logging"
+	"github.com/KilimcininKorOglu/oba/internal/server"
 )
 
 // TestIntegrationTLS tests TLS connection functionality.

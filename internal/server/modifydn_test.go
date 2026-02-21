@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/oba-ldap/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
 )
 
 // mockModifyDNBackend implements the ModifyDNBackend interface for testing.

@@ -3,8 +3,8 @@ package server
 import (
 	"testing"
 
-	"github.com/oba-ldap/oba/internal/ber"
-	"github.com/oba-ldap/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/ber"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
 )
 
 func TestParsePersistentSearchControl(t *testing.T) {

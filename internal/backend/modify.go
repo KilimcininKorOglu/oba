@@ -6,7 +6,7 @@ package backend
 import (
 	"strings"
 
-	"github.com/oba-ldap/oba/internal/server"
+	"github.com/KilimcininKorOglu/oba/internal/server"
 )
 
 // ModifyEntry modifies an existing entry with proper validation.

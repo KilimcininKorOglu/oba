@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/backend"
+	"github.com/KilimcininKorOglu/oba/internal/backend"
 )
 
 // TestLdapUtils tests compatibility with ldap-utils command-line tools.

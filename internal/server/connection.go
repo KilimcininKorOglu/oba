@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/ber"
-	"github.com/oba-ldap/oba/internal/ldap"
-	"github.com/oba-ldap/oba/internal/logging"
+	"github.com/KilimcininKorOglu/oba/internal/ber"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/logging"
 )
 
 // Connection errors

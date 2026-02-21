@@ -3,7 +3,7 @@
 package filter
 
 import (
-	"github.com/oba-ldap/oba/internal/storage/index"
+	"github.com/KilimcininKorOglu/oba/internal/storage/index"
 )
 
 // QueryPlan represents an optimized execution plan for a filter query.

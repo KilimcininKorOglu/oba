@@ -5,9 +5,9 @@ import (
 	"net"
 	"testing"
 
-	"github.com/oba-ldap/oba/internal/ber"
-	"github.com/oba-ldap/oba/internal/ldap"
-	"github.com/oba-ldap/oba/internal/password"
+	"github.com/KilimcininKorOglu/oba/internal/ber"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/password"
 )
 
 // mockPasswordBackend is a mock implementation of PasswordBackend for testing.

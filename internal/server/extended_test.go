@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/oba-ldap/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
 )
 
 // mockExtendedHandler is a test implementation of ExtendedHandler.

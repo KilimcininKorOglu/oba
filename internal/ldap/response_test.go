@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/oba-ldap/oba/internal/ber"
+	"github.com/KilimcininKorOglu/oba/internal/ber"
 )
 
 func TestResultCode_String(t *testing.T) {

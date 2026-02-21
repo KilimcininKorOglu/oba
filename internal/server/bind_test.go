@@ -4,8 +4,8 @@ package server
 import (
 	"testing"
 
-	"github.com/oba-ldap/oba/internal/ldap"
-	"github.com/oba-ldap/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
 )
 
 // mockBackend implements the Backend interface for testing.

@@ -10,11 +10,11 @@ import (
 func TestParseBenchmarkOutput(t *testing.T) {
 	input := `goos: darwin
 goarch: arm64
-pkg: github.com/oba-ldap/oba/internal/ber
+pkg: github.com/KilimcininKorOglu/oba/internal/ber
 BenchmarkBEREncodeInteger-10    2406133    51.32 ns/op    8 B/op    1 allocs/op
 BenchmarkBERDecodeInteger-10    16797212   8.809 ns/op    0 B/op    0 allocs/op
 PASS
-ok  	github.com/oba-ldap/oba/internal/ber	8.035s`
+ok  	github.com/KilimcininKorOglu/oba/internal/ber	8.035s`
 
 	results, err := ParseBenchmarkOutput(strings.NewReader(input))
 	if err != nil {

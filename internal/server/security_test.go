@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
 )
 
 // generateTestTLSCertificate generates a self-signed certificate for testing.

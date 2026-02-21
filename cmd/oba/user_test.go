@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/oba-ldap/oba/internal/storage"
-	"github.com/oba-ldap/oba/internal/storage/engine"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage/engine"
 )
 
 // mockPasswordReader is a mock password reader for testing.

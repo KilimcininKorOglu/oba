@@ -16,7 +16,7 @@ The fastest way to get started:
 
 ```bash
 # Clone the repository
-git clone https://github.com/oba-ldap/oba.git
+git clone https://github.com/KilimcininKorOglu/oba.git
 cd oba
 
 # Start with Docker Compose
@@ -30,7 +30,7 @@ ldapsearch -x -H ldap://localhost:1389 -b "dc=example,dc=com" "(objectClass=*)"
 
 ```bash
 # Clone the repository
-git clone https://github.com/oba-ldap/oba.git
+git clone https://github.com/KilimcininKorOglu/oba.git
 cd oba
 
 # Build using Makefile

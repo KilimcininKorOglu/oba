@@ -9,7 +9,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/oba-ldap/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
 )
 
 // LDIF errors.

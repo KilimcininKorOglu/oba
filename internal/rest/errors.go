@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/oba-ldap/oba/internal/backend"
-	"github.com/oba-ldap/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/backend"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
 )
 
 // LDAP result code to HTTP status code mapping.

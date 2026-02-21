@@ -7,7 +7,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/oba-ldap/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
 )
 
 // StartTLS OID as defined in RFC 4511

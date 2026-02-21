@@ -5,8 +5,8 @@ import (
 	"bytes"
 	"strings"
 
-	"github.com/oba-ldap/oba/internal/ldap"
-	"github.com/oba-ldap/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
 )
 
 // CompareResult represents the result of a compare operation.

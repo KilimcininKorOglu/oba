@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/ldap"
-	"github.com/oba-ldap/oba/internal/logging"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/logging"
 )
 
 // generateLDAPSTestCertificate creates a self-signed certificate for testing.

@@ -4,7 +4,7 @@ import (
 	"container/list"
 	"sync"
 
-	"github.com/oba-ldap/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
 )
 
 const DefaultCacheSize = 10000

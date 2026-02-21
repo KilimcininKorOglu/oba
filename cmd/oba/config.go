@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/config"
+	"github.com/KilimcininKorOglu/oba/internal/config"
 )
 
 // configCmd handles the config command.

@@ -6,8 +6,8 @@ package backend
 import (
 	"strings"
 
-	"github.com/oba-ldap/oba/internal/storage"
-	"github.com/oba-ldap/oba/internal/storage/radix"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage/radix"
 )
 
 // ErrNoParent is returned when the parent entry does not exist.

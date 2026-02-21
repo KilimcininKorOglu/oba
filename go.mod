@@ -1,3 +1,3 @@
-module github.com/oba-ldap/oba
+module github.com/KilimcininKorOglu/oba
 
 go 1.22

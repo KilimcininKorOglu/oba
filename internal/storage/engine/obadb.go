@@ -9,12 +9,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/oba-ldap/oba/internal/crypto"
-	"github.com/oba-ldap/oba/internal/storage"
-	"github.com/oba-ldap/oba/internal/storage/index"
-	"github.com/oba-ldap/oba/internal/storage/mvcc"
-	"github.com/oba-ldap/oba/internal/storage/radix"
-	"github.com/oba-ldap/oba/internal/storage/tx"
+	"github.com/KilimcininKorOglu/oba/internal/crypto"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage/index"
+	"github.com/KilimcininKorOglu/oba/internal/storage/mvcc"
+	"github.com/KilimcininKorOglu/oba/internal/storage/radix"
+	"github.com/KilimcininKorOglu/oba/internal/storage/tx"
 )
 
 // File names for ObaDB storage.

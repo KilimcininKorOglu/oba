@@ -3,7 +3,7 @@
 package radix
 
 import (
-	"github.com/oba-ldap/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
 )
 
 // Node represents a node in the radix tree for DN hierarchy traversal.

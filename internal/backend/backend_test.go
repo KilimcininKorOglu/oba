@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/oba-ldap/oba/internal/config"
-	"github.com/oba-ldap/oba/internal/filter"
-	"github.com/oba-ldap/oba/internal/server"
-	"github.com/oba-ldap/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/config"
+	"github.com/KilimcininKorOglu/oba/internal/filter"
+	"github.com/KilimcininKorOglu/oba/internal/server"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
 )
 
 // mockStorageEngine is a mock implementation of storage.StorageEngine for testing.

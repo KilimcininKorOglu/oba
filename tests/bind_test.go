@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/ber"
-	"github.com/oba-ldap/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/ber"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
 )
 
 // TestIntegrationBind tests bind operations end-to-end.

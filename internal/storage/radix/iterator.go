@@ -1,7 +1,7 @@
 package radix
 
 import (
-	"github.com/oba-ldap/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
 )
 
 // Scope represents the LDAP search scope.

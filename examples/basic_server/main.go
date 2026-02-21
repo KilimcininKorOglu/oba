@@ -21,12 +21,12 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/oba-ldap/oba/internal/backend"
-	"github.com/oba-ldap/oba/internal/config"
-	"github.com/oba-ldap/oba/internal/filter"
-	"github.com/oba-ldap/oba/internal/ldap"
-	"github.com/oba-ldap/oba/internal/logging"
-	"github.com/oba-ldap/oba/internal/server"
+	"github.com/KilimcininKorOglu/oba/internal/backend"
+	"github.com/KilimcininKorOglu/oba/internal/config"
+	"github.com/KilimcininKorOglu/oba/internal/filter"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/logging"
+	"github.com/KilimcininKorOglu/oba/internal/server"
 )
 
 func main() {

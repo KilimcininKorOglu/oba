@@ -11,7 +11,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/oba-ldap/oba/internal/filter"
+	"github.com/KilimcininKorOglu/oba/internal/filter"
 )
 
 func main() {

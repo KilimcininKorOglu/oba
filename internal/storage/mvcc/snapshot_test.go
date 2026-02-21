@@ -7,8 +7,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/oba-ldap/oba/internal/storage"
-	"github.com/oba-ldap/oba/internal/storage/tx"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage/tx"
 )
 
 // --- Snapshot Tests ---

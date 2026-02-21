@@ -39,7 +39,7 @@ Oba is a zero-dependency LDAP server written in pure Go. It uses only the Go sta
 The easiest way to build Oba:
 
 ```bash
-git clone https://github.com/oba-ldap/oba.git
+git clone https://github.com/KilimcininKorOglu/oba.git
 cd oba
 
 # Build the binary
@@ -64,7 +64,7 @@ Available Makefile targets:
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/oba-ldap/oba.git
+git clone https://github.com/KilimcininKorOglu/oba.git
 cd oba
 ```
 

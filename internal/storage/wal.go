@@ -8,7 +8,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/oba-ldap/oba/internal/crypto"
+	"github.com/KilimcininKorOglu/oba/internal/crypto"
 )
 
 // WAL constants.

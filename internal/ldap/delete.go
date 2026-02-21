@@ -5,7 +5,7 @@ package ldap
 import (
 	"errors"
 
-	"github.com/oba-ldap/oba/internal/ber"
+	"github.com/KilimcininKorOglu/oba/internal/ber"
 )
 
 // DeleteRequest represents an LDAP Delete Request

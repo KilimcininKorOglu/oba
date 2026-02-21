@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/storage"
-	"github.com/oba-ldap/oba/internal/storage/engine"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage/engine"
 )
 
 // LogEntry represents a single log entry stored in the database.

@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/password"
+	"github.com/KilimcininKorOglu/oba/internal/password"
 )
 
 func main() {

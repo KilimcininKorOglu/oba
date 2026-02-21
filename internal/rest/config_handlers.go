@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/oba-ldap/oba/internal/config"
+	"github.com/KilimcininKorOglu/oba/internal/config"
 )
 
 // HandleGetConfig handles GET /api/v1/config

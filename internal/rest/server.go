@@ -9,10 +9,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/acl"
-	"github.com/oba-ldap/oba/internal/backend"
-	"github.com/oba-ldap/oba/internal/config"
-	"github.com/oba-ldap/oba/internal/logging"
+	"github.com/KilimcininKorOglu/oba/internal/acl"
+	"github.com/KilimcininKorOglu/oba/internal/backend"
+	"github.com/KilimcininKorOglu/oba/internal/config"
+	"github.com/KilimcininKorOglu/oba/internal/logging"
 )
 
 // ServerConfig holds REST server configuration.

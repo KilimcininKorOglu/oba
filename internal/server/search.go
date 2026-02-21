@@ -4,10 +4,10 @@ package server
 import (
 	"strings"
 
-	"github.com/oba-ldap/oba/internal/acl"
-	"github.com/oba-ldap/oba/internal/filter"
-	"github.com/oba-ldap/oba/internal/ldap"
-	"github.com/oba-ldap/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/acl"
+	"github.com/KilimcininKorOglu/oba/internal/filter"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
 )
 
 // SearchBackend defines the interface for search operations.

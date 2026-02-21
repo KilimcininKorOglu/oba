@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/oba-ldap/oba/internal/crypto"
-	"github.com/oba-ldap/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/crypto"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
 )
 
 func TestObaDBEncryption(t *testing.T) {

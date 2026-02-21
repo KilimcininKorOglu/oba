@@ -3,7 +3,7 @@
 package ldap
 
 import (
-	"github.com/oba-ldap/oba/internal/ber"
+	"github.com/KilimcininKorOglu/oba/internal/ber"
 )
 
 // Context-specific tags for response fields

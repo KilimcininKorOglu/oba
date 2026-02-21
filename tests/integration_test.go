@@ -17,13 +17,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/backend"
-	"github.com/oba-ldap/oba/internal/config"
-	"github.com/oba-ldap/oba/internal/ldap"
-	"github.com/oba-ldap/oba/internal/logging"
-	"github.com/oba-ldap/oba/internal/server"
-	"github.com/oba-ldap/oba/internal/storage"
-	"github.com/oba-ldap/oba/internal/storage/engine"
+	"github.com/KilimcininKorOglu/oba/internal/backend"
+	"github.com/KilimcininKorOglu/oba/internal/config"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/logging"
+	"github.com/KilimcininKorOglu/oba/internal/server"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage/engine"
 )
 
 // TestConfig holds configuration for integration tests.

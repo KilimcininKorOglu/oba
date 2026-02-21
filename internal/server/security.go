@@ -6,7 +6,7 @@ import (
 	"crypto/x509"
 	"errors"
 
-	"github.com/oba-ldap/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
 )
 
 // Security policy errors

@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/backend"
+	"github.com/KilimcininKorOglu/oba/internal/backend"
 )
 
 // Auth errors.

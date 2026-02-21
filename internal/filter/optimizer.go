@@ -5,7 +5,7 @@ package filter
 import (
 	"strings"
 
-	"github.com/oba-ldap/oba/internal/storage/index"
+	"github.com/KilimcininKorOglu/oba/internal/storage/index"
 )
 
 // Optimizer analyzes filters and creates optimized query plans using available indexes.

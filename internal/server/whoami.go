@@ -2,7 +2,7 @@
 package server
 
 import (
-	"github.com/oba-ldap/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
 )
 
 // WhoAmIOID is the OID for the Who Am I extended operation.

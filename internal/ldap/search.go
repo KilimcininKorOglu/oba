@@ -5,7 +5,7 @@ package ldap
 import (
 	"errors"
 
-	"github.com/oba-ldap/oba/internal/ber"
+	"github.com/KilimcininKorOglu/oba/internal/ber"
 )
 
 // SearchScope represents the scope of an LDAP search operation

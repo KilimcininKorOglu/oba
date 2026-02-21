@@ -15,17 +15,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/acl"
-	"github.com/oba-ldap/oba/internal/backend"
-	"github.com/oba-ldap/oba/internal/config"
-	"github.com/oba-ldap/oba/internal/filter"
-	"github.com/oba-ldap/oba/internal/ldap"
-	"github.com/oba-ldap/oba/internal/logging"
-	"github.com/oba-ldap/oba/internal/password"
-	"github.com/oba-ldap/oba/internal/rest"
-	"github.com/oba-ldap/oba/internal/server"
-	"github.com/oba-ldap/oba/internal/storage"
-	"github.com/oba-ldap/oba/internal/storage/engine"
+	"github.com/KilimcininKorOglu/oba/internal/acl"
+	"github.com/KilimcininKorOglu/oba/internal/backend"
+	"github.com/KilimcininKorOglu/oba/internal/config"
+	"github.com/KilimcininKorOglu/oba/internal/filter"
+	"github.com/KilimcininKorOglu/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/logging"
+	"github.com/KilimcininKorOglu/oba/internal/password"
+	"github.com/KilimcininKorOglu/oba/internal/rest"
+	"github.com/KilimcininKorOglu/oba/internal/server"
+	"github.com/KilimcininKorOglu/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage/engine"
 )
 
 // Server errors.

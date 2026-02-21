@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/oba-ldap/oba/internal/backup"
+	"github.com/KilimcininKorOglu/oba/internal/backup"
 )
 
 // generateBackupFilename generates a backup filename with timestamp.
