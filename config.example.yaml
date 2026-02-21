@@ -123,3 +123,28 @@ rest:
   # CORS allowed origins
   corsOrigins:
     - "*"
+
+# Cluster configuration (Raft replication)
+cluster:
+  # Enable cluster mode for high availability
+  enabled: false
+  # This node's unique ID (must be unique in cluster)
+  nodeID: 1
+  # Raft RPC listen address
+  raftAddr: "0.0.0.0:4445"
+  # Cluster peers (including this node)
+  peers:
+    - id: 1
+      addr: "node1:4445"
+    - id: 2
+      addr: "node2:4445"
+    - id: 3
+      addr: "node3:4445"
+  # Election timeout (randomized between 1x-2x)
+  electionTimeout: 150ms
+  # Heartbeat interval (must be less than electionTimeout)
+  heartbeatTimeout: 50ms
+  # Snapshot after N log entries (0 = disabled)
+  snapshotInterval: 10000
+  # Raft data directory (for persistent state and snapshots)
+  dataDir: "/var/lib/oba/raft"

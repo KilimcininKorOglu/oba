@@ -16,6 +16,7 @@ type Config struct {
 	ACL       ACLConfig       `yaml:"acl"`
 	ACLFile   string          `yaml:"aclFile"`
 	REST      RESTConfig      `yaml:"rest"`
+	Cluster   ClusterConfig   `yaml:"cluster"`
 }
 
 // ResolvePaths resolves relative paths in the configuration to absolute paths.
@@ -180,4 +181,22 @@ type RESTConfig struct {
 	TokenTTL    time.Duration `yaml:"tokenTTL"`
 	RateLimit   int           `yaml:"rateLimit"`
 	CORSOrigins []string      `yaml:"corsOrigins"`
+}
+
+// ClusterConfig holds Raft cluster configuration.
+type ClusterConfig struct {
+	Enabled          bool          `yaml:"enabled"`
+	NodeID           uint64        `yaml:"nodeID"`
+	RaftAddr         string        `yaml:"raftAddr"`
+	Peers            []PeerConfig  `yaml:"peers"`
+	ElectionTimeout  time.Duration `yaml:"electionTimeout"`
+	HeartbeatTimeout time.Duration `yaml:"heartbeatTimeout"`
+	SnapshotInterval uint64        `yaml:"snapshotInterval"`
+	DataDir          string        `yaml:"dataDir"`
+}
+
+// PeerConfig holds peer node configuration.
+type PeerConfig struct {
+	ID   uint64 `yaml:"id"`
+	Addr string `yaml:"addr"`
 }
