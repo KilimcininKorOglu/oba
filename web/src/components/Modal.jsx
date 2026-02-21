@@ -27,8 +27,8 @@ export default function Modal({ isOpen, onClose, title, children }) {
         onClick={onClose}
       />
       <div className="flex min-h-full items-center justify-center p-4">
-        <div className="relative bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-          <div className="flex items-center justify-between p-4 border-b border-zinc-700">
+        <div className="relative bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-visible">
+          <div className="flex items-center justify-between p-4 border-b border-zinc-700 flex-shrink-0">
             <h3 className="text-lg font-semibold text-zinc-100">{title}</h3>
             <button
               onClick={onClose}
@@ -37,7 +37,7 @@ export default function Modal({ isOpen, onClose, title, children }) {
               <X className="w-5 h-5" />
             </button>
           </div>
-          <div className="p-4">
+          <div className="p-4 overflow-y-auto flex-1">
             {children}
           </div>
         </div>

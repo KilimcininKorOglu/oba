@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, ChevronDown, Check } from 'lucide-react';
 
 export default function MultiSelect({ 
@@ -12,18 +13,47 @@ export default function MultiSelect({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [dropdownStyle, setDropdownStyle] = useState({});
   const containerRef = useRef(null);
+  const dropdownRef = useRef(null);
   const inputRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (containerRef.current && !containerRef.current.contains(e.target)) {
+      if (
+        containerRef.current && 
+        !containerRef.current.contains(e.target) &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target)
+      ) {
         setIsOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (isOpen && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      const dropdownHeight = 250;
+      
+      const openAbove = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+      
+      setDropdownStyle({
+        position: 'fixed',
+        left: rect.left,
+        width: rect.width,
+        ...(openAbove 
+          ? { bottom: window.innerHeight - rect.top + 4 }
+          : { top: rect.bottom + 4 }
+        ),
+        maxHeight: Math.min(dropdownHeight, openAbove ? spaceAbove - 20 : spaceBelow - 20)
+      });
+    }
+  }, [isOpen]);
 
   const filteredOptions = options.filter(opt => {
     const label = typeof opt === 'string' ? opt : opt[labelKey];
@@ -85,8 +115,12 @@ export default function MultiSelect({
         <ChevronDown className={`w-4 h-4 text-zinc-400 ml-auto transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </div>
 
-      {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-md shadow-lg max-h-60 overflow-hidden">
+      {isOpen && createPortal(
+        <div 
+          ref={dropdownRef}
+          style={dropdownStyle}
+          className="z-[100] bg-zinc-800 border border-zinc-700 rounded-md shadow-lg overflow-hidden"
+        >
           {searchable && (
             <div className="p-2 border-b border-zinc-700">
               <input
@@ -99,7 +133,7 @@ export default function MultiSelect({
               />
             </div>
           )}
-          <div className="overflow-y-auto max-h-48">
+          <div className="overflow-y-auto" style={{ maxHeight: dropdownStyle.maxHeight ? dropdownStyle.maxHeight - 50 : 200 }}>
             {filteredOptions.length === 0 ? (
               <div className="px-3 py-2 text-zinc-500 text-sm">No options found</div>
             ) : (
@@ -124,7 +158,8 @@ export default function MultiSelect({
               })
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
