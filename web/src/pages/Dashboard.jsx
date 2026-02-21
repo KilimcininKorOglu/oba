@@ -4,7 +4,7 @@ import {
   Activity, Clock, Users, BarChart3, Search, Plus, Settings,
   Database, Shield, Cpu, Lock, UserX, AlertTriangle,
   LogIn, FileSearch, FilePlus, FileEdit, Trash2, GitCompare,
-  RefreshCw
+  RefreshCw, Server, Crown, Network
 } from 'lucide-react';
 import api from '../api/client';
 import Header from '../components/Header';
@@ -104,6 +104,7 @@ function ActivityItem({ activity }) {
 export default function Dashboard() {
   const [stats, setStats] = useState(null);
   const [activities, setActivities] = useState([]);
+  const [clusterStatus, setClusterStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -112,9 +113,10 @@ export default function Dashboard() {
     try {
       if (showRefresh) setRefreshing(true);
       
-      const [statsData, activitiesData] = await Promise.all([
+      const [statsData, activitiesData, clusterData] = await Promise.all([
         api.getStats(),
-        api.getActivities(10)
+        api.getActivities(10),
+        api.getClusterStatus().catch(() => null)
       ]);
       
       // Set server timezone for date formatting
@@ -124,6 +126,7 @@ export default function Dashboard() {
       
       setStats(statsData);
       setActivities(activitiesData.activities || []);
+      setClusterStatus(clusterData);
       setError(null);
     } catch (err) {
       setError(err.message);
@@ -314,6 +317,79 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Cluster Status - Only show if cluster mode is enabled */}
+      {clusterStatus?.enabled && (
+        <div className="bg-zinc-800 rounded-lg border border-zinc-700 p-5 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Network className="w-5 h-5 text-violet-500" />
+            <h2 className="text-lg font-medium text-zinc-100">Cluster Status</h2>
+            {clusterStatus.state === 'leader' && (
+              <span className="flex items-center gap-1 px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs rounded-full">
+                <Crown className="w-3 h-3" />
+                Leader
+              </span>
+            )}
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            <div className="p-3 bg-zinc-700/50 rounded-lg">
+              <span className="text-xs text-zinc-400 block mb-1">Node ID</span>
+              <span className="text-lg font-semibold text-zinc-100">{clusterStatus.nodeId}</span>
+            </div>
+            <div className="p-3 bg-zinc-700/50 rounded-lg">
+              <span className="text-xs text-zinc-400 block mb-1">State</span>
+              <span className={`text-lg font-semibold capitalize ${
+                clusterStatus.state === 'leader' ? 'text-yellow-400' : 
+                clusterStatus.state === 'follower' ? 'text-green-400' : 'text-orange-400'
+              }`}>
+                {clusterStatus.state}
+              </span>
+            </div>
+            <div className="p-3 bg-zinc-700/50 rounded-lg">
+              <span className="text-xs text-zinc-400 block mb-1">Term</span>
+              <span className="text-lg font-semibold text-zinc-100">{clusterStatus.term}</span>
+            </div>
+            <div className="p-3 bg-zinc-700/50 rounded-lg">
+              <span className="text-xs text-zinc-400 block mb-1">Commit Index</span>
+              <span className="text-lg font-semibold text-zinc-100">{clusterStatus.commitIndex}</span>
+            </div>
+          </div>
+
+          {/* Peers */}
+          {clusterStatus.peers && clusterStatus.peers.length > 0 && (
+            <div>
+              <h3 className="text-sm font-medium text-zinc-400 mb-2">Cluster Peers</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                {clusterStatus.peers.map((peer) => (
+                  <div 
+                    key={peer.id} 
+                    className={`flex items-center gap-2 p-2 rounded-lg ${
+                      peer.id === clusterStatus.nodeId ? 'bg-violet-500/20 border border-violet-500/30' :
+                      peer.id === clusterStatus.leaderId ? 'bg-yellow-500/10 border border-yellow-500/20' :
+                      'bg-zinc-700/30'
+                    }`}
+                  >
+                    <Server className={`w-4 h-4 ${
+                      peer.id === clusterStatus.leaderId ? 'text-yellow-400' : 'text-zinc-400'
+                    }`} />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm text-zinc-200 block">Node {peer.id}</span>
+                      <span className="text-xs text-zinc-500 truncate block">{peer.addr}</span>
+                    </div>
+                    {peer.id === clusterStatus.nodeId && (
+                      <span className="text-xs text-violet-400">(this)</span>
+                    )}
+                    {peer.id === clusterStatus.leaderId && peer.id !== clusterStatus.nodeId && (
+                      <Crown className="w-3 h-3 text-yellow-400" />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* LDAP Operations */}
