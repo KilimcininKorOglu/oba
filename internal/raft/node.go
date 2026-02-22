@@ -284,7 +284,7 @@ func (n *Node) runCandidate() {
 		case <-n.stopCh:
 			return
 		case <-n.electionTimer.C:
-			// Election timeout - restart election
+			// Election timeout - restart election with new term
 			n.state.BecomeCandidate()
 			n.state.SetVotedFor(n.id)
 			return
@@ -302,7 +302,7 @@ func (n *Node) runCandidate() {
 		}
 	}
 
-	// Didn't get enough votes, restart election
+	// Didn't get enough votes, restart election with new term
 	n.state.BecomeCandidate()
 	n.state.SetVotedFor(n.id)
 }
@@ -331,6 +331,7 @@ func (n *Node) runLeader() {
 }
 
 func (n *Node) becomeLeader() {
+	n.logger.Info("became leader", "nodeId", n.id, "term", n.state.CurrentTerm())
 	n.state.BecomeLeader(n.id)
 
 	// Initialize leader state

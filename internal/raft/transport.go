@@ -33,6 +33,7 @@ type TCPTransport struct {
 	listener net.Listener
 	peers    map[uint64]string   // peerID -> address
 	conns    map[uint64]net.Conn // peerID -> connection
+	connMu   map[uint64]*sync.Mutex // peerID -> connection mutex
 	handler  RPCHandler
 	timeout  time.Duration
 	closed   bool
@@ -42,10 +43,15 @@ type TCPTransport struct {
 
 // NewTCPTransport creates a new TCP transport.
 func NewTCPTransport(addr string, peers map[uint64]string) *TCPTransport {
+	connMu := make(map[uint64]*sync.Mutex)
+	for peerID := range peers {
+		connMu[peerID] = &sync.Mutex{}
+	}
 	return &TCPTransport{
 		addr:    addr,
 		peers:   peers,
 		conns:   make(map[uint64]net.Conn),
+		connMu:  connMu,
 		timeout: 5 * time.Second,
 	}
 }
@@ -65,12 +71,29 @@ func (t *TCPTransport) LocalAddr() string {
 // Send sends an RPC message to a peer and waits for response.
 // Message format: [type:1][length:4][data:N]
 func (t *TCPTransport) Send(peerID uint64, msgType uint8, data []byte) ([]byte, error) {
+	// Get or create per-peer mutex
 	t.mu.Lock()
 	if t.closed {
 		t.mu.Unlock()
 		return nil, ErrTransportClosed
 	}
+	peerMu, ok := t.connMu[peerID]
+	if !ok {
+		peerMu = &sync.Mutex{}
+		t.connMu[peerID] = peerMu
+	}
+	t.mu.Unlock()
 
+	// Lock per-peer mutex to serialize access to this peer's connection
+	peerMu.Lock()
+	defer peerMu.Unlock()
+
+	// Get or create connection
+	t.mu.Lock()
+	if t.closed {
+		t.mu.Unlock()
+		return nil, ErrTransportClosed
+	}
 	conn, ok := t.conns[peerID]
 	if !ok || conn == nil {
 		addr, exists := t.peers[peerID]
