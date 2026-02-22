@@ -306,18 +306,7 @@ func (s *LogStore) Write(level, msg, source, user, requestID string, fields map[
 		return s.forwardToLeader(entry, leaderAddr)
 	}
 
-	// Check if we're in cluster mode but cluster writer not yet set
-	// Buffer the entry for later flush
-	if s.pendingEntries != nil || s.isClusterMode() {
-		// Limit buffer size to prevent memory issues
-		if len(s.pendingEntries) < 1000 {
-			s.pendingEntries = append(s.pendingEntries, entry)
-		}
-		s.mu.Unlock()
-		return nil
-	}
-
-	// Standalone mode: direct write
+	// Standalone mode or cluster mode without cluster writer: direct write
 	err := s.writeLocal(entry)
 	s.mu.Unlock()
 	return err
