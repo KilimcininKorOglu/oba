@@ -150,6 +150,7 @@ func (s *Server) setupRoutes() {
 	// Cluster management endpoints
 	s.router.GET("/api/v1/cluster/status", s.handlers.HandleClusterStatus)
 	s.router.GET("/api/v1/cluster/health", s.handlers.HandleClusterHealth)
+	s.router.GET("/api/v1/cluster/ready", s.handlers.HandleClusterReady)
 	s.router.GET("/api/v1/cluster/leader", s.handlers.HandleClusterLeader)
 	s.router.POST("/api/v1/cluster/repair/uid", s.handlers.HandleRepairUIDUniqueness)
 }
@@ -174,6 +175,7 @@ func (s *Server) setupMiddleware() {
 		"/api/v1/auth/bind",
 		"/api/v1/config/public",
 		"/api/v1/cluster/health",
+		"/api/v1/cluster/ready",
 		"/api/v1/internal/", // Internal cluster communication
 	}))
 

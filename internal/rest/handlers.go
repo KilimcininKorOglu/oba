@@ -1124,6 +1124,46 @@ func (h *Handlers) HandleClusterHealth(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandleClusterReady handles GET /api/v1/cluster/ready
+// Returns 200 only when this node is leader and fully caught up (lastApplied == commitIndex).
+func (h *Handlers) HandleClusterReady(w http.ResponseWriter, r *http.Request) {
+	if h.clusterBackend == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"status": "ok",
+			"mode":   "standalone",
+			"ready":  true,
+		})
+		return
+	}
+
+	st := h.clusterBackend.Status()
+	isLeader := h.clusterBackend.IsLeader()
+	caughtUp := st.LastApplied >= st.CommitIndex
+	ready := isLeader && caughtUp
+
+	status := map[string]interface{}{
+		"status":      "ok",
+		"mode":        "cluster",
+		"nodeId":      st.NodeID,
+		"state":       st.State,
+		"isLeader":    isLeader,
+		"leaderId":    st.LeaderID,
+		"commitIndex": st.CommitIndex,
+		"lastApplied": st.LastApplied,
+		"caughtUp":    caughtUp,
+		"ready":       ready,
+	}
+
+	if ready {
+		writeJSON(w, http.StatusOK, status)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusServiceUnavailable)
+	json.NewEncoder(w).Encode(status)
+}
+
 // HandleClusterLeader handles GET /api/v1/cluster/leader
 func (h *Handlers) HandleClusterLeader(w http.ResponseWriter, r *http.Request) {
 	atomic.AddInt64(&h.requestCount, 1)
