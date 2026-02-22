@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Users, Pencil } from 'lucide-react';
+import { Plus, Trash2, Users, Pencil, MoveRight } from 'lucide-react';
 import api from '../api/client';
 import Header from '../components/Header';
 import Modal from '../components/Modal';
@@ -10,9 +10,13 @@ export default function Groups() {
   const { showToast } = useToast();
   const [groups, setGroups] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
+  const [allOUs, setAllOUs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [baseDN, setBaseDN] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [moveGroup, setMoveGroup] = useState(null);
+  const [moveTarget, setMoveTarget] = useState('');
   const [editGroup, setEditGroup] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
   const [form, setForm] = useState({ cn: '', description: '', members: [] });
@@ -24,7 +28,7 @@ export default function Groups() {
       const base = config?.directory?.baseDN || 'dc=example,dc=com';
       setBaseDN(base);
 
-      const [groupsData, usersData] = await Promise.all([
+      const [groupsData, usersData, ousData] = await Promise.all([
         api.searchEntries({
           baseDN: base,
           scope: 'sub',
@@ -36,11 +40,18 @@ export default function Groups() {
           scope: 'sub',
           filter: '(|(objectClass=person)(objectClass=inetOrgPerson))',
           limit: 1000
+        }),
+        api.searchEntries({
+          baseDN: base,
+          scope: 'sub',
+          filter: '(objectClass=organizationalUnit)',
+          limit: 1000
         })
       ]);
 
       setGroups(groupsData.entries || []);
       setAllUsers(usersData.entries || []);
+      setAllOUs(ousData.entries || []);
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
@@ -60,6 +71,29 @@ export default function Groups() {
       fetchData();
     } catch (err) {
       showToast(err.message, 'error');
+    }
+  };
+
+  const openMoveModal = (group) => {
+    setMoveGroup(group);
+    setMoveTarget('');
+    setShowMoveModal(true);
+  };
+
+  const handleMove = async () => {
+    if (!moveGroup || !moveTarget) return;
+    setFormLoading(true);
+    try {
+      const rdn = moveGroup.dn.split(',')[0];
+      await api.moveEntry(moveGroup.dn, rdn, moveTarget);
+      showToast('Group moved successfully', 'success');
+      setShowMoveModal(false);
+      setMoveGroup(null);
+      fetchData();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setFormLoading(false);
     }
   };
 
@@ -192,6 +226,13 @@ export default function Groups() {
                   <td className="px-6 py-4 whitespace-nowrap text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button
+                        onClick={() => openMoveModal(group)}
+                        className="text-blue-400 hover:text-blue-300"
+                        title="Move to another OU"
+                      >
+                        <MoveRight className="w-4 h-4" />
+                      </button>
+                      <button
                         onClick={() => openEditModal(group)}
                         className="text-zinc-400 hover:text-zinc-200"
                         title="Edit"
@@ -268,6 +309,45 @@ export default function Groups() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal isOpen={showMoveModal} onClose={() => setShowMoveModal(false)} title="Move Group">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-zinc-300 mb-1">Current Location</label>
+            <div className="px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-md text-zinc-400 font-mono text-sm">
+              {moveGroup?.dn}
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-zinc-300 mb-1">Move to</label>
+            <select
+              value={moveTarget}
+              onChange={(e) => setMoveTarget(e.target.value)}
+              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-md text-zinc-100 focus:outline-none focus:border-blue-500"
+            >
+              <option value="">Select destination OU...</option>
+              {allOUs.map(ou => (
+                <option key={ou.dn} value={ou.dn}>{ou.dn}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={handleMove}
+              disabled={formLoading || !moveTarget}
+              className="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md disabled:opacity-50"
+            >
+              {formLoading ? 'Moving...' : 'Move'}
+            </button>
+            <button
+              onClick={() => setShowMoveModal(false)}
+              className="px-4 py-2 bg-zinc-700 text-zinc-300 rounded-md hover:bg-zinc-600"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );
