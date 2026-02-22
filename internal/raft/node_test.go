@@ -287,7 +287,7 @@ func TestProposeReturnsApplyError(t *testing.T) {
 	network := NewInMemoryNetwork()
 	transport := network.NewTransport(1, "localhost:4445")
 	sm := NewMockStateMachine()
-	applyErr := errors.New("uid attribute must be unique")
+	applyErr := errors.New("hard apply failure")
 	sm.SetApplyError(applyErr)
 
 	node, _ := NewNode(cfg, sm, transport)
@@ -303,6 +303,21 @@ func TestProposeReturnsApplyError(t *testing.T) {
 	err := node.Propose(cmd)
 	if !errors.Is(err, applyErr) {
 		t.Fatalf("expected apply error %v, got %v", applyErr, err)
+	}
+}
+
+func TestIsSkippableApplyErrorUIDVariant(t *testing.T) {
+	if !isSkippableApplyError(errors.New("uid attribute must be unique")) {
+		t.Fatal("expected uid uniqueness error variant to be skippable")
+	}
+	if !isSkippableApplyError(errors.New("uid attribute value must be unique")) {
+		t.Fatal("expected uid uniqueness error to be skippable")
+	}
+	if !isSkippableApplyError(errors.New("version has been deleted")) {
+		t.Fatal("expected deleted-version error to be skippable")
+	}
+	if isSkippableApplyError(errors.New("some other hard error")) {
+		t.Fatal("did not expect unrelated error to be skippable")
 	}
 }
 

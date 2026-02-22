@@ -56,7 +56,7 @@ export default function Users() {
 
       // Check lock status for each user
       const lockStatuses = {};
-      for (const user of usersData.entries || []) {
+      for (const user of (usersData.entries || [])) {
         try {
           const status = await api.getLockStatus(user.dn);
           if (status.locked) {

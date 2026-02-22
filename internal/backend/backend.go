@@ -40,6 +40,8 @@ var (
 	ErrAccountDisabled = errors.New("backend: account is disabled")
 	// ErrAccountLocked is returned when trying to bind with a locked account.
 	ErrAccountLocked = errors.New("backend: account is locked due to too many failed attempts")
+	// ErrInvalidPlacement is returned when an entry is not under the correct organizational unit.
+	ErrInvalidPlacement = errors.New("backend: invalid entry placement")
 )
 
 // PasswordAttribute is the standard LDAP attribute name for user passwords.
@@ -369,6 +371,11 @@ func (b *ObaBackend) AddWithBindDN(entry *Entry, bindDN string) error {
 	// Set operational attributes for add operation
 	SetOperationalAttrs(entry, OpAdd, bindDN)
 
+	// Enforce OU placement rules for user/group object classes.
+	if err := validateEntryPlacement(entry); err != nil {
+		return err
+	}
+
 	// Validate entry against schema if available
 	if b.schema != nil {
 		if err := b.validateEntry(entry); err != nil {
@@ -572,6 +579,11 @@ func (b *ObaBackend) ModifyWithBindDN(dn string, changes []Modification, bindDN 
 
 	// Set operational attributes for modify operation
 	SetOperationalAttrs(entry, OpModify, bindDN)
+
+	// Enforce OU placement rules for user/group object classes.
+	if err := validateEntryPlacement(entry); err != nil {
+		return err
+	}
 
 	// Validate modified entry against schema if available
 	if b.schema != nil {

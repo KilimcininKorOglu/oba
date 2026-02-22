@@ -119,6 +119,11 @@ func (b *ObaBackend) ModifyDN(req *ModifyDNRequest) error {
 	// Update the entry's DN
 	entry.DN = newDN
 
+	// Enforce OU placement rules for user/group object classes.
+	if err := validateEntryPlacement(entry); err != nil {
+		return err
+	}
+
 	// Convert back to storage entry
 	modifiedStorageEntry := convertToStorageEntry(entry)
 

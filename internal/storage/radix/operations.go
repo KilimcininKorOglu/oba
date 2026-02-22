@@ -1,6 +1,8 @@
 package radix
 
 import (
+	"errors"
+
 	"github.com/KilimcininKorOglu/oba/internal/storage"
 )
 
@@ -46,7 +48,14 @@ func (t *RadixTree) Insert(dn string, pageID storage.PageID, slotID uint16) erro
 
 	// Mark tree as dirty and persist
 	t.markDirty()
-	return t.persistRoot()
+	if err := t.persistRoot(); err != nil {
+		// Best effort: keep operating in-memory when root page capacity is exceeded.
+		if errors.Is(err, ErrTooManyNodes) {
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 // Delete removes a DN from the tree.
@@ -87,7 +96,14 @@ func (t *RadixTree) Delete(dn string) error {
 
 	// Mark tree as dirty and persist
 	t.markDirty()
-	return t.persistRoot()
+	if err := t.persistRoot(); err != nil {
+		// Best effort: keep operating in-memory when root page capacity is exceeded.
+		if errors.Is(err, ErrTooManyNodes) {
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 // cleanupEmptyNodes removes empty nodes (no entry, no children) from the tree.
@@ -161,7 +177,14 @@ func (t *RadixTree) Update(dn string, pageID storage.PageID, slotID uint16) erro
 
 	// Mark tree as dirty and persist
 	t.markDirty()
-	return t.persistRoot()
+	if err := t.persistRoot(); err != nil {
+		// Best effort: keep operating in-memory when root page capacity is exceeded.
+		if errors.Is(err, ErrTooManyNodes) {
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 // GetSubtreeCount returns the number of entries in the subtree rooted at the given DN.

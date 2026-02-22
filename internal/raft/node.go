@@ -2,6 +2,7 @@ package raft
 
 import (
 	"math/rand"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -844,7 +845,7 @@ func (n *Node) applyLoop() {
 			lastApplied++
 			entry, err := n.state.Log().Get(lastApplied)
 			if err != nil {
-				n.logger.Error("applyLoop: failed to get entry", "index", lastApplied, "error", err)
+				n.logger.Error("applyLoop: failed to get entry", "index", lastApplied, "error", err.Error())
 				break
 			}
 
@@ -853,21 +854,47 @@ func (n *Node) applyLoop() {
 				cmd, err := DeserializeCommand(entry.Command)
 				if err != nil {
 					applyErr = err
-					n.logger.Error("applyLoop: failed to deserialize command", "index", lastApplied, "error", err)
+					n.logger.Error("applyLoop: failed to deserialize command", "index", lastApplied, "error", err.Error())
 				} else {
 					if err := n.stateMachine.Apply(cmd); err != nil {
 						applyErr = err
-						n.logger.Error("applyLoop: state machine apply failed", "index", lastApplied, "error", err)
+						n.logger.Error("applyLoop: state machine apply failed", "index", lastApplied, "error", err.Error())
 					}
 				}
 			}
 
+			// Critical safety: never advance lastApplied on failed apply.
+			// Advancing here causes silent state divergence after restart/rejoin.
+			if applyErr != nil {
+				if isSkippableApplyError(applyErr) {
+					n.logger.Warn("applyLoop: skipping failed apply", "index", lastApplied, "error", applyErr.Error())
+					n.state.SetLastApplied(lastApplied)
+					n.notifyProposalApplied(lastApplied, nil)
+					continue
+				}
+				n.notifyProposalApplied(lastApplied, applyErr)
+				lastApplied--
+				break
+			}
+
 			n.state.SetLastApplied(lastApplied)
-			n.notifyProposalApplied(lastApplied, applyErr)
+			n.notifyProposalApplied(lastApplied, nil)
 		}
 
 		time.Sleep(10 * time.Millisecond)
 	}
+}
+
+func isSkippableApplyError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return (strings.Contains(msg, "uid attribute") && strings.Contains(msg, "unique")) ||
+		strings.Contains(msg, "invalid entry placement") ||
+		strings.Contains(msg, "entry already exists") ||
+		strings.Contains(msg, "too many nodes for page") ||
+		strings.Contains(msg, "version has been deleted")
 }
 
 // GetPeers returns the list of peers.

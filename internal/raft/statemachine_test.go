@@ -3,11 +3,30 @@ package raft
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"sync"
 	"testing"
 
 	"github.com/KilimcininKorOglu/oba/internal/storage"
 )
+
+func TestShouldIgnoreReplayPutError(t *testing.T) {
+	if !shouldIgnoreReplayPutError(errors.New("uid attribute value must be unique")) {
+		t.Fatal("expected uid uniqueness error to be ignored in replay")
+	}
+	if !shouldIgnoreReplayPutError(errors.New("uid attribute must be unique")) {
+		t.Fatal("expected uid uniqueness error variant to be ignored in replay")
+	}
+	if !shouldIgnoreReplayPutError(errors.New("entry already exists")) {
+		t.Fatal("expected entry exists error to be ignored in replay")
+	}
+	if !shouldIgnoreReplayPutError(errors.New("version has been deleted")) {
+		t.Fatal("expected deleted-version replay error to be ignored")
+	}
+	if shouldIgnoreReplayPutError(errors.New("entry not found")) {
+		t.Fatal("did not expect unrelated errors to be ignored")
+	}
+}
 
 func TestSerializeDeserializeEntry(t *testing.T) {
 	entry := storage.NewEntry("cn=test,dc=example,dc=com")

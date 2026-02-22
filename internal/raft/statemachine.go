@@ -138,6 +138,9 @@ func (sm *ObaDBStateMachine) applyLDAPCommand(cmd *Command) error {
 			return nil
 		}
 		applyErr = engine.Put(tx, entry)
+		if shouldIgnoreReplayPutError(applyErr) {
+			applyErr = nil
+		}
 
 	case CmdDelete:
 		applyErr = engine.Delete(tx, cmd.DN)
@@ -158,6 +161,9 @@ func (sm *ObaDBStateMachine) applyLDAPCommand(cmd *Command) error {
 			return err
 		}
 		applyErr = engine.Put(tx, entry)
+		if shouldIgnoreReplayPutError(applyErr) {
+			applyErr = nil
+		}
 	}
 
 	if applyErr != nil {
@@ -166,6 +172,16 @@ func (sm *ObaDBStateMachine) applyLDAPCommand(cmd *Command) error {
 	}
 
 	return engine.Commit(tx)
+}
+
+func shouldIgnoreReplayPutError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return (strings.Contains(msg, "uid attribute") && strings.Contains(msg, "unique")) ||
+		strings.Contains(msg, "entry already exists") ||
+		strings.Contains(msg, "version has been deleted")
 }
 
 func entriesEqual(a, b *storage.Entry) bool {

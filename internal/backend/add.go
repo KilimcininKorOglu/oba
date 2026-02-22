@@ -40,6 +40,11 @@ func (b *ObaBackend) AddEntry(entry *storage.Entry) error {
 	backendEntry := convertFromStorageEntry(entry)
 	backendEntry.DN = normalizedDN
 
+	// Enforce OU placement rules for user/group object classes.
+	if err := validateEntryPlacement(backendEntry); err != nil {
+		return err
+	}
+
 	// Validate entry against schema if available
 	if b.schema != nil {
 		if err := b.validateEntry(backendEntry); err != nil {

@@ -356,8 +356,7 @@ func (s *LogStore) writeViaRaft(entry *storage.Entry) error {
 	if err := s.clusterWriter.PutLog(entry); err != nil {
 		return err
 	}
-
-	// Trim old entries if needed (async)
+	// Cluster trim runs async to avoid blocking write path under lock.
 	go s.trimOldEntries()
 	return nil
 }
@@ -564,6 +563,11 @@ func (s *LogStore) tryForwardEntry(entry *storage.Entry, httpAddr string) error 
 
 // writeLocal writes an entry directly to local database (no Raft).
 func (s *LogStore) writeLocal(entry *storage.Entry) error {
+	// Enforce maxEntries before writing a new log entry.
+	if err := s.trimOldEntriesLocked(1); err != nil {
+		return err
+	}
+
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -593,9 +597,6 @@ func (s *LogStore) writeLocal(entry *storage.Entry) error {
 		return err
 	}
 
-	// Trim old entries if needed (async)
-	go s.trimOldEntries()
-
 	return nil
 }
 
@@ -608,11 +609,20 @@ func (s *LogStore) trimOldEntries() {
 		return
 	}
 
+	_ = s.trimOldEntriesLocked(0)
+}
+
+// trimOldEntriesLocked archives and removes oldest entries while holding s.mu.
+// incoming is the number of new entries that are about to be written.
+func (s *LogStore) trimOldEntriesLocked(incoming int) error {
+	if s.db == nil {
+		return nil
+	}
+
 	tx, err := s.db.Begin()
 	if err != nil {
-		return
+		return err
 	}
-	defer s.db.Rollback(tx)
 
 	// Get all entries with their data
 	iter := s.db.SearchByDN(tx, "ou=logs", storage.ScopeOneLevel)
@@ -637,17 +647,17 @@ func (s *LogStore) trimOldEntries() {
 		entries = append(entries, ed)
 	}
 	iter.Close()
+	s.db.Rollback(tx)
 
-	if len(entries) <= s.maxEntries {
-		return
+	deleteCount := len(entries) + incoming - s.maxEntries
+	if deleteCount <= 0 {
+		return nil
 	}
 
 	// Sort by ID (oldest first)
 	sort.Slice(entries, func(i, j int) bool {
 		return entries[i].id < entries[j].id
 	})
-
-	deleteCount := len(entries) - s.maxEntries
 
 	// Archive entries before deleting (if archive is enabled)
 	if s.archive != nil && deleteCount > 0 {
@@ -663,23 +673,30 @@ func (s *LogStore) trimOldEntries() {
 		// If cluster writer is set, delete through Raft
 		if s.clusterWriter != nil {
 			for i := 0; i < deleteCount; i++ {
-				s.clusterWriter.DeleteLog(entries[i].dn)
+				if err := s.clusterWriter.DeleteLog(entries[i].dn); err != nil {
+					return err
+				}
 			}
-			return
+			return nil
 		}
 
 		// Standalone mode: direct delete
 		tx2, err := s.db.Begin()
 		if err != nil {
-			return
+			return err
 		}
 
 		for i := 0; i < deleteCount; i++ {
-			s.db.Delete(tx2, entries[i].dn)
+			if err := s.db.Delete(tx2, entries[i].dn); err != nil {
+				s.db.Rollback(tx2)
+				return err
+			}
 		}
-
-		s.db.Commit(tx2)
+		if err := s.db.Commit(tx2); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // Query searches log entries with the given filters.

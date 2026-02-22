@@ -145,7 +145,7 @@ func TestParseTimestamp(t *testing.T) {
 
 // TestSetOperationalAttrsAdd tests setting operational attributes for add operations.
 func TestSetOperationalAttrsAdd(t *testing.T) {
-	entry := NewEntry("uid=test,dc=example,dc=com")
+	entry := NewEntry("uid=test,ou=users,dc=example,dc=com")
 	bindDN := "cn=admin,dc=example,dc=com"
 
 	SetOperationalAttrs(entry, OpAdd, bindDN)
@@ -189,7 +189,7 @@ func TestSetOperationalAttrsAdd(t *testing.T) {
 
 // TestSetOperationalAttrsModify tests setting operational attributes for modify operations.
 func TestSetOperationalAttrsModify(t *testing.T) {
-	entry := NewEntry("uid=test,dc=example,dc=com")
+	entry := NewEntry("uid=test,ou=users,dc=example,dc=com")
 	bindDN := "cn=admin,dc=example,dc=com"
 
 	// First add the entry
@@ -358,7 +358,7 @@ func TestAddWithBindDNSetsOperationalAttrs(t *testing.T) {
 	engine := newMockStorageEngine()
 	backend := NewBackend(engine, nil)
 
-	entry := NewEntry("uid=test,dc=example,dc=com")
+	entry := NewEntry("uid=test,ou=users,dc=example,dc=com")
 	entry.SetAttribute("objectClass", "inetOrgPerson")
 	entry.SetAttribute("uid", "test")
 	entry.SetAttribute("cn", "Test User")
@@ -372,7 +372,7 @@ func TestAddWithBindDNSetsOperationalAttrs(t *testing.T) {
 	}
 
 	// Retrieve the entry from storage
-	storedEntry, ok := engine.entries["uid=test,dc=example,dc=com"]
+	storedEntry, ok := engine.entries["uid=test,ou=users,dc=example,dc=com"]
 	if !ok {
 		t.Fatal("Entry not found in storage")
 	}
@@ -409,8 +409,8 @@ func TestAddWithBindDNSetsOperationalAttrs(t *testing.T) {
 
 	// Check entryDN is set
 	entryDN := storedEntry.GetAttribute("entrydn")
-	if len(entryDN) == 0 || string(entryDN[0]) != "uid=test,dc=example,dc=com" {
-		t.Errorf("entryDN = %v, expected uid=test,dc=example,dc=com", entryDN)
+	if len(entryDN) == 0 || string(entryDN[0]) != "uid=test,ou=users,dc=example,dc=com" {
+		t.Errorf("entryDN = %v, expected uid=test,ou=users,dc=example,dc=com", entryDN)
 	}
 }
 
@@ -420,7 +420,7 @@ func TestModifyWithBindDNSetsOperationalAttrs(t *testing.T) {
 	backend := NewBackend(engine, nil)
 
 	// First add an entry
-	entry := NewEntry("uid=test,dc=example,dc=com")
+	entry := NewEntry("uid=test,ou=users,dc=example,dc=com")
 	entry.SetAttribute("objectClass", "inetOrgPerson")
 	entry.SetAttribute("uid", "test")
 	entry.SetAttribute("cn", "Test User")
@@ -433,7 +433,7 @@ func TestModifyWithBindDNSetsOperationalAttrs(t *testing.T) {
 	}
 
 	// Get original values
-	storedEntry, _ := engine.entries["uid=test,dc=example,dc=com"]
+	storedEntry, _ := engine.entries["uid=test,ou=users,dc=example,dc=com"]
 	originalCreateTimestamp := string(storedEntry.GetAttribute("createtimestamp")[0])
 	originalCreatorsName := string(storedEntry.GetAttribute("creatorsname")[0])
 	originalEntryUUID := string(storedEntry.GetAttribute("entryuuid")[0])
@@ -447,13 +447,13 @@ func TestModifyWithBindDNSetsOperationalAttrs(t *testing.T) {
 		{Type: ModReplace, Attribute: "cn", Values: []string{"Modified User"}},
 	}
 
-	err = backend.ModifyWithBindDN("uid=test,dc=example,dc=com", changes, modifierDN)
+	err = backend.ModifyWithBindDN("uid=test,ou=users,dc=example,dc=com", changes, modifierDN)
 	if err != nil {
 		t.Fatalf("ModifyWithBindDN failed: %v", err)
 	}
 
 	// Retrieve the modified entry
-	modifiedEntry, _ := engine.entries["uid=test,dc=example,dc=com"]
+	modifiedEntry, _ := engine.entries["uid=test,ou=users,dc=example,dc=com"]
 
 	// Check createTimestamp is unchanged
 	createTimestamp := string(modifiedEntry.GetAttribute("createtimestamp")[0])

@@ -73,6 +73,12 @@ func (b *ObaBackend) ModifyEntry(dn string, changes []server.Modification) error
 	}
 
 	// Validate modified entry against schema if available
+	if err := validateEntryPlacement(entry); err != nil {
+		b.engine.Rollback(txn)
+		return err
+	}
+
+	// Validate modified entry against schema if available
 	if b.schema != nil {
 		if err := b.validateEntry(entry); err != nil {
 			b.engine.Rollback(txn)

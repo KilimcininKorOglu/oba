@@ -2,6 +2,7 @@ package rest
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -45,6 +46,10 @@ var ldapToHTTPStatus = map[ldap.ResultCode]int{
 
 // mapBackendError maps a backend error to HTTP status and error code.
 func mapBackendError(err error) (int, string, string) {
+	if errors.Is(err, backend.ErrInvalidPlacement) {
+		return http.StatusBadRequest, "invalid_placement", "entry must be under the correct OU"
+	}
+
 	switch err {
 	case backend.ErrInvalidCredentials:
 		return http.StatusUnauthorized, "invalid_credentials", "invalid credentials"

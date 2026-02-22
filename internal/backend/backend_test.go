@@ -367,6 +367,41 @@ func TestAddInvalidEntry(t *testing.T) {
 	}
 }
 
+func TestAddRejectsUserOutsideUsersOU(t *testing.T) {
+	engine := newMockStorageEngine()
+	backend := NewBackend(engine, nil)
+
+	entry := NewEntry("uid=alice,ou=groups,dc=example,dc=com")
+	entry.SetAttribute("objectclass", "inetOrgPerson", "person")
+	entry.SetAttribute("uid", "alice")
+	entry.SetAttribute("cn", "Alice")
+
+	err := backend.Add(entry)
+	if !errors.Is(err, ErrInvalidPlacement) {
+		t.Fatalf("expected ErrInvalidPlacement, got %v", err)
+	}
+}
+
+func TestAddWithBindDNRejectsUserOutsideUsersOUWithMixedCaseObjectClassKey(t *testing.T) {
+	engine := newMockStorageEngine()
+	backend := NewBackend(engine, nil)
+
+	entry := &Entry{
+		DN: "uid=wrong,ou=groups,dc=example,dc=com",
+		Attributes: map[string][]string{
+			"objectClass": {"inetOrgPerson", "person"},
+			"uid":         {"wrong"},
+			"cn":          {"Wrong"},
+			"sn":          {"Wrong"},
+		},
+	}
+
+	err := backend.AddWithBindDN(entry, "cn=admin,dc=example,dc=com")
+	if !errors.Is(err, ErrInvalidPlacement) {
+		t.Fatalf("expected ErrInvalidPlacement, got %v", err)
+	}
+}
+
 // TestDelete tests deleting entries.
 func TestDelete(t *testing.T) {
 	engine := newMockStorageEngine()
@@ -1125,6 +1160,59 @@ func TestModifyDN_NewSuperiorNotFound(t *testing.T) {
 	err := backend.ModifyDN(req)
 	if err != ErrNewSuperiorNotFound {
 		t.Errorf("expected ErrNewSuperiorNotFound, got %v", err)
+	}
+}
+
+func TestModifyRejectsGroupClassOutsideGroupsOU(t *testing.T) {
+	engine := newMockStorageEngine()
+	backend := NewBackend(engine, nil)
+
+	entry := storage.NewEntry("uid=alice,ou=users,dc=example,dc=com")
+	entry.SetStringAttribute("objectclass", "person", "inetOrgPerson")
+	entry.SetStringAttribute("uid", "alice")
+	engine.entries["uid=alice,ou=users,dc=example,dc=com"] = entry
+
+	changes := []Modification{
+		{
+			Type:      ModAdd,
+			Attribute: "objectclass",
+			Values:    []string{"groupOfNames"},
+		},
+	}
+
+	err := backend.Modify("uid=alice,ou=users,dc=example,dc=com", changes)
+	if !errors.Is(err, ErrInvalidPlacement) {
+		t.Fatalf("expected ErrInvalidPlacement, got %v", err)
+	}
+}
+
+func TestModifyDNRejectsMoveUserToGroupsOU(t *testing.T) {
+	engine := newMockStorageEngine()
+	backend := NewBackend(engine, nil)
+
+	entry := storage.NewEntry("uid=alice,ou=users,dc=example,dc=com")
+	entry.SetStringAttribute("objectclass", "person", "inetOrgPerson")
+	entry.SetStringAttribute("uid", "alice")
+	engine.entries["uid=alice,ou=users,dc=example,dc=com"] = entry
+
+	oldParent := storage.NewEntry("ou=users,dc=example,dc=com")
+	oldParent.SetStringAttribute("ou", "users")
+	engine.entries["ou=users,dc=example,dc=com"] = oldParent
+
+	newParent := storage.NewEntry("ou=groups,dc=example,dc=com")
+	newParent.SetStringAttribute("ou", "groups")
+	engine.entries["ou=groups,dc=example,dc=com"] = newParent
+
+	req := &ModifyDNRequest{
+		DN:           "uid=alice,ou=users,dc=example,dc=com",
+		NewRDN:       "uid=alice",
+		DeleteOldRDN: false,
+		NewSuperior:  "ou=groups,dc=example,dc=com",
+	}
+
+	err := backend.ModifyDN(req)
+	if !errors.Is(err, ErrInvalidPlacement) {
+		t.Fatalf("expected ErrInvalidPlacement, got %v", err)
 	}
 }
 

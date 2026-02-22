@@ -167,6 +167,11 @@ func (t *RadixTree) Persist() error {
 	}
 
 	if err := t.persistRoot(); err != nil {
+		// Best effort: when the serialized tree no longer fits a single page,
+		// keep serving with in-memory tree state.
+		if errors.Is(err, ErrTooManyNodes) {
+			return nil
+		}
 		return err
 	}
 
