@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
-  Activity, Clock, Users, BarChart3, Search, Plus, Settings,
+  Activity, Clock, Users, BarChart3,
   Database, Shield, Cpu, Lock, UserX, AlertTriangle,
   LogIn, FileSearch, FilePlus, FileEdit, Trash2, GitCompare,
   RefreshCw, Server, Crown, Network
@@ -9,7 +9,7 @@ import {
 import api from '../api/client';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { setServerTimezone, formatDate, formatRelativeTime } from '../utils/dateFormat';
+import { setServerTimezone, formatRelativeTime } from '../utils/dateFormat';
 
 function formatUptime(uptime) {
   if (!uptime) return 'N/A';
@@ -157,12 +157,6 @@ export default function Dashboard() {
       </div>
     );
   }
-
-  const quickActions = [
-    { label: 'Search Entries', to: '/search', icon: Search },
-    { label: 'Add Entry', to: '/entries/new', icon: Plus },
-    { label: 'View Config', to: '/config', icon: Settings },
-  ];
 
   return (
     <div>
@@ -428,23 +422,6 @@ export default function Dashboard() {
               <p className="text-sm text-zinc-500 text-center py-4">No recent activity</p>
             )}
           </div>
-        </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="bg-zinc-800 rounded-lg border border-zinc-700 p-5">
-        <h2 className="text-lg font-medium text-zinc-100 mb-4">Quick Actions</h2>
-        <div className="flex flex-wrap gap-3">
-          {quickActions.map((action, i) => (
-            <Link
-              key={i}
-              to={action.to}
-              className="flex items-center gap-2 px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-sm text-zinc-100 transition-colors"
-            >
-              <action.icon className="w-4 h-4" />
-              {action.label}
-            </Link>
-          ))}
         </div>
       </div>
     </div>
