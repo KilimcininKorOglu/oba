@@ -4,6 +4,7 @@ set -euo pipefail
 BASE_DN="${BASE_DN:-dc=example,dc=com}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.cluster.yml}"
 NODES=(8081 8082 8083)
+FOLLOWER_SERVICE=""
 
 log() {
   printf '[verify-cluster] %s\n' "$*"
@@ -13,6 +14,16 @@ fail() {
   printf '[verify-cluster] ERROR: %s\n' "$*" >&2
   exit 1
 }
+
+cleanup() {
+  # Never leave the cluster half-down if the script exits early.
+  docker compose -f "$COMPOSE_FILE" up -d oba-node1 oba-node2 oba-node3 >/dev/null 2>&1 || true
+  if [[ -n "$FOLLOWER_SERVICE" ]]; then
+    docker compose -f "$COMPOSE_FILE" start "$FOLLOWER_SERVICE" >/dev/null 2>&1 || true
+  fi
+}
+
+trap cleanup EXIT
 
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || fail "required command not found: $1"

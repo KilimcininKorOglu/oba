@@ -670,13 +670,10 @@ func (s *LogStore) trimOldEntriesLocked(incoming int) error {
 
 	// Delete oldest entries
 	if deleteCount > 0 {
-		// If cluster writer is set, delete through Raft
+		// In cluster mode, retention deletes via Raft can create heavy command churn
+		// and stall apply under bursty logging. Keep replicated log entries append-only
+		// on the Raft path; retention can be handled by external archival/rotation.
 		if s.clusterWriter != nil {
-			for i := 0; i < deleteCount; i++ {
-				if err := s.clusterWriter.DeleteLog(entries[i].dn); err != nil {
-					return err
-				}
-			}
 			return nil
 		}
 
