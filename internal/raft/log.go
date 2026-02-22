@@ -620,6 +620,19 @@ func (l *RaftLog) TruncateFrom(index uint64) {
 	}
 }
 
+// TruncateBefore removes all entries before the given index.
+// Used after snapshot restore to discard entries included in the snapshot.
+func (l *RaftLog) TruncateBefore(index uint64) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if index > 0 && index <= uint64(len(l.entries)) {
+		l.entries = l.entries[index:]
+	} else if index > uint64(len(l.entries)) {
+		// If index is beyond log, clear all entries
+		l.entries = nil
+	}
+}
+
 // Len returns the number of entries in the log.
 func (l *RaftLog) Len() int {
 	l.mu.RLock()

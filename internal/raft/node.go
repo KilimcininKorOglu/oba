@@ -548,13 +548,19 @@ func (n *Node) handleInstallSnapshot(data []byte) []byte {
 	// Apply snapshot to state machine
 	if n.stateMachine != nil {
 		if err := n.stateMachine.Restore(args.Data); err != nil {
+			n.logger.Error("failed to restore snapshot", "error", err)
 			return reply.Serialize()
 		}
+		n.logger.Info("snapshot restored successfully", "lastIncludedIndex", args.LastIncludedIndex)
 	}
 
-	// Update state
+	// Update state - set both commit and applied to snapshot's last index
+	// This prevents re-applying old log entries
 	n.state.SetCommitIndex(args.LastIncludedIndex)
 	n.state.SetLastApplied(args.LastIncludedIndex)
+	
+	// Truncate log entries that are included in the snapshot
+	n.state.Log().TruncateBefore(args.LastIncludedIndex + 1)
 
 	return reply.Serialize()
 }
@@ -599,15 +605,6 @@ func (n *Node) replicateTo(peerID uint64) {
 	}
 
 	nextIndex := n.state.GetNextIndex(peerID)
-	matchIndex := n.state.GetMatchIndex(peerID)
-	
-	// If follower hasn't received any data yet (matchIndex == 0) and log is nearly empty,
-	// send snapshot to sync initial state
-	if matchIndex == 0 && nextIndex <= 1 && n.stateMachine != nil {
-		n.sendSnapshotTo(peerID)
-		return
-	}
-
 	prevLogIndex := nextIndex - 1
 	prevLogTerm := n.state.Log().TermAt(prevLogIndex)
 
@@ -707,12 +704,14 @@ func (n *Node) sendSnapshotTo(peerID uint64) {
 		return
 	}
 
+	// Use commitIndex as LastIncludedIndex since snapshot represents committed state
+	commitIndex := n.state.CommitIndex()
 	log := n.state.Log()
 	args := &InstallSnapshotArgs{
 		Term:              n.Term(),
 		LeaderID:          n.id,
-		LastIncludedIndex: log.LastIndex(),
-		LastIncludedTerm:  log.TermAt(log.LastIndex()),
+		LastIncludedIndex: commitIndex,
+		LastIncludedTerm:  log.TermAt(commitIndex),
 		Data:              snapshotData,
 	}
 
