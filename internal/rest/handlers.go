@@ -665,7 +665,7 @@ func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, HealthResponse{
 		Status:      "ok",
-		Version:     "1.0.2",
+		Version:     "1.1.0",
 		Uptime:      uptime.String(),
 		UptimeSecs:  int64(uptime.Seconds()),
 		StartTime:   h.startTime,
@@ -729,7 +729,7 @@ func (h *Handlers) HandleStats(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, StatsResponse{
 		Status:      "ok",
-		Version:     "1.0.2",
+		Version:     "1.1.0",
 		Uptime:      uptime.String(),
 		UptimeSecs:  int64(uptime.Seconds()),
 		StartTime:   h.startTime,
