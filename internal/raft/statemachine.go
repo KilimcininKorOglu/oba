@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 
 	"github.com/KilimcininKorOglu/oba/internal/storage"
@@ -117,8 +118,10 @@ func (sm *ObaDBStateMachine) applyLDAPCommand(cmd *Command) error {
 
 	case CmdModifyDN:
 		// ModifyDN = Delete old + Put new
-		if err := engine.Delete(tx, cmd.OldDN); err != nil {
-			// Ignore delete error - old entry may not exist
+		// Normalize oldDN to match storage format (lowercase)
+		oldDN := strings.ToLower(strings.TrimSpace(cmd.OldDN))
+		if err := engine.Delete(tx, oldDN); err != nil {
+			// Continue even if delete fails - old entry may have different case or not exist
 		}
 		entry, err := deserializeEntry(cmd.EntryData)
 		if err != nil {
