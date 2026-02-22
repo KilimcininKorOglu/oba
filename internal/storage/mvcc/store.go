@@ -199,10 +199,28 @@ func (vs *VersionStore) DeleteVersion(txn *tx.Transaction, dn string) error {
 		return ErrTransactionAborted
 	}
 
-	// Check if the entry exists
+	// Check if the entry exists in memory
 	vs.mu.RLock()
 	latestVersion := vs.versions[dn]
 	vs.mu.RUnlock()
+
+	// If not in memory, try to load from cache or disk
+	if latestVersion == nil {
+		// Check cache
+		if vs.cache != nil {
+			if cached := vs.cache.Get(dn); cached != nil && cached.Version != nil {
+				latestVersion = cached.Version
+			}
+		}
+
+		// If still not found, try disk loader
+		if latestVersion == nil && vs.diskLoader != nil {
+			version, _, _, err := vs.diskLoader(dn)
+			if err == nil && version != nil {
+				latestVersion = version
+			}
+		}
+	}
 
 	if latestVersion == nil {
 		return ErrVersionNotFound

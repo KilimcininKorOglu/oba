@@ -57,6 +57,10 @@ type Node struct {
 	proposeCh chan *proposeRequest
 	stopCh    chan struct{}
 
+	// Pending proposals waiting for commit
+	pendingMu       sync.Mutex
+	pendingProposals map[uint64]*proposeRequest
+
 	// Timers
 	electionTimer  *time.Timer
 	heartbeatTimer *time.Timer
@@ -70,6 +74,7 @@ type Node struct {
 type proposeRequest struct {
 	cmd    *Command
 	result chan error
+	index  uint64 // Log index of the proposed command
 }
 
 // NewNode creates a new Raft node.
@@ -79,16 +84,17 @@ func NewNode(cfg *NodeConfig, sm StateMachine, transport Transport) (*Node, erro
 	}
 
 	n := &Node{
-		id:           cfg.ID,
-		config:       cfg,
-		state:        NewNodeState(),
-		peers:        make(map[uint64]*Peer),
-		transport:    transport,
-		stateMachine: sm,
-		logger:       &defaultLogger{},
-		applyCh:      make(chan *LogEntry, 256),
-		proposeCh:    make(chan *proposeRequest, 256),
-		stopCh:       make(chan struct{}),
+		id:               cfg.ID,
+		config:           cfg,
+		state:            NewNodeState(),
+		peers:            make(map[uint64]*Peer),
+		transport:        transport,
+		stateMachine:     sm,
+		logger:           &defaultLogger{},
+		applyCh:          make(chan *LogEntry, 256),
+		proposeCh:        make(chan *proposeRequest, 256),
+		stopCh:           make(chan struct{}),
+		pendingProposals: make(map[uint64]*proposeRequest),
 	}
 
 	// Add peers
@@ -315,6 +321,8 @@ func (n *Node) runLeader() {
 	for n.State() == StateLeader {
 		select {
 		case <-n.stopCh:
+			// Cancel all pending proposals
+			n.cancelPendingProposals(ErrNodeStopped)
 			return
 		case <-n.heartbeatTimer.C:
 			n.broadcastAppendEntries()
@@ -324,10 +332,13 @@ func (n *Node) runLeader() {
 				req.result <- ErrNotLeader
 				continue
 			}
-			n.appendCommand(req.cmd)
-			req.result <- nil
+			// Append command and track for commit notification
+			index := n.appendCommandAndTrack(req)
+			req.index = index
 		}
 	}
+	// No longer leader - cancel pending proposals
+	n.cancelPendingProposals(ErrNotLeader)
 }
 
 func (n *Node) becomeLeader() {
@@ -608,6 +619,7 @@ func (n *Node) replicateTo(peerID uint64) {
 		n.state.SetNextIndex(peerID, nextIndex+uint64(len(entries)))
 		n.state.SetMatchIndex(peerID, nextIndex+uint64(len(entries))-1)
 		n.updateCommitIndex()
+		n.notifyCommittedProposals()
 	} else {
 		// Decrement nextIndex and retry
 		if reply.ConflictTerm > 0 {
@@ -679,6 +691,65 @@ func (n *Node) appendCommand(cmd *Command) {
 
 	// Replicate to peers
 	n.broadcastAppendEntries()
+}
+
+// appendCommandAndTrack appends a command and tracks it for commit notification.
+func (n *Node) appendCommandAndTrack(req *proposeRequest) uint64 {
+	if n.State() != StateLeader {
+		return 0
+	}
+
+	data, _ := req.cmd.Serialize()
+	entry := &LogEntry{
+		Index:   n.state.Log().LastIndex() + 1,
+		Term:    n.Term(),
+		Type:    LogEntryCommand,
+		Command: data,
+	}
+
+	n.state.AppendEntry(entry)
+
+	// Track this proposal for commit notification
+	n.pendingMu.Lock()
+	n.pendingProposals[entry.Index] = req
+	n.pendingMu.Unlock()
+
+	// Update commit index (for single node, commits immediately)
+	n.updateCommitIndex()
+
+	// Notify any proposals that are now committed
+	n.notifyCommittedProposals()
+
+	// Replicate to peers
+	n.broadcastAppendEntries()
+
+	return entry.Index
+}
+
+// notifyCommittedProposals notifies pending proposals that have been committed.
+func (n *Node) notifyCommittedProposals() {
+	commitIndex := n.state.CommitIndex()
+
+	n.pendingMu.Lock()
+	defer n.pendingMu.Unlock()
+
+	for index, req := range n.pendingProposals {
+		if index <= commitIndex {
+			req.result <- nil
+			delete(n.pendingProposals, index)
+		}
+	}
+}
+
+// cancelPendingProposals cancels all pending proposals with the given error.
+func (n *Node) cancelPendingProposals(err error) {
+	n.pendingMu.Lock()
+	defer n.pendingMu.Unlock()
+
+	for index, req := range n.pendingProposals {
+		req.result <- err
+		delete(n.pendingProposals, index)
+	}
 }
 
 // applyLoop applies committed entries to the state machine.

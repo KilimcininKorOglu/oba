@@ -56,7 +56,7 @@ func (b *ObaBackend) ModifyDN(req *ModifyDNRequest) error {
 	normalizedDN := normalizeDN(req.DN)
 	normalizedNewRDN := normalizeDN(req.NewRDN)
 
-	// Start a transaction
+	// Start a read transaction to validate
 	txn, err := b.engine.Begin()
 	if err != nil {
 		return wrapStorageError(err)
@@ -95,7 +95,7 @@ func (b *ObaBackend) ModifyDN(req *ModifyDNRequest) error {
 		}
 	}
 
-	// Check if entry has children (for subtree move)
+	// Check if entry has children (for subtree move) - not supported in cluster mode yet
 	hasChildren, err := b.hasChildren(txn, normalizedDN)
 	if err != nil {
 		b.engine.Rollback(txn)
@@ -119,14 +119,37 @@ func (b *ObaBackend) ModifyDN(req *ModifyDNRequest) error {
 	// Update the entry's DN
 	entry.DN = newDN
 
+	// Convert back to storage entry
+	modifiedStorageEntry := convertToStorageEntry(entry)
+
+	// Close read transaction before cluster write
+	b.engine.Rollback(txn)
+
+	// If cluster writer is set, route through Raft consensus (atomic operation)
+	if b.clusterWriter != nil {
+		// Note: subtree moves not supported in cluster mode yet
+		if hasChildren {
+			return errors.New("subtree moves not supported in cluster mode")
+		}
+		if err := b.clusterWriter.ModifyDN(normalizedDN, modifiedStorageEntry); err != nil {
+			return wrapStorageError(err)
+		}
+		return nil
+	}
+
+	// Standalone mode: direct write with transaction
+	txn, err = b.engine.Begin()
+	if err != nil {
+		return wrapStorageError(err)
+	}
+
 	// Delete the old entry
 	if err := b.engine.Delete(txn, normalizedDN); err != nil {
 		b.engine.Rollback(txn)
 		return wrapStorageError(err)
 	}
 
-	// Convert back to storage entry and put with new DN
-	modifiedStorageEntry := convertToStorageEntry(entry)
+	// Put with new DN
 	if err := b.engine.Put(txn, modifiedStorageEntry); err != nil {
 		b.engine.Rollback(txn)
 		return wrapStorageError(err)

@@ -582,50 +582,34 @@ func (h *Handlers) HandleModifyDN(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entries, err := h.backend.Search(decodedDN, int(ldap.ScopeBaseObject), nil)
-	if err != nil || len(entries) == 0 {
-		writeError(w, http.StatusNotFound, "not_found", "entry not found")
+	// Use backend's ModifyDN which handles cluster mode atomically
+	modifyReq := &backend.ModifyDNRequest{
+		DN:           decodedDN,
+		NewRDN:       req.NewRDN,
+		DeleteOldRDN: req.DeleteOldRDN,
+		NewSuperior:  req.NewSuperior,
+	}
+
+	if err := h.backend.ModifyDN(modifyReq); err != nil {
+		status, code, msg := mapBackendError(err)
+		writeError(w, status, code, msg)
 		return
 	}
-	oldEntry := entries[0]
 
+	// Calculate new DN for response
 	newDN := calculateNewDN(decodedDN, req.NewRDN, req.NewSuperior)
 
-	existingEntries, _ := h.backend.Search(newDN, int(ldap.ScopeBaseObject), nil)
-	if len(existingEntries) > 0 {
-		writeError(w, http.StatusConflict, "entry_exists", "entry with new DN already exists")
-		return
-	}
-
-	newEntry := &backend.Entry{
-		DN:         newDN,
-		Attributes: copyAttributes(oldEntry.Attributes),
-	}
-
-	if req.DeleteOldRDN {
-		rdnAttr, rdnValue := parseRDN(req.NewRDN)
-		if rdnAttr != "" {
-			newEntry.Attributes[rdnAttr] = []string{rdnValue}
-		}
-	}
-
-	bindDN := BindDN(r)
-	if err := h.backend.AddWithBindDN(newEntry, bindDN); err != nil {
-		status, code, msg := mapBackendError(err)
-		writeError(w, status, code, msg)
-		return
-	}
-
-	if err := h.backend.Delete(decodedDN); err != nil {
-		h.backend.Delete(newDN)
-		status, code, msg := mapBackendError(err)
-		writeError(w, status, code, msg)
-		return
-	}
-
 	h.auditLog(r, "entry moved", "oldDN", decodedDN, "newDN", newDN)
-	w.Header().Set("Location", "/api/v1/entries/"+url.PathEscape(newDN))
-	writeJSON(w, http.StatusOK, convertEntry(newEntry))
+
+	// Fetch the moved entry for response
+	entries, _ := h.backend.Search(newDN, int(ldap.ScopeBaseObject), nil)
+	if len(entries) > 0 {
+		w.Header().Set("Location", "/api/v1/entries/"+url.PathEscape(newDN))
+		writeJSON(w, http.StatusOK, convertEntry(entries[0]))
+	} else {
+		w.Header().Set("Location", "/api/v1/entries/"+url.PathEscape(newDN))
+		writeJSON(w, http.StatusOK, map[string]string{"dn": newDN})
+	}
 }
 
 // HandleCompare handles POST /api/v1/compare

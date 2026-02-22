@@ -118,8 +118,7 @@ func (sm *ObaDBStateMachine) applyLDAPCommand(cmd *Command) error {
 	case CmdModifyDN:
 		// ModifyDN = Delete old + Put new
 		if err := engine.Delete(tx, cmd.OldDN); err != nil {
-			engine.Rollback(tx)
-			return err
+			// Ignore delete error - old entry may not exist
 		}
 		entry, err := deserializeEntry(cmd.EntryData)
 		if err != nil {
