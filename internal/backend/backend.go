@@ -16,6 +16,7 @@ import (
 	"github.com/KilimcininKorOglu/oba/internal/schema"
 	"github.com/KilimcininKorOglu/oba/internal/server"
 	"github.com/KilimcininKorOglu/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage/radix"
 	"github.com/KilimcininKorOglu/oba/internal/storage/stream"
 )
 
@@ -389,8 +390,31 @@ func (b *ObaBackend) AddWithBindDN(entry *Entry, bindDN string) error {
 
 	// If cluster writer is set, route through Raft consensus
 	if b.clusterWriter != nil {
+		var txn interface{}
+		var err error
+		requiresParent := dnUnderOU(normalizedDN, "users") || dnUnderOU(normalizedDN, "groups")
+		if requiresParent {
+			// In cluster mode, reject orphan writes under managed OUs early.
+			txn, err = b.engine.Begin()
+			if err != nil {
+				return wrapStorageError(err)
+			}
+			parentDN, err := radix.GetParentDN(normalizedDN)
+			if err != nil {
+				b.engine.Rollback(txn)
+				return ErrInvalidDN
+			}
+			if parentDN != "" {
+				if _, err := b.engine.Get(txn, parentDN); err != nil {
+					b.engine.Rollback(txn)
+					return ErrNoParent
+				}
+			}
+			b.engine.Rollback(txn)
+		}
+
 		// Check if entry already exists (read is local)
-		txn, err := b.engine.Begin()
+		txn, err = b.engine.Begin()
 		if err != nil {
 			return wrapStorageError(err)
 		}
@@ -448,7 +472,7 @@ func (b *ObaBackend) Delete(dn string) error {
 
 	normalizedDN := normalizeDN(dn)
 
-	// Check if entry exists (read is local)
+	// Check if entry exists and has children (read is local)
 	txn, err := b.engine.Begin()
 	if err != nil {
 		return wrapStorageError(err)
@@ -457,6 +481,15 @@ func (b *ObaBackend) Delete(dn string) error {
 	if err != nil {
 		b.engine.Rollback(txn)
 		return ErrEntryNotFound
+	}
+	hasChildren, err := b.engine.HasChildren(txn, normalizedDN)
+	if err != nil {
+		b.engine.Rollback(txn)
+		return wrapStorageError(err)
+	}
+	if hasChildren {
+		b.engine.Rollback(txn)
+		return ErrNotAllowedOnNonLeaf
 	}
 	b.engine.Rollback(txn)
 

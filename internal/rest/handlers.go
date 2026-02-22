@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -19,6 +20,7 @@ import (
 	"github.com/KilimcininKorOglu/oba/internal/ldap"
 	"github.com/KilimcininKorOglu/oba/internal/logging"
 	"github.com/KilimcininKorOglu/oba/internal/raft"
+	"github.com/KilimcininKorOglu/oba/internal/storage/radix"
 )
 
 // Handlers contains all REST API handlers.
@@ -280,6 +282,63 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 			status, code, msg := mapBackendError(searchErr)
 			writeError(w, status, code, msg)
 			return
+		}
+	}
+
+	// Fallback path for one-level queries without filter:
+	// if radix base node is missing but descendants exist, derive direct children
+	// from subtree results so UI listing does not appear empty.
+	if scope == ldap.ScopeSingleLevel && searchFilter == nil && len(entries) == 0 {
+		subtreeFilter := filter.NewPresentFilter("objectClass")
+		subtreeEntries, err := h.backend.Search(baseDN, int(ldap.ScopeWholeSubtree), subtreeFilter)
+		if err == nil {
+			directChildren := make([]*backend.Entry, 0, len(subtreeEntries))
+			for _, entry := range subtreeEntries {
+				ok, relErr := radix.IsDirectChildOf(entry.DN, baseDN)
+				if relErr == nil && ok {
+					directChildren = append(directChildren, entry)
+				}
+			}
+			if len(directChildren) > 0 {
+				entries = directChildren
+			} else {
+				// If direct children are missing from index, synthesize one-level containers
+				// (for example ou=users/ou=groups) from deeper descendants.
+				synth := make(map[string]*backend.Entry)
+				for _, entry := range subtreeEntries {
+					parentDN, pErr := radix.GetParentDN(entry.DN)
+					for pErr == nil && parentDN != "" {
+						isDirect, relErr := radix.IsDirectChildOf(parentDN, baseDN)
+						if relErr != nil {
+							break
+						}
+						if isDirect {
+							if _, exists := synth[parentDN]; !exists {
+								e := backend.NewEntry(parentDN)
+								e.SetAttribute("objectClass", "top", "organizationalUnit")
+								if rdn, rErr := radix.GetRDN(parentDN); rErr == nil {
+									parts := strings.SplitN(rdn, "=", 2)
+									if len(parts) == 2 {
+										e.SetAttribute(parts[0], parts[1])
+									}
+								}
+								synth[parentDN] = e
+							}
+							break
+						}
+						parentDN, pErr = radix.GetParentDN(parentDN)
+					}
+				}
+				if len(synth) > 0 {
+					entries = make([]*backend.Entry, 0, len(synth))
+					for _, e := range synth {
+						entries = append(entries, e)
+					}
+					sort.Slice(entries, func(i, j int) bool {
+						return entries[i].DN < entries[j].DN
+					})
+				}
+			}
 		}
 	}
 
