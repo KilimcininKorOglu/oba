@@ -670,6 +670,65 @@ func convertToStorageEntry(entry *Entry) *storage.Entry {
 	return storageEntry
 }
 
+// Standard LDAP attribute names (RFC 4519 and common extensions)
+var standardAttrNames = map[string]string{
+	"cn":               "cn",
+	"sn":               "sn",
+	"givenname":        "givenName",
+	"uid":              "uid",
+	"mail":             "mail",
+	"userpassword":     "userPassword",
+	"objectclass":      "objectClass",
+	"ou":               "ou",
+	"dc":               "dc",
+	"o":                "o",
+	"c":                "c",
+	"l":                "l",
+	"st":               "st",
+	"street":           "street",
+	"postalcode":       "postalCode",
+	"postaladdress":    "postalAddress",
+	"telephonenumber":  "telephoneNumber",
+	"facsimiletelephonenumber": "facsimileTelephoneNumber",
+	"description":      "description",
+	"title":            "title",
+	"member":           "member",
+	"uniquemember":     "uniqueMember",
+	"memberof":         "memberOf",
+	"memberuid":        "memberUid",
+	"gidnumber":        "gidNumber",
+	"uidnumber":        "uidNumber",
+	"homedirectory":    "homeDirectory",
+	"loginshell":       "loginShell",
+	"gecos":            "gecos",
+	"displayname":      "displayName",
+	"departmentnumber": "departmentNumber",
+	"employeenumber":   "employeeNumber",
+	"employeetype":     "employeeType",
+	"jpegphoto":        "jpegPhoto",
+	"labeleduri":       "labeledURI",
+	"seealso":          "seeAlso",
+	"usercertificate":  "userCertificate",
+	"createtimestamp":  "createTimestamp",
+	"modifytimestamp":  "modifyTimestamp",
+	"creatorsname":     "creatorsName",
+	"modifiersname":    "modifiersName",
+	"entryuuid":        "entryUUID",
+	"entrydn":          "entryDN",
+	"obadisabled":      "obaDisabled",
+	"obalocktime":      "obaLockTime",
+	"obafailedattempts": "obaFailedAttempts",
+}
+
+// normalizeAttrName returns the standard LDAP attribute name
+func normalizeAttrName(name string) string {
+	lower := strings.ToLower(name)
+	if standard, ok := standardAttrNames[lower]; ok {
+		return standard
+	}
+	return name
+}
+
 // convertFromStorageEntry converts a storage Entry to a backend Entry.
 func convertFromStorageEntry(storageEntry *storage.Entry) *Entry {
 	entry := NewEntry(storageEntry.DN)
@@ -679,7 +738,8 @@ func convertFromStorageEntry(storageEntry *storage.Entry) *Entry {
 		for i, v := range values {
 			stringValues[i] = string(v)
 		}
-		entry.Attributes[name] = stringValues
+		// Use standard attribute name for output
+		entry.Attributes[normalizeAttrName(name)] = stringValues
 	}
 
 	return entry

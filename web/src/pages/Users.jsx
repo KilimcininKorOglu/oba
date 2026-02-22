@@ -142,7 +142,8 @@ export default function Users() {
   const openEditModal = (user) => {
     const getAttrVal = (name) => {
       const attrs = user.attributes || {};
-      const val = attrs[name] || attrs[name.toLowerCase()];
+      // Check lowercase first (server normalizes to lowercase)
+      const val = attrs[name.toLowerCase()] || attrs[name];
       return Array.isArray(val) ? val[0] : val || '';
     };
     setEditUser(user);

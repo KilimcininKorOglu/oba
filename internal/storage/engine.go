@@ -1,6 +1,8 @@
 // Package storage provides the core storage engine components for ObaDB.
 package storage
 
+import "strings"
+
 // Scope represents the LDAP search scope.
 type Scope int
 
@@ -50,7 +52,7 @@ func (e *Entry) GetAttribute(name string) [][]byte {
 	if e.Attributes == nil {
 		return nil
 	}
-	return e.Attributes[name]
+	return e.Attributes[strings.ToLower(name)]
 }
 
 // HasAttribute returns true if the entry has the given attribute.
@@ -58,23 +60,26 @@ func (e *Entry) HasAttribute(name string) bool {
 	if e.Attributes == nil {
 		return false
 	}
-	_, ok := e.Attributes[name]
+	_, ok := e.Attributes[strings.ToLower(name)]
 	return ok
 }
 
 // SetAttribute sets the values for the given attribute name.
+// Attribute names are normalized to lowercase.
 func (e *Entry) SetAttribute(name string, values [][]byte) {
 	if e.Attributes == nil {
 		e.Attributes = make(map[string][][]byte)
 	}
-	e.Attributes[name] = values
+	e.Attributes[strings.ToLower(name)] = values
 }
 
 // AddAttributeValue adds a value to the given attribute.
+// Attribute names are normalized to lowercase.
 func (e *Entry) AddAttributeValue(name string, value []byte) {
 	if e.Attributes == nil {
 		e.Attributes = make(map[string][][]byte)
 	}
+	name = strings.ToLower(name)
 	e.Attributes[name] = append(e.Attributes[name], value)
 }
 
