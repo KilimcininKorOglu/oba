@@ -612,6 +612,11 @@ func (db *ObaDB) Put(txnIface interface{}, entry *storage.Entry) error {
 	dn := normalizeDN(entry.DN)
 	entry.DN = dn
 
+	// Check uid uniqueness
+	if err := db.checkUIDUnique(dn, entry.Attributes); err != nil {
+		return err
+	}
+
 	// Serialize entry
 	data, err := serializeEntry(entry)
 	if err != nil {
@@ -1029,6 +1034,43 @@ func (db *ObaDB) updateIndexesWithLocation(oldEntry, newEntry *storage.Entry, pa
 	}
 
 	return db.indexManager.UpdateIndexes(oldIndexEntry, newIndexEntry)
+}
+
+// checkUIDUnique checks if the uid attribute value is unique across all entries.
+// Returns ErrUIDNotUnique if another entry with the same uid exists.
+func (db *ObaDB) checkUIDUnique(dn string, attrs map[string][][]byte) error {
+	if db.indexManager == nil {
+		return nil
+	}
+
+	// Find uid attribute (case-insensitive)
+	var uidValue []byte
+	for name, values := range attrs {
+		if strings.ToLower(name) == "uid" && len(values) > 0 && len(values[0]) > 0 {
+			uidValue = values[0]
+			break
+		}
+	}
+
+	if uidValue == nil {
+		return nil // No uid attribute, nothing to check
+	}
+
+	// Search for existing entries with the same uid
+	refs, err := db.indexManager.Search("uid", uidValue)
+	if err != nil {
+		// Index not found or other error - skip check
+		return nil
+	}
+
+	// Check if any found entry has a different DN
+	for _, ref := range refs {
+		if ref.DN != "" && ref.DN != dn {
+			return ErrUIDNotUnique
+		}
+	}
+
+	return nil
 }
 
 // normalizeDN normalizes a DN for consistent storage and lookup.

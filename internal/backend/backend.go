@@ -738,8 +738,8 @@ func convertFromStorageEntry(storageEntry *storage.Entry) *Entry {
 		for i, v := range values {
 			stringValues[i] = string(v)
 		}
-		// Use standard attribute name for output
-		entry.Attributes[normalizeAttrName(name)] = stringValues
+		// Use lowercase attribute name for internal storage
+		entry.Attributes[strings.ToLower(name)] = stringValues
 	}
 
 	return entry

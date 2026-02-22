@@ -110,6 +110,10 @@ func (m *mockStorageEngine) Compact() error {
 	return nil
 }
 
+func (m *mockStorageEngine) ClearIndexes() error {
+	return nil
+}
+
 func (m *mockStorageEngine) Stats() *storage.EngineStats {
 	return &storage.EngineStats{
 		EntryCount: uint64(len(m.entries)),

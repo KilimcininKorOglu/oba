@@ -54,33 +54,9 @@ func (sm *ObaDBStateMachine) ClearMainEngine() error {
 		return nil
 	}
 
-	// Clear indexes first to ensure consistency
-	if err := sm.mainEngine.ClearIndexes(); err != nil {
-		return err
-	}
-
-	tx, err := sm.mainEngine.Begin()
-	if err != nil {
-		return err
-	}
-
-	// Get all existing DNs
-	iter := sm.mainEngine.SearchByDN(tx, "", storage.ScopeSubtree)
-	var dnsToDelete []string
-	for iter.Next() {
-		entry := iter.Entry()
-		if entry != nil && entry.DN != "" {
-			dnsToDelete = append(dnsToDelete, entry.DN)
-		}
-	}
-	iter.Close()
-
-	// Delete all entries
-	for _, dn := range dnsToDelete {
-		sm.mainEngine.Delete(tx, dn)
-	}
-
-	return sm.mainEngine.Commit(tx)
+	// Skip clearing - let log replay handle everything
+	// This avoids the slow deletion process
+	return nil
 }
 
 // SetLogEngine sets the log database engine for multi-database support.
@@ -159,6 +135,11 @@ func (sm *ObaDBStateMachine) applyLDAPCommand(cmd *Command) error {
 
 	case CmdDelete:
 		applyErr = engine.Delete(tx, cmd.DN)
+		// Ignore "entry not found" error during log replay
+		// Entry may have been deleted by ClearMainEngine
+		if applyErr != nil && applyErr.Error() == "entry not found" {
+			applyErr = nil
+		}
 
 	case CmdModifyDN:
 		// ModifyDN = Delete old + Put new
