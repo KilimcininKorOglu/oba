@@ -127,8 +127,9 @@ export default function Users() {
   };
 
   const getUserGroups = (userDN) => {
+    const userDNLower = userDN.toLowerCase();
     return allGroups
-      .filter(g => getAttr(g, 'member').includes(userDN))
+      .filter(g => getAttr(g, 'member').some(m => m.toLowerCase() === userDNLower))
       .map(g => g.dn);
   };
 
@@ -146,7 +147,7 @@ export default function Users() {
     };
     setEditUser(user);
     setForm({
-      uid: getAttrVal('uid'),
+      uid: getAttrVal('uid') || extractCN(user.dn),
       cn: getAttrVal('cn'),
       sn: getAttrVal('sn'),
       mail: getAttrVal('mail'),
