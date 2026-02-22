@@ -2,6 +2,7 @@ package raft
 
 import (
 	"bytes"
+	"os"
 	"testing"
 )
 
@@ -593,5 +594,56 @@ func TestLogBasicOperations(t *testing.T) {
 	log.Append(&LogEntry{Index: 1, Term: 1, Type: LogEntryCommand})
 	if log.LastIndex() != 1 {
 		t.Errorf("LastIndex should be 1, got %d", log.LastIndex())
+	}
+}
+
+func TestRaftLogPersistence(t *testing.T) {
+	// Create temp directory
+	tmpDir, err := os.MkdirTemp("", "raft-log-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create log with persistence
+	log1, err := NewRaftLogWithDir(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Add some entries
+	log1.Append(&LogEntry{Index: 1, Term: 1, Type: LogEntryCommand, Command: []byte("cmd1")})
+	log1.Append(&LogEntry{Index: 2, Term: 1, Type: LogEntryCommand, Command: []byte("cmd2")})
+	log1.Append(&LogEntry{Index: 3, Term: 2, Type: LogEntryCommand, Command: []byte("cmd3")})
+
+	// Close the log
+	log1.Close()
+
+	// Reopen the log
+	log2, err := NewRaftLogWithDir(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer log2.Close()
+
+	// Verify entries were loaded
+	if log2.LastIndex() != 3 {
+		t.Errorf("Expected LastIndex 3, got %d", log2.LastIndex())
+	}
+
+	entry, err := log2.Get(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(entry.Command) != "cmd1" {
+		t.Errorf("Expected cmd1, got %s", string(entry.Command))
+	}
+
+	entry, err = log2.Get(3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry.Term != 2 {
+		t.Errorf("Expected term 2, got %d", entry.Term)
 	}
 }

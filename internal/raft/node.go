@@ -83,10 +83,23 @@ func NewNode(cfg *NodeConfig, sm StateMachine, transport Transport) (*Node, erro
 		return nil, err
 	}
 
+	var state *NodeState
+	var err error
+
+	// Create state with disk persistence if dataDir is set
+	if cfg.DataDir != "" {
+		state, err = NewNodeStateWithDir(cfg.DataDir)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		state = NewNodeState()
+	}
+
 	n := &Node{
 		id:               cfg.ID,
 		config:           cfg,
-		state:            NewNodeState(),
+		state:            state,
 		peers:            make(map[uint64]*Peer),
 		transport:        transport,
 		stateMachine:     sm,

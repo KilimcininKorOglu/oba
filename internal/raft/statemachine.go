@@ -44,6 +44,40 @@ func NewObaDBStateMachine(engine storage.StorageEngine) *ObaDBStateMachine {
 	return &ObaDBStateMachine{mainEngine: engine}
 }
 
+// ClearMainEngine clears all entries from the main engine.
+// This is called on startup before replaying the Raft log.
+func (sm *ObaDBStateMachine) ClearMainEngine() error {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	if sm.mainEngine == nil {
+		return nil
+	}
+
+	tx, err := sm.mainEngine.Begin()
+	if err != nil {
+		return err
+	}
+
+	// Get all existing DNs
+	iter := sm.mainEngine.SearchByDN(tx, "", storage.ScopeSubtree)
+	var dnsToDelete []string
+	for iter.Next() {
+		entry := iter.Entry()
+		if entry != nil && entry.DN != "" {
+			dnsToDelete = append(dnsToDelete, entry.DN)
+		}
+	}
+	iter.Close()
+
+	// Delete all entries
+	for _, dn := range dnsToDelete {
+		sm.mainEngine.Delete(tx, dn)
+	}
+
+	return sm.mainEngine.Commit(tx)
+}
+
 // SetLogEngine sets the log database engine for multi-database support.
 func (sm *ObaDBStateMachine) SetLogEngine(engine storage.StorageEngine) {
 	sm.mu.Lock()
@@ -72,7 +106,8 @@ func (sm *ObaDBStateMachine) getEngine(dbID uint8) storage.StorageEngine {
 		if sm.logEngine != nil {
 			return sm.logEngine
 		}
-		return sm.mainEngine // fallback to main if log engine not set
+		// Don't fallback to main engine for log entries
+		return nil
 	default:
 		return sm.mainEngine
 	}
@@ -98,6 +133,10 @@ func (sm *ObaDBStateMachine) Apply(cmd *Command) error {
 // applyLDAPCommand applies LDAP operations (Put, Delete, ModifyDN).
 func (sm *ObaDBStateMachine) applyLDAPCommand(cmd *Command) error {
 	engine := sm.getEngine(cmd.DatabaseID)
+	if engine == nil {
+		// Skip if engine not available (e.g., log engine not set yet)
+		return nil
+	}
 	tx, err := engine.Begin()
 	if err != nil {
 		return err
@@ -121,7 +160,7 @@ func (sm *ObaDBStateMachine) applyLDAPCommand(cmd *Command) error {
 		// Normalize oldDN to match storage format (lowercase)
 		oldDN := strings.ToLower(strings.TrimSpace(cmd.OldDN))
 		if err := engine.Delete(tx, oldDN); err != nil {
-			// Continue even if delete fails - old entry may have different case or not exist
+			// Continue even if delete fails - old entry may not exist
 		}
 		entry, err := deserializeEntry(cmd.EntryData)
 		if err != nil {

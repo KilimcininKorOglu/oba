@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	"os"
+	"path/filepath"
 	"sync"
 )
 
@@ -549,10 +551,12 @@ func readBytes(r io.Reader) ([]byte, error) {
 	return data, nil
 }
 
-// RaftLog manages the Raft log entries.
+// RaftLog manages the Raft log entries with disk persistence.
 type RaftLog struct {
 	mu      sync.RWMutex
 	entries []*LogEntry
+	dataDir string   // Directory for persistence
+	file    *os.File // Log file handle
 }
 
 // NewRaftLog creates a new Raft log with an initial noop entry at index 0.
@@ -564,11 +568,200 @@ func NewRaftLog() *RaftLog {
 	}
 }
 
-// Append adds a new entry to the log.
+// NewRaftLogWithDir creates a new Raft log with disk persistence.
+func NewRaftLogWithDir(dataDir string) (*RaftLog, error) {
+	l := &RaftLog{
+		entries: []*LogEntry{
+			{Index: 0, Term: 0, Type: LogEntryNoop},
+		},
+		dataDir: dataDir,
+	}
+
+	if dataDir != "" {
+		if err := os.MkdirAll(dataDir, 0755); err != nil {
+			return nil, err
+		}
+
+		// Open or create log file
+		logPath := filepath.Join(dataDir, "raft.log")
+		f, err := os.OpenFile(logPath, os.O_RDWR|os.O_CREATE, 0644)
+		if err != nil {
+			return nil, err
+		}
+		l.file = f
+
+		// Load existing entries from disk
+		if err := l.loadFromDisk(); err != nil {
+			f.Close()
+			return nil, err
+		}
+	}
+
+	return l, nil
+}
+
+// loadFromDisk loads log entries from the log file.
+func (l *RaftLog) loadFromDisk() error {
+	if l.file == nil {
+		return nil
+	}
+
+	// Seek to beginning
+	if _, err := l.file.Seek(0, 0); err != nil {
+		return err
+	}
+
+	// Read all entries into a map to handle duplicates
+	entryMap := make(map[uint64]*LogEntry)
+	var maxIndex uint64 = 0
+
+	for {
+		// Read entry length (4 bytes)
+		lenBuf := make([]byte, 4)
+		_, err := io.ReadFull(l.file, lenBuf)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		entryLen := binary.LittleEndian.Uint32(lenBuf)
+		if entryLen == 0 || entryLen > 10*1024*1024 { // Max 10MB per entry
+			break
+		}
+
+		// Read entry data
+		entryData := make([]byte, entryLen)
+		_, err = io.ReadFull(l.file, entryData)
+		if err != nil {
+			return err
+		}
+
+		// Deserialize entry
+		entry, err := DeserializeLogEntry(entryData)
+		if err != nil {
+			return err
+		}
+
+		// Store in map (later entries overwrite earlier ones for same index)
+		if entry.Index > 0 {
+			entryMap[entry.Index] = entry
+			if entry.Index > maxIndex {
+				maxIndex = entry.Index
+			}
+		}
+	}
+
+	// Build entries array from map
+	for i := uint64(1); i <= maxIndex; i++ {
+		if entry, ok := entryMap[i]; ok {
+			for uint64(len(l.entries)) <= i {
+				l.entries = append(l.entries, nil)
+			}
+			l.entries[i] = entry
+		}
+	}
+
+	// Compact the log file - rewrite without duplicates
+	if err := l.compactLogFile(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// compactLogFile rewrites the log file without duplicates.
+func (l *RaftLog) compactLogFile() error {
+	if l.file == nil {
+		return nil
+	}
+
+	// Truncate file
+	if err := l.file.Truncate(0); err != nil {
+		return err
+	}
+	if _, err := l.file.Seek(0, 0); err != nil {
+		return err
+	}
+
+	// Rewrite all entries
+	for i := uint64(1); i < uint64(len(l.entries)); i++ {
+		entry := l.entries[i]
+		if entry != nil {
+			if err := l.persistEntryLocked(entry); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// persistEntry writes a single entry to disk.
+func (l *RaftLog) persistEntry(entry *LogEntry) error {
+	if l.file == nil {
+		return nil
+	}
+
+	data := entry.Serialize()
+	lenBuf := make([]byte, 4)
+	binary.LittleEndian.PutUint32(lenBuf, uint32(len(data)))
+
+	// Write length + data
+	if _, err := l.file.Write(lenBuf); err != nil {
+		return err
+	}
+	if _, err := l.file.Write(data); err != nil {
+		return err
+	}
+
+	// Sync to disk
+	return l.file.Sync()
+}
+
+// Close closes the log file.
+func (l *RaftLog) Close() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.file != nil {
+		return l.file.Close()
+	}
+	return nil
+}
+
+// Append adds a new entry to the log and persists it to disk.
 func (l *RaftLog) Append(entry *LogEntry) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.entries = append(l.entries, entry)
+
+	// Persist to disk
+	if l.file != nil {
+		l.persistEntryLocked(entry)
+	}
+}
+
+// persistEntryLocked writes a single entry to disk (must hold lock).
+func (l *RaftLog) persistEntryLocked(entry *LogEntry) error {
+	if l.file == nil {
+		return nil
+	}
+
+	data := entry.Serialize()
+	lenBuf := make([]byte, 4)
+	binary.LittleEndian.PutUint32(lenBuf, uint32(len(data)))
+
+	// Write length + data
+	if _, err := l.file.Write(lenBuf); err != nil {
+		return err
+	}
+	if _, err := l.file.Write(data); err != nil {
+		return err
+	}
+
+	// Sync to disk
+	return l.file.Sync()
 }
 
 // Get returns the entry at the given index.

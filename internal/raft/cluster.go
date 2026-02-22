@@ -2,6 +2,7 @@ package raft
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -148,7 +149,13 @@ func (cb *ClusterBackend) SetACLApplier(applier ACLApplier) {
 }
 
 // Start starts the cluster backend and Raft node.
+// On startup, clears the main engine and replays all Raft logs.
 func (cb *ClusterBackend) Start() error {
+	// Clear main engine before replaying logs
+	// This ensures the state machine is rebuilt from the Raft log
+	if err := cb.stateMachine.ClearMainEngine(); err != nil {
+		return fmt.Errorf("failed to clear main engine: %w", err)
+	}
 	return cb.node.Start()
 }
 

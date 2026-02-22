@@ -1,6 +1,9 @@
 package raft
 
 import (
+	"encoding/binary"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -92,6 +95,9 @@ type NodeState struct {
 	// Timing
 	lastHeartbeat time.Time
 
+	// Data directory for persistence
+	dataDir string
+
 	mu sync.RWMutex
 }
 
@@ -107,7 +113,88 @@ func NewNodeState() *NodeState {
 		nextIndex:   make(map[uint64]uint64),
 		matchIndex:  make(map[uint64]uint64),
 		leaderID:    0,
+		dataDir:     "",
 	}
+}
+
+// NewNodeStateWithDir creates a new node state with disk persistence.
+func NewNodeStateWithDir(dataDir string) (*NodeState, error) {
+	log, err := NewRaftLogWithDir(dataDir)
+	if err != nil {
+		return nil, err
+	}
+
+	s := &NodeState{
+		currentTerm: 0,
+		votedFor:    0,
+		log:         log,
+		state:       StateFollower,
+		commitIndex: 0,
+		lastApplied: 0,
+		nextIndex:   make(map[uint64]uint64),
+		matchIndex:  make(map[uint64]uint64),
+		leaderID:    0,
+		dataDir:     dataDir,
+	}
+
+	// Load persisted state
+	if err := s.loadPersistedState(); err != nil {
+		return nil, err
+	}
+
+	return s, nil
+}
+
+// loadPersistedState loads term and votedFor from disk.
+// Note: lastApplied is NOT loaded - we want to replay all logs on restart.
+func (s *NodeState) loadPersistedState() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	// Load term and votedFor
+	path := filepath.Join(s.dataDir, "term.dat")
+	data, err := os.ReadFile(path)
+	if err == nil && len(data) >= 16 {
+		s.currentTerm = binary.LittleEndian.Uint64(data[0:8])
+		s.votedFor = binary.LittleEndian.Uint64(data[8:16])
+	}
+
+	// Set commitIndex to log's last index so all entries get applied
+	s.commitIndex = s.log.LastIndex()
+
+	return nil
+}
+
+// SetDataDir sets the data directory for persistence.
+func (s *NodeState) SetDataDir(dir string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.dataDir = dir
+}
+
+// LoadLastApplied loads the last applied index from disk.
+func (s *NodeState) LoadLastApplied() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.dataDir == "" {
+		return nil
+	}
+
+	path := filepath.Join(s.dataDir, "last_applied.dat")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	if len(data) >= 8 {
+		s.lastApplied = binary.LittleEndian.Uint64(data)
+	}
+	return nil
 }
 
 // CurrentTerm returns the current term.
@@ -117,11 +204,12 @@ func (s *NodeState) CurrentTerm() uint64 {
 	return s.currentTerm
 }
 
-// SetCurrentTerm sets the current term.
+// SetCurrentTerm sets the current term and persists it to disk.
 func (s *NodeState) SetCurrentTerm(term uint64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.currentTerm = term
+	s.persistTermAndVote()
 }
 
 // VotedFor returns the candidate ID this node voted for in current term.
@@ -131,11 +219,24 @@ func (s *NodeState) VotedFor() uint64 {
 	return s.votedFor
 }
 
-// SetVotedFor sets the voted for candidate.
+// SetVotedFor sets the voted for candidate and persists it to disk.
 func (s *NodeState) SetVotedFor(candidateID uint64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.votedFor = candidateID
+	s.persistTermAndVote()
+}
+
+// persistTermAndVote saves term and votedFor to disk.
+func (s *NodeState) persistTermAndVote() {
+	if s.dataDir == "" {
+		return
+	}
+	path := filepath.Join(s.dataDir, "term.dat")
+	data := make([]byte, 16)
+	binary.LittleEndian.PutUint64(data[0:8], s.currentTerm)
+	binary.LittleEndian.PutUint64(data[8:16], s.votedFor)
+	os.WriteFile(path, data, 0644)
 }
 
 // State returns the current node state.
@@ -189,6 +290,8 @@ func (s *NodeState) LastApplied() uint64 {
 }
 
 // SetLastApplied sets the last applied index.
+// Note: We don't persist lastApplied because on restart we want to replay
+// all logs to rebuild the state machine from scratch.
 func (s *NodeState) SetLastApplied(index uint64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
