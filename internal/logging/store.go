@@ -236,6 +236,14 @@ func (s *LogStore) Write(level, msg, source, user, requestID string, fields map[
 		return nil
 	}
 
+	// Skip Raft's own logs to prevent infinite loop:
+	// Raft log -> LogStore.Write -> Propose -> Raft waits -> deadlock
+	// Raft logs are written directly to stdout, not replicated
+	if source == "raft" {
+		s.mu.Unlock()
+		return nil
+	}
+
 	id := s.nextID
 	s.nextID++
 
