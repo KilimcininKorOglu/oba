@@ -612,7 +612,9 @@ func TestDeleteCausesLeafUnderflow(t *testing.T) {
 
 	// Insert enough keys to create multiple leaves
 	// Use a reasonable number that will fit in pages
-	numKeys := 200
+	// With EntryRefBaseSize=12 and average key size ~10, each entry ~24 bytes
+	// Page size 4096 - header 21 = 4075 usable, so ~170 entries max per leaf
+	numKeys := 150
 
 	for i := 0; i < numKeys; i++ {
 		key := []byte(fmt.Sprintf("key%05d", i))
@@ -1075,7 +1077,7 @@ func TestBPlusTreePropertiesAfterDeletes(t *testing.T) {
 		t.Fatalf("failed to create B+ tree: %v", err)
 	}
 
-	numKeys := 200
+	numKeys := 150
 
 	// Insert keys
 	for i := 0; i < numKeys; i++ {

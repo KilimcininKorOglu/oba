@@ -54,6 +54,11 @@ func (sm *ObaDBStateMachine) ClearMainEngine() error {
 		return nil
 	}
 
+	// Clear indexes first to ensure consistency
+	if err := sm.mainEngine.ClearIndexes(); err != nil {
+		return err
+	}
+
 	tx, err := sm.mainEngine.Begin()
 	if err != nil {
 		return err

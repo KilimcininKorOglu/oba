@@ -37,6 +37,7 @@ var (
 	ErrInvalidDN         = errors.New("invalid distinguished name")
 	ErrInvalidEntry      = errors.New("invalid entry")
 	ErrTransactionClosed = errors.New("transaction is closed")
+	ErrUIDNotUnique      = errors.New("uid attribute must be unique")
 )
 
 // ObaDB is the main storage engine implementation.
@@ -648,8 +649,8 @@ func (db *ObaDB) Put(txnIface interface{}, entry *storage.Entry) error {
 		}
 	}
 
-	// Update indexes
-	if err := db.updateIndexes(oldEntry, entry); err != nil {
+	// Update indexes with storage location
+	if err := db.updateIndexesWithLocation(oldEntry, entry, pageID, slotID); err != nil {
 		return err
 	}
 
@@ -702,6 +703,14 @@ func (db *ObaDB) Delete(txnIface interface{}, dn string) error {
 	// Delete version in version store
 	if err := db.versionStore.DeleteVersion(txn, dn); err != nil {
 		return err
+	}
+
+	// Remove from radix tree
+	if err := db.radixTree.Delete(dn); err != nil {
+		// Ignore if not found
+		if err != radix.ErrEntryNotFound {
+			return err
+		}
 	}
 
 	// Update indexes (remove old entry)
@@ -855,6 +864,27 @@ func (db *ObaDB) DropIndex(attribute string) error {
 	return db.indexManager.DropIndex(attribute)
 }
 
+// ClearIndexes clears all index data.
+// This is called when the main engine is cleared to ensure index consistency.
+func (db *ObaDB) ClearIndexes() error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if db.closed {
+		return ErrDatabaseClosed
+	}
+
+	if db.readOnly {
+		return ErrDatabaseReadOnly
+	}
+
+	if db.indexManager == nil {
+		return nil
+	}
+
+	return db.indexManager.ClearAll()
+}
+
 // Checkpoint performs a checkpoint operation.
 func (db *ObaDB) Checkpoint() error {
 	db.mu.RLock()
@@ -971,6 +1001,11 @@ func (db *ObaDB) Stats() *storage.EngineStats {
 
 // updateIndexes updates indexes when an entry is modified.
 func (db *ObaDB) updateIndexes(oldEntry, newEntry *storage.Entry) error {
+	return db.updateIndexesWithLocation(oldEntry, newEntry, 0, 0)
+}
+
+// updateIndexesWithLocation updates indexes when an entry is modified, with storage location.
+func (db *ObaDB) updateIndexesWithLocation(oldEntry, newEntry *storage.Entry, pageID storage.PageID, slotID uint16) error {
 	if db.indexManager == nil {
 		return nil
 	}
@@ -988,6 +1023,8 @@ func (db *ObaDB) updateIndexes(oldEntry, newEntry *storage.Entry) error {
 		newIndexEntry = &index.Entry{
 			DN:         newEntry.DN,
 			Attributes: newEntry.Attributes,
+			PageID:     pageID,
+			SlotID:     slotID,
 		}
 	}
 

@@ -26,8 +26,13 @@ const (
 	// KeyLengthSize is the size of the key length prefix (2 bytes for uint16).
 	KeyLengthSize = 2
 
-	// EntryRefSize is the size of an EntryRef in bytes (8 + 2 = 10).
-	EntryRefSize = 10
+	// EntryRefBaseSize is the base size of an EntryRef in bytes (PageID 8 + SlotID 2 + DN length 2 = 12).
+	// The actual size varies based on DN length.
+	EntryRefBaseSize = 12
+
+	// EntryRefSize is kept for backward compatibility but represents minimum size.
+	// Actual size = EntryRefBaseSize + len(DN)
+	EntryRefSize = 12
 
 	// PageIDSize is the size of a PageID in bytes.
 	PageIDSize = 8
@@ -56,8 +61,10 @@ func (n *BPlusNode) SerializedSize() int {
 	}
 
 	if n.IsLeaf {
-		// Leaf nodes store entry references
-		size += len(n.Values) * EntryRefSize
+		// Leaf nodes store entry references (PageID + SlotID + DN length + DN)
+		for _, ref := range n.Values {
+			size += EntryRefBaseSize + len(ref.DN)
+		}
 	} else {
 		// Internal nodes store child page IDs
 		size += len(n.Children) * PageIDSize
@@ -137,6 +144,12 @@ func (n *BPlusNode) Serialize(buf []byte) (int, error) {
 			offset += 8
 			binary.LittleEndian.PutUint16(buf[offset:offset+2], ref.SlotID)
 			offset += 2
+			// Write DN (length-prefixed)
+			dnBytes := []byte(ref.DN)
+			binary.LittleEndian.PutUint16(buf[offset:offset+2], uint16(len(dnBytes)))
+			offset += 2
+			copy(buf[offset:], dnBytes)
+			offset += len(dnBytes)
 		}
 	} else {
 		for _, child := range n.Children {
@@ -212,7 +225,7 @@ func (n *BPlusNode) Deserialize(buf []byte, pageID storage.PageID) error {
 		n.Children = nil
 
 		for i := 0; i < keyCount; i++ {
-			if offset+EntryRefSize > len(buf) {
+			if offset+EntryRefBaseSize > len(buf) {
 				return ErrCorruptedNode
 			}
 
@@ -220,6 +233,14 @@ func (n *BPlusNode) Deserialize(buf []byte, pageID storage.PageID) error {
 			offset += 8
 			n.Values[i].SlotID = binary.LittleEndian.Uint16(buf[offset : offset+2])
 			offset += 2
+			// Read DN (length-prefixed)
+			dnLen := int(binary.LittleEndian.Uint16(buf[offset : offset+2]))
+			offset += 2
+			if offset+dnLen > len(buf) {
+				return ErrCorruptedNode
+			}
+			n.Values[i].DN = string(buf[offset : offset+dnLen])
+			offset += dnLen
 		}
 	} else {
 		childCount := keyCount + 1
@@ -343,21 +364,30 @@ func DecodeKey(buf []byte) ([]byte, int, error) {
 
 // EncodeEntryRef encodes an EntryRef to a byte slice.
 func EncodeEntryRef(ref EntryRef) []byte {
-	buf := make([]byte, EntryRefSize)
+	dnBytes := []byte(ref.DN)
+	buf := make([]byte, EntryRefBaseSize+len(dnBytes))
 	binary.LittleEndian.PutUint64(buf[0:8], uint64(ref.PageID))
 	binary.LittleEndian.PutUint16(buf[8:10], ref.SlotID)
+	binary.LittleEndian.PutUint16(buf[10:12], uint16(len(dnBytes)))
+	copy(buf[12:], dnBytes)
 	return buf
 }
 
 // DecodeEntryRef decodes an EntryRef from a byte slice.
 func DecodeEntryRef(buf []byte) (EntryRef, error) {
-	if len(buf) < EntryRefSize {
+	if len(buf) < EntryRefBaseSize {
+		return EntryRef{}, ErrBufferTooSmall
+	}
+
+	dnLen := int(binary.LittleEndian.Uint16(buf[10:12]))
+	if len(buf) < EntryRefBaseSize+dnLen {
 		return EntryRef{}, ErrBufferTooSmall
 	}
 
 	return EntryRef{
 		PageID: storage.PageID(binary.LittleEndian.Uint64(buf[0:8])),
 		SlotID: binary.LittleEndian.Uint16(buf[8:10]),
+		DN:     string(buf[12 : 12+dnLen]),
 	}, nil
 }
 

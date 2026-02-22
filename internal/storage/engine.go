@@ -234,6 +234,10 @@ type StorageEngine interface {
 	// Compact compacts the database to reclaim space.
 	Compact() error
 
+	// ClearIndexes clears all index data.
+	// This is called when the main engine is cleared to ensure index consistency.
+	ClearIndexes() error
+
 	// Stats returns statistics about the storage engine.
 	Stats() *EngineStats
 

@@ -3,6 +3,8 @@
 package index
 
 import (
+	"strings"
+
 	"github.com/KilimcininKorOglu/oba/internal/storage"
 	"github.com/KilimcininKorOglu/oba/internal/storage/btree"
 )
@@ -73,13 +75,19 @@ func NewEntry(dn string) *Entry {
 	}
 }
 
-// GetAttribute returns the values for the given attribute name.
+// GetAttribute returns the values for the given attribute name (case-insensitive).
 // Returns nil if the attribute doesn't exist.
 func (e *Entry) GetAttribute(name string) [][]byte {
 	if e.Attributes == nil {
 		return nil
 	}
-	return e.Attributes[name]
+	name = strings.ToLower(name)
+	for k, v := range e.Attributes {
+		if strings.ToLower(k) == name {
+			return v
+		}
+	}
+	return nil
 }
 
 // HasAttribute returns true if the entry has the given attribute.
@@ -112,6 +120,7 @@ func (e *Entry) EntryRef() btree.EntryRef {
 	return btree.EntryRef{
 		PageID: e.PageID,
 		SlotID: e.SlotID,
+		DN:     e.DN,
 	}
 }
 

@@ -904,7 +904,11 @@ func (l *RaftLog) LastTerm() uint64 {
 	if len(l.entries) == 0 {
 		return 0
 	}
-	return l.entries[len(l.entries)-1].Term
+	lastEntry := l.entries[len(l.entries)-1]
+	if lastEntry == nil {
+		return 0
+	}
+	return lastEntry.Term
 }
 
 // GetFrom returns all entries from the given index.

@@ -529,8 +529,8 @@ func TestSerializedSize(t *testing.T) {
 
 	// Leaf with keys
 	leaf.Keys = [][]byte{[]byte("test")}
-	leaf.Values = []EntryRef{{PageID: 1, SlotID: 0}}
-	expectedSize := BPlusNodeHeaderSize + KeyLengthSize + 4 + EntryRefSize
+	leaf.Values = []EntryRef{{PageID: 1, SlotID: 0, DN: ""}}
+	expectedSize := BPlusNodeHeaderSize + KeyLengthSize + 4 + EntryRefBaseSize // DN is empty
 	if leaf.SerializedSize() != expectedSize {
 		t.Errorf("expected size %d, got %d", expectedSize, leaf.SerializedSize())
 	}
@@ -709,11 +709,12 @@ func TestEncodeKeyTooLarge(t *testing.T) {
 }
 
 func TestEncodeDecodeEntryRef(t *testing.T) {
-	ref := EntryRef{PageID: 12345678, SlotID: 999}
+	ref := EntryRef{PageID: 12345678, SlotID: 999, DN: "uid=test,dc=example,dc=com"}
 
 	encoded := EncodeEntryRef(ref)
-	if len(encoded) != EntryRefSize {
-		t.Errorf("expected %d bytes, got %d", EntryRefSize, len(encoded))
+	expectedSize := EntryRefBaseSize + len(ref.DN)
+	if len(encoded) != expectedSize {
+		t.Errorf("expected %d bytes, got %d", expectedSize, len(encoded))
 	}
 
 	decoded, err := DecodeEntryRef(encoded)
@@ -721,7 +722,7 @@ func TestEncodeDecodeEntryRef(t *testing.T) {
 		t.Fatalf("DecodeEntryRef failed: %v", err)
 	}
 
-	if decoded != ref {
+	if decoded.PageID != ref.PageID || decoded.SlotID != ref.SlotID || decoded.DN != ref.DN {
 		t.Errorf("EntryRef mismatch: got %v, want %v", decoded, ref)
 	}
 }

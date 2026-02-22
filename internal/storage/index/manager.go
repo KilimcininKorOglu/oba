@@ -572,6 +572,39 @@ func (im *IndexManager) IndexCount() int {
 	return len(im.indexes)
 }
 
+// ClearAll clears all data from all indexes.
+// The index structure is preserved, only the data is removed.
+func (im *IndexManager) ClearAll() error {
+	im.mu.Lock()
+	defer im.mu.Unlock()
+
+	if im.closed {
+		return ErrManagerClosed
+	}
+
+	// Recreate each index with a fresh B+ tree
+	for attr, idx := range im.indexes {
+		// Allocate new root page
+		rootPageID, err := im.pageManager.AllocatePage(storage.PageTypeAttrIndex)
+		if err != nil {
+			return err
+		}
+
+		// Create new B+ tree
+		newTree, err := btree.NewBPlusTree(im.pageManager, int(rootPageID))
+		if err != nil {
+			return err
+		}
+
+		// Update index
+		idx.Tree = newTree
+		idx.RootPageID = rootPageID
+		im.indexes[attr] = idx
+	}
+
+	return im.saveMetadata()
+}
+
 // Close closes the index manager and persists all metadata.
 func (im *IndexManager) Close() error {
 	im.mu.Lock()

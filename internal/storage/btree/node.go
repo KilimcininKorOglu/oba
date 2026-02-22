@@ -25,10 +25,11 @@ const (
 )
 
 // EntryRef represents a reference to an entry stored in a data page.
-// It contains the page ID and slot ID where the entry is located.
+// It contains the page ID, slot ID, and DN where the entry is located.
 type EntryRef struct {
 	PageID storage.PageID // Page containing the entry
 	SlotID uint16         // Slot index within the page
+	DN     string         // Distinguished name of the entry
 }
 
 // BPlusNode represents a node in the B+ Tree.
