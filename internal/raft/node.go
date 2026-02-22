@@ -58,7 +58,7 @@ type Node struct {
 	stopCh    chan struct{}
 
 	// Pending proposals waiting for commit
-	pendingMu       sync.Mutex
+	pendingMu        sync.Mutex
 	pendingProposals map[uint64]*proposeRequest
 
 	// Timers
@@ -571,7 +571,7 @@ func (n *Node) handleInstallSnapshot(data []byte) []byte {
 	// This prevents re-applying old log entries
 	n.state.SetCommitIndex(args.LastIncludedIndex)
 	n.state.SetLastApplied(args.LastIncludedIndex)
-	
+
 	// Truncate log entries that are included in the snapshot
 	n.state.Log().TruncateBefore(args.LastIncludedIndex + 1)
 
@@ -647,7 +647,6 @@ func (n *Node) replicateTo(peerID uint64) {
 		n.state.SetNextIndex(peerID, nextIndex+uint64(len(entries)))
 		n.state.SetMatchIndex(peerID, nextIndex+uint64(len(entries))-1)
 		n.updateCommitIndex()
-		n.notifyCommittedProposals()
 	} else {
 		// Decrement nextIndex and retry
 		if reply.ConflictTerm > 0 {
@@ -770,7 +769,7 @@ func (n *Node) appendCommand(cmd *Command) {
 	n.broadcastAppendEntries()
 }
 
-// appendCommandAndTrack appends a command and tracks it for commit notification.
+// appendCommandAndTrack appends a command and tracks it for apply notification.
 func (n *Node) appendCommandAndTrack(req *proposeRequest) uint64 {
 	if n.State() != StateLeader {
 		return 0
@@ -786,7 +785,7 @@ func (n *Node) appendCommandAndTrack(req *proposeRequest) uint64 {
 
 	n.state.AppendEntry(entry)
 
-	// Track this proposal for commit notification
+	// Track this proposal for apply notification.
 	n.pendingMu.Lock()
 	n.pendingProposals[entry.Index] = req
 	n.pendingMu.Unlock()
@@ -794,28 +793,23 @@ func (n *Node) appendCommandAndTrack(req *proposeRequest) uint64 {
 	// Update commit index (for single node, commits immediately)
 	n.updateCommitIndex()
 
-	// Notify any proposals that are now committed
-	n.notifyCommittedProposals()
-
 	// Replicate to peers
 	n.broadcastAppendEntries()
 
 	return entry.Index
 }
 
-// notifyCommittedProposals notifies pending proposals that have been committed.
-func (n *Node) notifyCommittedProposals() {
-	commitIndex := n.state.CommitIndex()
-
+// notifyProposalApplied resolves a pending proposal with apply result.
+func (n *Node) notifyProposalApplied(index uint64, applyErr error) {
 	n.pendingMu.Lock()
 	defer n.pendingMu.Unlock()
 
-	for index, req := range n.pendingProposals {
-		if index <= commitIndex {
-			req.result <- nil
-			delete(n.pendingProposals, index)
-		}
+	req, ok := n.pendingProposals[index]
+	if !ok {
+		return
 	}
+	req.result <- applyErr
+	delete(n.pendingProposals, index)
 }
 
 // cancelPendingProposals cancels all pending proposals with the given error.
@@ -831,6 +825,7 @@ func (n *Node) cancelPendingProposals(err error) {
 
 // applyLoop applies committed entries to the state machine.
 func (n *Node) applyLoop() {
+	n.logger.Info("applyLoop started")
 	for {
 		select {
 		case <-n.stopCh:
@@ -841,21 +836,34 @@ func (n *Node) applyLoop() {
 		commitIndex := n.state.CommitIndex()
 		lastApplied := n.state.LastApplied()
 
+		if lastApplied < commitIndex {
+			n.logger.Info("applyLoop: replaying", "commitIndex", commitIndex, "lastApplied", lastApplied)
+		}
+
 		for lastApplied < commitIndex {
 			lastApplied++
 			entry, err := n.state.Log().Get(lastApplied)
 			if err != nil {
+				n.logger.Error("applyLoop: failed to get entry", "index", lastApplied, "error", err)
 				break
 			}
 
+			var applyErr error
 			if entry.Type == LogEntryCommand && n.stateMachine != nil {
 				cmd, err := DeserializeCommand(entry.Command)
-				if err == nil {
-					n.stateMachine.Apply(cmd)
+				if err != nil {
+					applyErr = err
+					n.logger.Error("applyLoop: failed to deserialize command", "index", lastApplied, "error", err)
+				} else {
+					if err := n.stateMachine.Apply(cmd); err != nil {
+						applyErr = err
+						n.logger.Error("applyLoop: state machine apply failed", "index", lastApplied, "error", err)
+					}
 				}
 			}
 
 			n.state.SetLastApplied(lastApplied)
+			n.notifyProposalApplied(lastApplied, applyErr)
 		}
 
 		time.Sleep(10 * time.Millisecond)

@@ -674,143 +674,10 @@ func (l *RaftLog) loadFromDisk() error {
 // compactLogFile rewrites the log file without duplicates.
 // For LDAP commands (PUT, DELETE, MODIFYDN), keeps only the last command for each DN.
 func (l *RaftLog) compactLogFile() error {
-	if l.file == nil {
-		return nil
-	}
-
-	// First pass: find the last command index for each DN (MAIN database only)
-	dnLastIndex := make(map[string]uint64) // DN -> last index that affects it
-	
-	for i := uint64(1); i < uint64(len(l.entries)); i++ {
-		entry := l.entries[i]
-		if entry == nil || entry.Type != LogEntryCommand {
-			continue
-		}
-		
-		cmd, err := DeserializeCommand(entry.Command)
-		if err != nil || cmd == nil {
-			continue
-		}
-		
-		// Only compact MAIN database LDAP commands
-		if cmd.DatabaseID != DBMain {
-			continue
-		}
-		
-		switch cmd.Type {
-		case CmdPut, CmdDelete:
-			if cmd.DN != "" {
-				dnLastIndex[cmd.DN] = i
-			}
-		case CmdModifyDN:
-			// ModifyDN affects both old and new DN
-			if cmd.OldDN != "" {
-				dnLastIndex[cmd.OldDN] = i
-			}
-			if cmd.DN != "" {
-				dnLastIndex[cmd.DN] = i
-			}
-		}
-	}
-
-	// Second pass: mark entries to keep
-	keepEntry := make(map[uint64]bool)
-	dnKept := make(map[string]bool) // Track which DNs we've already kept
-	
-	// Process in reverse order to keep only the last command for each DN
-	for i := uint64(len(l.entries)) - 1; i >= 1; i-- {
-		entry := l.entries[i]
-		if entry == nil {
-			continue
-		}
-		
-		// Always keep non-command entries
-		if entry.Type != LogEntryCommand {
-			keepEntry[i] = true
-			continue
-		}
-		
-		cmd, err := DeserializeCommand(entry.Command)
-		if err != nil || cmd == nil {
-			keepEntry[i] = true
-			continue
-		}
-		
-		// Always keep non-MAIN database commands (LOG, config, ACL)
-		if cmd.DatabaseID != DBMain {
-			keepEntry[i] = true
-			continue
-		}
-		
-		// For LDAP commands, only keep if this is the last command for this DN
-		switch cmd.Type {
-		case CmdPut, CmdDelete:
-			if cmd.DN != "" && !dnKept[cmd.DN] {
-				keepEntry[i] = true
-				dnKept[cmd.DN] = true
-			}
-		case CmdModifyDN:
-			// Keep if either DN hasn't been kept yet
-			keep := false
-			if cmd.OldDN != "" && !dnKept[cmd.OldDN] {
-				keep = true
-				dnKept[cmd.OldDN] = true
-			}
-			if cmd.DN != "" && !dnKept[cmd.DN] {
-				keep = true
-				dnKept[cmd.DN] = true
-			}
-			if keep {
-				keepEntry[i] = true
-			}
-		default:
-			// Keep other command types
-			keepEntry[i] = true
-		}
-	}
-
-	// Build new entries array with only kept entries
-	newEntries := make([]*LogEntry, 1) // Start with nil at index 0
-	indexMap := make(map[uint64]uint64) // old index -> new index
-	
-	for i := uint64(1); i < uint64(len(l.entries)); i++ {
-		if keepEntry[i] && l.entries[i] != nil {
-			newIndex := uint64(len(newEntries))
-			indexMap[i] = newIndex
-			
-			// Create new entry with updated index
-			oldEntry := l.entries[i]
-			newEntry := &LogEntry{
-				Index:   newIndex,
-				Term:    oldEntry.Term,
-				Type:    oldEntry.Type,
-				Command: oldEntry.Command,
-			}
-			newEntries = append(newEntries, newEntry)
-		}
-	}
-
-	// Update entries
-	l.entries = newEntries
-
-	// Truncate and rewrite file
-	if err := l.file.Truncate(0); err != nil {
-		return err
-	}
-	if _, err := l.file.Seek(0, 0); err != nil {
-		return err
-	}
-
-	// Rewrite all kept entries
-	for i := uint64(1); i < uint64(len(l.entries)); i++ {
-		entry := l.entries[i]
-		if entry != nil {
-			if err := l.persistEntryLocked(entry); err != nil {
-				return err
-			}
-		}
-	}
-
+	// DISABLED: Log compaction was re-indexing entries which breaks Raft protocol.
+	// Raft log indices must be stable. Compaction should only remove old entries,
+	// not re-index them.
+	// TODO: Implement proper log compaction with snapshots.
 	return nil
 }
 
@@ -958,6 +825,9 @@ func (l *RaftLog) TermAt(index uint64) uint64 {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	if index >= uint64(len(l.entries)) {
+		return 0
+	}
+	if l.entries[index] == nil {
 		return 0
 	}
 	return l.entries[index].Term

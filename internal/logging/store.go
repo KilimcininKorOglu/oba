@@ -309,7 +309,7 @@ func (s *LogStore) Write(level, msg, source, user, requestID string, fields map[
 
 		// Release lock before network I/O
 		s.mu.Unlock()
-		
+
 		// Forward to leader (non-blocking relative to lock)
 		return s.forwardToLeader(entry, leaderAddr)
 	}
@@ -385,7 +385,7 @@ func (s *LogStore) forwardToLeader(entry *storage.Entry, leaderAddr string) erro
 	}
 
 	url := fmt.Sprintf("http://%s/api/v1/internal/log", httpAddr)
-	
+
 	// Retry up to 3 times with backoff
 	for i := 0; i < 3; i++ {
 		resp, err := http.Post(url, "application/json", bytes.NewReader(data))
@@ -398,13 +398,13 @@ func (s *LogStore) forwardToLeader(entry *storage.Entry, leaderAddr string) erro
 		if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusCreated {
 			return nil
 		}
-		
+
 		// 503 means leader not ready yet, retry
 		if resp.StatusCode == http.StatusServiceUnavailable {
 			time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
 			continue
 		}
-		
+
 		// Other errors, don't retry
 		return fmt.Errorf("forward failed: status %d", resp.StatusCode)
 	}

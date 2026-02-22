@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 type MockStateMachine struct {
 	applied  []*Command
 	snapshot []byte
+	applyErr error
 	mu       sync.Mutex
 }
 
@@ -23,7 +25,7 @@ func (m *MockStateMachine) Apply(cmd *Command) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.applied = append(m.applied, cmd)
-	return nil
+	return m.applyErr
 }
 
 func (m *MockStateMachine) Snapshot() ([]byte, error) {
@@ -43,6 +45,12 @@ func (m *MockStateMachine) AppliedCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return len(m.applied)
+}
+
+func (m *MockStateMachine) SetApplyError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.applyErr = err
 }
 
 // TestCluster helps manage a cluster of Raft nodes for testing.
@@ -264,6 +272,37 @@ func TestProposeNotLeader(t *testing.T) {
 	err := node.Propose(cmd)
 	if err != ErrNotLeader {
 		t.Errorf("Expected ErrNotLeader, got %v", err)
+	}
+}
+
+func TestProposeReturnsApplyError(t *testing.T) {
+	cfg := &NodeConfig{
+		ID:               1,
+		Addr:             "localhost:4445",
+		Peers:            []*Peer{{ID: 1, Addr: "localhost:4445"}},
+		ElectionTimeout:  50 * time.Millisecond,
+		HeartbeatTimeout: 20 * time.Millisecond,
+	}
+
+	network := NewInMemoryNetwork()
+	transport := network.NewTransport(1, "localhost:4445")
+	sm := NewMockStateMachine()
+	applyErr := errors.New("uid attribute must be unique")
+	sm.SetApplyError(applyErr)
+
+	node, _ := NewNode(cfg, sm, transport)
+	node.Start()
+	defer node.Stop()
+
+	time.Sleep(200 * time.Millisecond)
+	if !node.IsLeader() {
+		t.Fatal("single node should become leader")
+	}
+
+	cmd := &Command{Type: CmdPut, DN: "uid=dup,dc=example,dc=com"}
+	err := node.Propose(cmd)
+	if !errors.Is(err, applyErr) {
+		t.Fatalf("expected apply error %v, got %v", applyErr, err)
 	}
 }
 

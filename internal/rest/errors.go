@@ -3,6 +3,7 @@ package rest
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/KilimcininKorOglu/oba/internal/backend"
 	"github.com/KilimcininKorOglu/oba/internal/ldap"
@@ -62,6 +63,10 @@ func mapBackendError(err error) (int, string, string) {
 	case backend.ErrNotAllowedOnNonLeaf:
 		return http.StatusConflict, "not_allowed_on_non_leaf", "operation not allowed on non-leaf entry"
 	default:
+		if strings.Contains(strings.ToLower(err.Error()), "uid attribute") &&
+			strings.Contains(strings.ToLower(err.Error()), "unique") {
+			return http.StatusConflict, "uid_not_unique", "uid attribute value must be unique"
+		}
 		return http.StatusInternalServerError, "internal_error", err.Error()
 	}
 }

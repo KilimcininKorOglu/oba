@@ -47,15 +47,8 @@ func NewObaDBStateMachine(engine storage.StorageEngine) *ObaDBStateMachine {
 // ClearMainEngine clears all entries from the main engine.
 // This is called on startup before replaying the Raft log.
 func (sm *ObaDBStateMachine) ClearMainEngine() error {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
-	if sm.mainEngine == nil {
-		return nil
-	}
-
 	// Skip clearing - let log replay handle everything
-	// This avoids the slow deletion process
+	// ClearIndexes was causing "index already exists" error on restart
 	return nil
 }
 

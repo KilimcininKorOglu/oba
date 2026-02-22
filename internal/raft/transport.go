@@ -31,8 +31,8 @@ type RPCHandler func(msgType uint8, data []byte) []byte
 type TCPTransport struct {
 	addr     string
 	listener net.Listener
-	peers    map[uint64]string   // peerID -> address
-	conns    map[uint64]net.Conn // peerID -> connection
+	peers    map[uint64]string      // peerID -> address
+	conns    map[uint64]net.Conn    // peerID -> connection
 	connMu   map[uint64]*sync.Mutex // peerID -> connection mutex
 	handler  RPCHandler
 	timeout  time.Duration

@@ -3,6 +3,7 @@ package raft
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -217,6 +218,11 @@ func (cb *ClusterBackend) Put(entry *storage.Entry) error {
 		return ErrNotLeader
 	}
 
+	// Check uid uniqueness before proposing to Raft
+	if err := cb.checkUIDUnique(entry); err != nil {
+		return err
+	}
+
 	cmd := CreatePutCommand(entry)
 	return cb.node.Propose(cmd)
 }
@@ -428,3 +434,79 @@ func (cb *ClusterBackend) ProposeACLSetDefault(defaultPolicy string, version uin
 
 	return cb.node.Propose(cmd)
 }
+
+// checkUIDUnique checks if the uid attribute value is unique across all entries.
+// This is called before proposing a Put command to Raft.
+func (cb *ClusterBackend) checkUIDUnique(entry *storage.Entry) error {
+	if entry == nil {
+		return nil
+	}
+
+	// Find uid attribute (case-insensitive)
+	var uidValue string
+	for name, values := range entry.Attributes {
+		if strings.ToLower(name) == "uid" {
+			if len(values) > 0 && len(values[0]) > 0 {
+				uidValue = string(values[0])
+				break
+			}
+		}
+	}
+
+	if uidValue == "" {
+		return nil // No uid attribute, nothing to check
+	}
+
+	cb.logger.Info("checkUIDUnique: checking", "uid", uidValue, "dn", entry.DN)
+
+	// Search for existing entries with the same uid using the storage engine
+	tx, err := cb.engine.Begin()
+	if err != nil {
+		cb.logger.Error("checkUIDUnique: failed to begin tx", "error", err)
+		return nil // Skip check on error
+	}
+	defer cb.engine.Rollback(tx)
+
+	// Use SearchByFilter to find entries with the same uid
+	filter := &uidFilter{uid: uidValue}
+	iter := cb.engine.SearchByFilter(tx, "", filter)
+	defer iter.Close()
+
+	count := 0
+	for iter.Next() {
+		existing := iter.Entry()
+		count++
+		cb.logger.Info("checkUIDUnique: found entry", "existingDN", existing.DN, "entryDN", entry.DN)
+		if existing != nil && existing.DN != entry.DN {
+			cb.logger.Info("checkUIDUnique: duplicate found", "existingDN", existing.DN)
+			return ErrUIDNotUnique
+		}
+	}
+	cb.logger.Info("checkUIDUnique: scan complete", "count", count)
+
+	return nil
+}
+
+// uidFilter implements storage.FilterMatcher for uid search.
+type uidFilter struct {
+	uid string
+}
+
+func (f *uidFilter) Match(entry *storage.Entry) bool {
+	if entry == nil {
+		return false
+	}
+	for name, values := range entry.Attributes {
+		if strings.ToLower(name) == "uid" {
+			for _, v := range values {
+				if string(v) == f.uid {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// ErrUIDNotUnique is returned when trying to add an entry with a duplicate uid.
+var ErrUIDNotUnique = errors.New("uid attribute value is not unique")

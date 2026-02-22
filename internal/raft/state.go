@@ -365,7 +365,7 @@ func (s *NodeState) SetMatchIndex(peerID uint64, index uint64) {
 func (s *NodeState) InitLeaderState(peers []*Peer) {
 	// Get lastIndex before acquiring lock to avoid deadlock with RaftLog.mu
 	lastIndex := s.log.LastIndex()
-	
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
