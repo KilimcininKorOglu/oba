@@ -56,6 +56,7 @@ type ClusterWriter interface {
 	DeleteLog(dn string) error
 	IsLeader() bool
 	LeaderAddr() string
+	NodeID() uint64
 }
 
 // LogStoreConfig holds configuration for the log store.
@@ -259,6 +260,17 @@ func (s *LogStore) Write(level, msg, source, user, requestID string, fields map[
 
 	if requestID != "" {
 		entry.SetStringAttribute("requestid", requestID)
+	}
+
+	// Add nodeId to fields if in cluster mode and not already set
+	if s.clusterWriter != nil {
+		if fields == nil {
+			fields = make(map[string]interface{})
+		}
+		// Only set nodeId if not already present (preserve forwarded log's nodeId)
+		if _, exists := fields["nodeId"]; !exists {
+			fields["nodeId"] = s.clusterWriter.NodeID()
+		}
 	}
 
 	if len(fields) > 0 {
