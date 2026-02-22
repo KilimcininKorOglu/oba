@@ -44,6 +44,11 @@ func LoggingMiddleware(logger logging.Logger) Middleware {
 			wrapped := &loggingResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 			next.ServeHTTP(wrapped, r)
 
+			// Skip logging for health check endpoints (HAProxy spam prevention)
+			if strings.HasSuffix(r.URL.Path, "/health") {
+				return
+			}
+
 			// Only log errors (4xx, 5xx) - successful operations are logged by handlers
 			if wrapped.statusCode >= 400 {
 				reqLogger := restLogger
