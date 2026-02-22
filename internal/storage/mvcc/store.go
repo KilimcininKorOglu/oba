@@ -169,9 +169,24 @@ func (vs *VersionStore) CreateVersionWithLocation(txn *tx.Transaction, dn string
 	// Create the new version
 	newVersion := NewVersion(txn.ID, data, pageID, slotID)
 
-	// Link to the previous version
+	// Link to the previous version (check memory, cache, then disk)
 	vs.mu.Lock()
-	if prevVersion := vs.versions[dn]; prevVersion != nil {
+	prevVersion := vs.versions[dn]
+	if prevVersion == nil {
+		// Check cache
+		if vs.cache != nil {
+			if cached := vs.cache.Get(dn); cached != nil && cached.Version != nil {
+				prevVersion = cached.Version
+			}
+		}
+		// Check disk
+		if prevVersion == nil && vs.diskLoader != nil {
+			if diskVersion, _, _, err := vs.diskLoader(dn); err == nil && diskVersion != nil {
+				prevVersion = diskVersion
+			}
+		}
+	}
+	if prevVersion != nil {
 		newVersion.SetPrev(prevVersion)
 	}
 	vs.versions[dn] = newVersion

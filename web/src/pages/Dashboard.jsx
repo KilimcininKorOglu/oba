@@ -9,7 +9,7 @@ import {
 import api from '../api/client';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { setServerTimezone, formatRelativeTime } from '../utils/dateFormat';
+import { setServerTimezone, formatDate, formatRelativeTime } from '../utils/dateFormat';
 
 function formatUptime(uptime) {
   if (!uptime) return 'N/A';
