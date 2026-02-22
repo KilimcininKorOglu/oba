@@ -230,9 +230,9 @@ func (s *LogStore) loadNextID() error {
 // Write adds a new log entry to the store.
 func (s *LogStore) Write(level, msg, source, user, requestID string, fields map[string]interface{}) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	if s.db == nil {
+		s.mu.Unlock()
 		return nil
 	}
 
@@ -263,13 +263,14 @@ func (s *LogStore) Write(level, msg, source, user, requestID string, fields map[
 	}
 
 	// Add nodeId to fields if in cluster mode and not already set
-	if s.clusterWriter != nil {
+	cw := s.clusterWriter
+	if cw != nil {
 		if fields == nil {
 			fields = make(map[string]interface{})
 		}
 		// Only set nodeId if not already present (preserve forwarded log's nodeId)
 		if _, exists := fields["nodeId"]; !exists {
-			fields["nodeId"] = s.clusterWriter.NodeID()
+			fields["nodeId"] = cw.NodeID()
 		}
 	}
 
@@ -279,23 +280,29 @@ func (s *LogStore) Write(level, msg, source, user, requestID string, fields map[
 	}
 
 	// If cluster writer is set, route through Raft consensus
-	if s.clusterWriter != nil {
+	if cw != nil {
 		// Leader writes directly to Raft
-		if s.clusterWriter.IsLeader() {
-			return s.writeViaRaft(entry)
+		if cw.IsLeader() {
+			err := s.writeViaRaft(entry)
+			s.mu.Unlock()
+			return err
 		}
 
 		// Follower: forward to leader via HTTP
-		leaderAddr := s.clusterWriter.LeaderAddr()
+		leaderAddr := cw.LeaderAddr()
 		if leaderAddr == "" {
 			// No leader yet, buffer the entry
 			if len(s.pendingEntries) < 1000 {
 				s.pendingEntries = append(s.pendingEntries, entry)
 			}
+			s.mu.Unlock()
 			return nil
 		}
 
-		// Forward to leader
+		// Release lock before network I/O
+		s.mu.Unlock()
+		
+		// Forward to leader (non-blocking relative to lock)
 		return s.forwardToLeader(entry, leaderAddr)
 	}
 
@@ -306,11 +313,14 @@ func (s *LogStore) Write(level, msg, source, user, requestID string, fields map[
 		if len(s.pendingEntries) < 1000 {
 			s.pendingEntries = append(s.pendingEntries, entry)
 		}
+		s.mu.Unlock()
 		return nil
 	}
 
 	// Standalone mode: direct write
-	return s.writeLocal(entry)
+	err := s.writeLocal(entry)
+	s.mu.Unlock()
+	return err
 }
 
 // writeViaRaft writes an entry through Raft consensus (leader only).

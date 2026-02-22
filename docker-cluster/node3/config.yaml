@@ -20,7 +20,7 @@ storage:
   cacheSize: 10000
 
 logging:
-  level: "info"
+  level: "debug"
   format: "json"
   output: "stdout"
   store:

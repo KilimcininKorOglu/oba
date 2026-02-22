@@ -260,10 +260,12 @@ func (s *NodeState) SetMatchIndex(peerID uint64, index uint64) {
 
 // InitLeaderState initializes leader-specific state after election.
 func (s *NodeState) InitLeaderState(peers []*Peer) {
+	// Get lastIndex before acquiring lock to avoid deadlock with RaftLog.mu
+	lastIndex := s.log.LastIndex()
+	
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	lastIndex := s.log.LastIndex()
 	for _, peer := range peers {
 		s.nextIndex[peer.ID] = lastIndex + 1
 		s.matchIndex[peer.ID] = 0
@@ -301,9 +303,9 @@ func (s *NodeState) BecomeLeader(nodeID uint64) {
 }
 
 // AppendEntry appends an entry to the log.
+// AppendEntry appends an entry to the log.
 func (s *NodeState) AppendEntry(entry *LogEntry) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	// Append to log first (RaftLog has its own lock)
 	s.log.Append(entry)
 }
 

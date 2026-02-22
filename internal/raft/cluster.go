@@ -20,6 +20,7 @@ type ClusterBackend struct {
 	config       *config.ClusterConfig
 	transport    Transport
 	snapStore    *SnapshotStore
+	logger       Logger
 
 	// Config and ACL appliers for replication
 	configApplier ConfigApplier
@@ -107,10 +108,19 @@ func NewClusterBackend(cfg *ClusterBackendConfig) (*ClusterBackend, error) {
 		config:         cc,
 		transport:      transport,
 		snapStore:      snapStore,
+		logger:         &defaultLogger{},
 		onLeaderChange: cfg.OnLeaderChange,
 	}
 
 	return cb, nil
+}
+
+// SetLogger sets the logger for the cluster backend.
+func (cb *ClusterBackend) SetLogger(logger Logger) {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	cb.logger = logger
+	cb.node.SetLogger(logger)
 }
 
 // SetLogEngine sets the log database engine for multi-database replication.

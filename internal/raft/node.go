@@ -7,6 +7,22 @@ import (
 	"time"
 )
 
+// Logger interface for Raft logging
+type Logger interface {
+	Debug(msg string, args ...interface{})
+	Info(msg string, args ...interface{})
+	Warn(msg string, args ...interface{})
+	Error(msg string, args ...interface{})
+}
+
+// defaultLogger is a no-op logger
+type defaultLogger struct{}
+
+func (l *defaultLogger) Debug(msg string, args ...interface{}) {}
+func (l *defaultLogger) Info(msg string, args ...interface{})  {}
+func (l *defaultLogger) Warn(msg string, args ...interface{})  {}
+func (l *defaultLogger) Error(msg string, args ...interface{}) {}
+
 // StateMachine defines the interface for applying Raft commands.
 type StateMachine interface {
 	// Apply applies a command to the state machine.
@@ -34,6 +50,7 @@ type Node struct {
 	// Components
 	transport    Transport
 	stateMachine StateMachine
+	logger       Logger
 
 	// Channels
 	applyCh   chan *LogEntry // Committed entries to apply
@@ -68,6 +85,7 @@ func NewNode(cfg *NodeConfig, sm StateMachine, transport Transport) (*Node, erro
 		peers:        make(map[uint64]*Peer),
 		transport:    transport,
 		stateMachine: sm,
+		logger:       &defaultLogger{},
 		applyCh:      make(chan *LogEntry, 256),
 		proposeCh:    make(chan *proposeRequest, 256),
 		stopCh:       make(chan struct{}),
@@ -81,6 +99,11 @@ func NewNode(cfg *NodeConfig, sm StateMachine, transport Transport) (*Node, erro
 	}
 
 	return n, nil
+}
+
+// SetLogger sets the logger for the node.
+func (n *Node) SetLogger(logger Logger) {
+	n.logger = logger
 }
 
 // ID returns the node's ID.
@@ -205,9 +228,8 @@ func (n *Node) runFollower() {
 		case <-n.stopCh:
 			return
 		case <-n.electionTimer.C:
-			// Election timeout - become candidate
 			n.state.BecomeCandidate()
-			n.state.SetVotedFor(n.id) // Vote for self
+			n.state.SetVotedFor(n.id)
 			return
 		}
 	}
@@ -271,7 +293,8 @@ func (n *Node) runCandidate() {
 				return // State changed
 			}
 			if granted {
-				if int(atomic.AddInt32(&votes, 1)) >= votesNeeded {
+				currentVotes := int(atomic.AddInt32(&votes, 1))
+				if currentVotes >= votesNeeded {
 					n.becomeLeader()
 					return
 				}
@@ -287,7 +310,6 @@ func (n *Node) runCandidate() {
 func (n *Node) runLeader() {
 	// Send initial heartbeat
 	n.broadcastAppendEntries()
-
 	n.resetHeartbeatTimer()
 
 	for n.State() == StateLeader {

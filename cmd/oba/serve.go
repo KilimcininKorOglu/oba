@@ -36,6 +36,27 @@ var (
 	ErrListenerFailed       = errors.New("failed to create listener")
 )
 
+// raftLoggerAdapter adapts logging.Logger to raft.Logger interface.
+type raftLoggerAdapter struct {
+	logger logging.Logger
+}
+
+func (a *raftLoggerAdapter) Debug(msg string, args ...interface{}) {
+	a.logger.Debug(msg, args...)
+}
+
+func (a *raftLoggerAdapter) Info(msg string, args ...interface{}) {
+	a.logger.Info(msg, args...)
+}
+
+func (a *raftLoggerAdapter) Warn(msg string, args ...interface{}) {
+	a.logger.Warn(msg, args...)
+}
+
+func (a *raftLoggerAdapter) Error(msg string, args ...interface{}) {
+	a.logger.Error(msg, args...)
+}
+
 // LDAPServer represents the LDAP server instance.
 type LDAPServer struct {
 	config                  *config.Config
@@ -254,6 +275,15 @@ func NewServer(cfg *config.Config) (*LDAPServer, error) {
 			cancel()
 			return nil, fmt.Errorf("failed to create cluster backend: %w", err)
 		}
+
+		// Set logger for Raft debugging - use a separate logger without LogStore
+		// to avoid deadlock (Raft logging -> LogStore.Write -> Propose -> waits for runLeader)
+		raftLogger := logging.New(logging.Config{
+			Level:  cfg.Logging.Level,
+			Format: cfg.Logging.Format,
+			Output: "stdout",
+		})
+		clusterBackend.SetLogger(&raftLoggerAdapter{logger: raftLogger.WithSource("raft")})
 
 		// Set cluster backend on REST server
 		if restServer != nil {
