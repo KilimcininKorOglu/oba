@@ -219,7 +219,19 @@ docker compose up -d
 
 ```bash
 # Start 3-node Raft cluster with HAProxy
-docker compose -f docker-compose.cluster.yml up -d
+make up-cluster
+
+# View cluster logs
+make logs-cluster
+
+# Stop cluster
+make down-cluster
+
+# Clean cluster data files
+make clean-cluster-data
+
+# Run cluster verification
+make verify-cluster
 
 # Access points:
 # - LDAP (load balanced): ldap://localhost:389

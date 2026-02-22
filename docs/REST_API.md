@@ -2171,18 +2171,18 @@ Returns current cluster state and configuration.
 }
 ```
 
-| Field         | Type   | Description                              |
-|---------------|--------|------------------------------------------|
-| `enabled`     | bool   | Whether cluster mode is enabled          |
-| `mode`        | string | "cluster" or "standalone"                |
-| `nodeId`      | int    | This node's ID                           |
-| `state`       | string | "leader", "follower", or "candidate"     |
-| `term`        | int    | Current Raft term                        |
-| `leaderId`    | int    | Current leader's node ID                 |
-| `leaderAddr`  | string | Current leader's Raft address            |
-| `commitIndex` | int    | Highest committed log index              |
-| `lastApplied` | int    | Highest applied log index                |
-| `peers`       | array  | List of all cluster peers                |
+| Field         | Type   | Description                          |
+|---------------|--------|--------------------------------------|
+| `enabled`     | bool   | Whether cluster mode is enabled      |
+| `mode`        | string | "cluster" or "standalone"            |
+| `nodeId`      | int    | This node's ID                       |
+| `state`       | string | "leader", "follower", or "candidate" |
+| `term`        | int    | Current Raft term                    |
+| `leaderId`    | int    | Current leader's node ID             |
+| `leaderAddr`  | string | Current leader's Raft address        |
+| `commitIndex` | int    | Highest committed log index          |
+| `lastApplied` | int    | Highest applied log index            |
+| `peers`       | array  | List of all cluster peers            |
 
 #### Cluster Health
 

@@ -43,25 +43,34 @@ The easiest way to run a cluster is using Docker Compose:
 
 ```bash
 # Start 3-node cluster with HAProxy
-docker compose -f docker-compose.cluster.yml up -d
+make up-cluster
 
 # Check cluster status
 curl http://localhost:8080/api/v1/cluster/status
 
 # View logs
-docker compose -f docker-compose.cluster.yml logs -f
+make logs-cluster
+
+# Stop cluster
+make down-cluster
+
+# Clean cluster data files
+make clean-cluster-data
+
+# Run cluster verification
+make verify-cluster
 ```
 
 Access points:
-| Service              | Port | URL                      |
-|----------------------|------|--------------------------|
-| LDAP (load balanced) | 389  | ldap://localhost:389     |
-| REST (load balanced) | 8080 | http://localhost:8080    |
-| HAProxy Stats        | 8404 | http://localhost:8404    |
-| Web Admin            | 3000 | http://localhost:3000    |
-| Node 1 REST          | 8081 | http://localhost:8081    |
-| Node 2 REST          | 8082 | http://localhost:8082    |
-| Node 3 REST          | 8083 | http://localhost:8083    |
+| Service              | Port | URL                   |
+|----------------------|------|-----------------------|
+| LDAP (load balanced) | 389  | ldap://localhost:389  |
+| REST (load balanced) | 8080 | http://localhost:8080 |
+| HAProxy Stats        | 8404 | http://localhost:8404 |
+| Web Admin            | 3000 | http://localhost:3000 |
+| Node 1 REST          | 8081 | http://localhost:8081 |
+| Node 2 REST          | 8082 | http://localhost:8082 |
+| Node 3 REST          | 8083 | http://localhost:8083 |
 
 ## Configuration
 
@@ -309,13 +318,13 @@ In cluster mode, configuration and ACL changes are automatically synchronized ac
 
 ### What Gets Synchronized
 
-| Data Type     | Synchronized | Method                    |
-|---------------|--------------|---------------------------|
-| LDAP entries  | Yes          | Raft log replication      |
-| Log database  | Yes          | Raft log replication      |
-| Config changes| Yes          | Raft config commands      |
-| ACL rules     | Yes          | Raft ACL commands         |
-| Local files   | No           | Manual sync required      |
+| Data Type      | Synchronized | Method               |
+|----------------|--------------|----------------------|
+| LDAP entries   | Yes          | Raft log replication |
+| Log database   | Yes          | Raft log replication |
+| Config changes | Yes          | Raft config commands |
+| ACL rules      | Yes          | Raft ACL commands    |
+| Local files    | No           | Manual sync required |
 
 ### Log Replication
 
@@ -405,14 +414,14 @@ done
 
 ### Synchronized ACL Operations
 
-| Operation          | Endpoint                      | Replicated |
-|--------------------|-------------------------------|------------|
-| Add rule           | POST /api/v1/acl/rules        | Yes        |
-| Update rule        | PUT /api/v1/acl/rules/{index} | Yes        |
-| Delete rule        | DELETE /api/v1/acl/rules/{index} | Yes     |
-| Set default policy | PUT /api/v1/acl/default       | Yes        |
-| Reload from file   | POST /api/v1/acl/reload       | No (local) |
-| Save to file       | POST /api/v1/acl/save         | No (local) |
+| Operation          | Endpoint                         | Replicated |
+|--------------------|----------------------------------|------------|
+| Add rule           | POST /api/v1/acl/rules           | Yes        |
+| Update rule        | PUT /api/v1/acl/rules/{index}    | Yes        |
+| Delete rule        | DELETE /api/v1/acl/rules/{index} | Yes        |
+| Set default policy | PUT /api/v1/acl/default          | Yes        |
+| Reload from file   | POST /api/v1/acl/reload          | No (local) |
+| Save to file       | POST /api/v1/acl/save            | No (local) |
 
 ### Important Notes
 

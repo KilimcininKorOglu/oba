@@ -135,15 +135,20 @@ EOF
 
 ## Makefile Commands
 
-| Command           | Description                  |
-|-------------------|------------------------------|
-| `make build`      | Build the binary to bin/     |
-| `make test`       | Run all tests                |
-| `make test-race`  | Run tests with race detector |
-| `make test-cover` | Run tests with coverage      |
-| `make bench`      | Run benchmarks               |
-| `make clean`      | Remove build artifacts       |
-| `make run`        | Build and run the server     |
+| Command               | Description                      |
+|-----------------------|----------------------------------|
+| `make build`          | Build the binary to bin/         |
+| `make test`           | Run all tests                    |
+| `make test-race`      | Run tests with race detector     |
+| `make test-cover`     | Run tests with coverage          |
+| `make bench`          | Run benchmarks                   |
+| `make clean`          | Remove build artifacts           |
+| `make run`            | Build and run the server         |
+| `make up`             | Build and start all services     |
+| `make down`           | Stop all services                |
+| `make up-cluster`     | Build and start cluster services |
+| `make down-cluster`   | Stop cluster services            |
+| `make verify-cluster` | Run cluster verification script  |
 
 ## CLI Commands
 
