@@ -124,6 +124,19 @@ func (sm *ObaDBStateMachine) applyLDAPCommand(cmd *Command) error {
 			engine.Rollback(tx)
 			return err
 		}
+		// Log DB entries are immutable by DN (id=...).
+		// During restart/replay, skip if already present to keep apply idempotent.
+		if cmd.DatabaseID == DBLog {
+			if _, err := engine.Get(tx, entry.DN); err == nil {
+				engine.Rollback(tx)
+				return nil
+			}
+		}
+		// Replay-safe idempotency: if the exact entry already exists, skip re-applying.
+		if existing, err := engine.Get(tx, entry.DN); err == nil && entriesEqual(existing, entry) {
+			engine.Rollback(tx)
+			return nil
+		}
 		applyErr = engine.Put(tx, entry)
 
 	case CmdDelete:
@@ -153,6 +166,30 @@ func (sm *ObaDBStateMachine) applyLDAPCommand(cmd *Command) error {
 	}
 
 	return engine.Commit(tx)
+}
+
+func entriesEqual(a, b *storage.Entry) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	if a.DN != b.DN {
+		return false
+	}
+	if len(a.Attributes) != len(b.Attributes) {
+		return false
+	}
+	for k, aVals := range a.Attributes {
+		bVals, ok := b.Attributes[k]
+		if !ok || len(aVals) != len(bVals) {
+			return false
+		}
+		for i := range aVals {
+			if !bytes.Equal(aVals[i], bVals[i]) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // applyConfigCommand applies config update commands.

@@ -146,7 +146,7 @@ func NewNodeStateWithDir(dataDir string) (*NodeState, error) {
 }
 
 // loadPersistedState loads term and votedFor from disk.
-// Note: lastApplied is NOT loaded - we want to replay all logs on restart.
+// When persistent storage is present, we trust local DB state and resume from last log index.
 func (s *NodeState) loadPersistedState() error {
 	if s.dataDir == "" {
 		return nil
@@ -160,8 +160,20 @@ func (s *NodeState) loadPersistedState() error {
 		s.votedFor = binary.LittleEndian.Uint64(data[8:16])
 	}
 
-	// Set commitIndex to log's last index so all entries get applied
 	s.commitIndex = s.log.LastIndex()
+
+	// Load last applied index from disk if available.
+	// If missing, resume from commitIndex to avoid expensive full replays.
+	path = filepath.Join(s.dataDir, "last_applied.dat")
+	lastAppliedData, err := os.ReadFile(path)
+	if err == nil && len(lastAppliedData) >= 8 {
+		s.lastApplied = binary.LittleEndian.Uint64(lastAppliedData)
+		if s.lastApplied > s.commitIndex {
+			s.lastApplied = s.commitIndex
+		}
+	} else {
+		s.lastApplied = s.commitIndex
+	}
 
 	return nil
 }
@@ -289,13 +301,29 @@ func (s *NodeState) LastApplied() uint64 {
 	return s.lastApplied
 }
 
-// SetLastApplied sets the last applied index.
-// Note: We don't persist lastApplied because on restart we want to replay
-// all logs to rebuild the state machine from scratch.
+// SetLastApplied sets and persists the last applied index.
 func (s *NodeState) SetLastApplied(index uint64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.lastApplied = index
+	s.persistLastApplied()
+}
+
+// persistLastApplied saves lastApplied to disk atomically.
+func (s *NodeState) persistLastApplied() {
+	if s.dataDir == "" {
+		return
+	}
+	path := filepath.Join(s.dataDir, "last_applied.dat")
+	tmpPath := path + ".tmp"
+
+	data := make([]byte, 8)
+	binary.LittleEndian.PutUint64(data, s.lastApplied)
+
+	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+		return
+	}
+	_ = os.Rename(tmpPath, path)
 }
 
 // LeaderID returns the current leader's ID.

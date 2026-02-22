@@ -467,45 +467,35 @@ func (cb *ClusterBackend) checkUIDUnique(entry *storage.Entry) error {
 	}
 	defer cb.engine.Rollback(tx)
 
-	// Use SearchByFilter to find entries with the same uid
-	filter := &uidFilter{uid: uidValue}
-	iter := cb.engine.SearchByFilter(tx, "", filter)
+	// Scan full subtree to reliably include all entries.
+	iter := cb.engine.SearchByDN(tx, "", storage.ScopeSubtree)
 	defer iter.Close()
 
 	count := 0
 	for iter.Next() {
 		existing := iter.Entry()
-		count++
-		cb.logger.Info("checkUIDUnique: found entry", "existingDN", existing.DN, "entryDN", entry.DN)
-		if existing != nil && existing.DN != entry.DN {
-			cb.logger.Info("checkUIDUnique: duplicate found", "existingDN", existing.DN)
-			return ErrUIDNotUnique
+		if existing == nil {
+			continue
+		}
+		for name, values := range existing.Attributes {
+			if strings.ToLower(name) != "uid" {
+				continue
+			}
+			for _, v := range values {
+				if string(v) == uidValue {
+					count++
+					cb.logger.Info("checkUIDUnique: found entry", "existingDN", existing.DN, "entryDN", entry.DN)
+					if existing.DN != entry.DN {
+						cb.logger.Info("checkUIDUnique: duplicate found", "existingDN", existing.DN)
+						return ErrUIDNotUnique
+					}
+				}
+			}
 		}
 	}
 	cb.logger.Info("checkUIDUnique: scan complete", "count", count)
 
 	return nil
-}
-
-// uidFilter implements storage.FilterMatcher for uid search.
-type uidFilter struct {
-	uid string
-}
-
-func (f *uidFilter) Match(entry *storage.Entry) bool {
-	if entry == nil {
-		return false
-	}
-	for name, values := range entry.Attributes {
-		if strings.ToLower(name) == "uid" {
-			for _, v := range values {
-				if string(v) == f.uid {
-					return true
-				}
-			}
-		}
-	}
-	return false
 }
 
 // ErrUIDNotUnique is returned when trying to add an entry with a duplicate uid.

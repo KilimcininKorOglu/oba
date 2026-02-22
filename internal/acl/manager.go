@@ -268,6 +268,13 @@ func (m *Manager) logInfo(msg string, keysAndValues ...interface{}) {
 	}
 }
 
+// logInfoFromRaft logs Raft-applied events without feeding them back into log replication.
+func (m *Manager) logInfoFromRaft(msg string, keysAndValues ...interface{}) {
+	if m.logger != nil {
+		m.logger.WithSource("raft").Info(msg, keysAndValues...)
+	}
+}
+
 // logError logs an error message if logger is available.
 func (m *Manager) logError(msg string, keysAndValues ...interface{}) {
 	if m.logger != nil {
@@ -522,7 +529,7 @@ func (m *Manager) ApplyFullConfigFromRaft(rules []raft.ACLRuleData, defaultPolic
 	atomic.AddUint64(&m.reloadCount, 1)
 	atomic.AddUint64(&m.version, 1)
 
-	m.logInfo("ACL config applied from Raft",
+	m.logInfoFromRaft("ACL config applied from Raft",
 		"rules", len(rules),
 		"defaultPolicy", defaultPolicy,
 	)
@@ -554,7 +561,7 @@ func (m *Manager) AddRuleFromRaft(ruleData *raft.ACLRuleData, index int) error {
 	m.evaluator = NewEvaluator(m.config)
 	atomic.AddUint64(&m.version, 1)
 
-	m.logInfo("ACL rule added from Raft", "index", index, "target", rule.Target)
+	m.logInfoFromRaft("ACL rule added from Raft", "index", index, "target", rule.Target)
 
 	return nil
 }
@@ -581,7 +588,7 @@ func (m *Manager) UpdateRuleFromRaft(ruleData *raft.ACLRuleData, index int) erro
 	m.evaluator = NewEvaluator(m.config)
 	atomic.AddUint64(&m.version, 1)
 
-	m.logInfo("ACL rule updated from Raft", "index", index, "target", rule.Target)
+	m.logInfoFromRaft("ACL rule updated from Raft", "index", index, "target", rule.Target)
 
 	return nil
 }
@@ -599,7 +606,7 @@ func (m *Manager) DeleteRuleFromRaft(index int) error {
 	m.evaluator = NewEvaluator(m.config)
 	atomic.AddUint64(&m.version, 1)
 
-	m.logInfo("ACL rule deleted from Raft", "index", index)
+	m.logInfoFromRaft("ACL rule deleted from Raft", "index", index)
 
 	return nil
 }
@@ -618,7 +625,7 @@ func (m *Manager) SetDefaultPolicyFromRaft(policy string) error {
 	m.evaluator = NewEvaluator(m.config)
 	atomic.AddUint64(&m.version, 1)
 
-	m.logInfo("ACL default policy set from Raft", "policy", policy)
+	m.logInfoFromRaft("ACL default policy set from Raft", "policy", policy)
 
 	return nil
 }
@@ -673,7 +680,7 @@ func (m *Manager) RestoreACLSnapshot(data []byte) error {
 	m.evaluator = NewEvaluator(m.config)
 	atomic.StoreUint64(&m.version, snapshot.Version)
 
-	m.logInfo("ACL restored from Raft snapshot",
+	m.logInfoFromRaft("ACL restored from Raft snapshot",
 		"rules", len(rules),
 		"defaultPolicy", snapshot.DefaultPolicy,
 	)

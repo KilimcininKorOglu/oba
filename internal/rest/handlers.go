@@ -101,7 +101,11 @@ func (h *Handlers) auditLogWithUser(r *http.Request, user string, msg string, ke
 	}
 	// Add client IP
 	keyvals = append(keyvals, "remoteAddr", getClientIPFromRequest(r))
-	logger.Info(msg, keyvals...)
+
+	// Audit logging must never block request handling.
+	// In cluster mode, log persistence may briefly wait for Raft replay.
+	fields := append([]interface{}(nil), keyvals...)
+	go logger.Info(msg, fields...)
 }
 
 // getClientIPFromRequest extracts client IP from request

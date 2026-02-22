@@ -613,7 +613,7 @@ func (db *ObaDB) Put(txnIface interface{}, entry *storage.Entry) error {
 	entry.DN = dn
 
 	// Check uid uniqueness
-	if err := db.checkUIDUnique(dn, entry.Attributes); err != nil {
+	if err := db.checkUIDUnique(txn, dn, entry.Attributes); err != nil {
 		return err
 	}
 
@@ -1038,11 +1038,7 @@ func (db *ObaDB) updateIndexesWithLocation(oldEntry, newEntry *storage.Entry, pa
 
 // checkUIDUnique checks if the uid attribute value is unique across all entries.
 // Returns ErrUIDNotUnique if another entry with the same uid exists.
-func (db *ObaDB) checkUIDUnique(dn string, attrs map[string][][]byte) error {
-	if db.indexManager == nil {
-		return nil
-	}
-
+func (db *ObaDB) checkUIDUnique(txn *tx.Transaction, dn string, attrs map[string][][]byte) error {
 	// Find uid attribute (case-insensitive)
 	var uidValue []byte
 	for name, values := range attrs {
@@ -1056,18 +1052,30 @@ func (db *ObaDB) checkUIDUnique(dn string, attrs map[string][][]byte) error {
 		return nil // No uid attribute, nothing to check
 	}
 
-	// Search for existing entries with the same uid
-	refs, err := db.indexManager.Search("uid", uidValue)
-	if err != nil {
-		// Index not found or other error - skip check
-		return nil
+	// Full scan over subtree to reliably include all entries.
+	iter := db.SearchByDN(txn, "", storage.ScopeSubtree)
+	defer iter.Close()
+
+	for iter.Next() {
+		existing := iter.Entry()
+		if existing == nil || existing.DN == "" || existing.DN == dn {
+			continue
+		}
+		for name, values := range existing.Attributes {
+			if strings.ToLower(name) != "uid" {
+				continue
+			}
+			for _, v := range values {
+				if string(v) == string(uidValue) {
+					return ErrUIDNotUnique
+				}
+			}
+		}
 	}
 
-	// Check if any found entry has a different DN
-	for _, ref := range refs {
-		if ref.DN != "" && ref.DN != dn {
-			return ErrUIDNotUnique
-		}
+	// If scan fails, skip uniqueness check instead of blocking write path.
+	if err := iter.Error(); err != nil {
+		return nil
 	}
 
 	return nil

@@ -18,7 +18,7 @@ export default function Logs() {
     source: '',
     search: ''
   });
-  const pageSize = 50;
+  const pageSize = 100;
   const [pagination, setPagination] = useState({ offset: 0, total: 0, hasMore: false });
 
   const fetchLogs = async (offset = 0) => {
@@ -156,10 +156,15 @@ export default function Logs() {
       render: (row) => {
         const fields = row.fields || {};
         const details = [];
+        if (fields.method) details.push(`method=${fields.method}`);
+        if (fields.path) details.push(`path=${fields.path}`);
+        if (fields.status !== undefined) details.push(`status=${fields.status}`);
         if (fields.dn) details.push(`dn=${fields.dn}`);
         if (fields.baseDN) details.push(`baseDN=${fields.baseDN}`);
         if (fields.scope) details.push(`scope=${fields.scope}`);
         if (fields.filter) details.push(`filter=${fields.filter}`);
+        if (fields.code) details.push(`code=${fields.code}`);
+        if (fields.error) details.push(`error=${fields.error}`);
         if (fields.results !== undefined) details.push(`results=${fields.results}`);
         if (fields.changes !== undefined) details.push(`changes=${fields.changes}`);
         
