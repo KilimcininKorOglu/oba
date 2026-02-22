@@ -81,3 +81,4 @@ temp/
 plan/
 *.pid
 docker-single/cache/
+.gocache/
