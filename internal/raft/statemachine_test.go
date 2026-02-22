@@ -3,6 +3,7 @@ package raft
 import (
 	"bytes"
 	"encoding/binary"
+	"sync"
 	"testing"
 
 	"github.com/KilimcininKorOglu/oba/internal/storage"
@@ -144,6 +145,7 @@ func TestCreateModifyDNCommand(t *testing.T) {
 
 // MockStorageEngine implements storage.StorageEngine for testing.
 type MockStorageEngine struct {
+	mu      sync.RWMutex
 	entries map[string]*storage.Entry
 }
 
@@ -166,6 +168,8 @@ func (m *MockStorageEngine) Rollback(tx interface{}) error {
 }
 
 func (m *MockStorageEngine) Get(tx interface{}, dn string) (*storage.Entry, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	if entry, ok := m.entries[dn]; ok {
 		return entry.Clone(), nil
 	}
@@ -173,11 +177,15 @@ func (m *MockStorageEngine) Get(tx interface{}, dn string) (*storage.Entry, erro
 }
 
 func (m *MockStorageEngine) Put(tx interface{}, entry *storage.Entry) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.entries[entry.DN] = entry.Clone()
 	return nil
 }
 
 func (m *MockStorageEngine) Delete(tx interface{}, dn string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	delete(m.entries, dn)
 	return nil
 }
@@ -195,11 +203,21 @@ func (m *MockStorageEngine) SearchByFilter(tx interface{}, baseDN string, f inte
 }
 
 func (m *MockStorageEngine) getAllEntries() []*storage.Entry {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	entries := make([]*storage.Entry, 0, len(m.entries))
 	for _, e := range m.entries {
 		entries = append(entries, e.Clone())
 	}
 	return entries
+}
+
+// HasEntry checks if an entry exists (thread-safe for tests).
+func (m *MockStorageEngine) HasEntry(dn string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	_, ok := m.entries[dn]
+	return ok
 }
 
 func (m *MockStorageEngine) CreateIndex(attribute string, indexType storage.IndexType) error {

@@ -89,7 +89,7 @@ func TestClusterBackendSingleNode(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 
 	// Verify entry exists
-	if _, ok := engine.entries["cn=test,dc=example,dc=com"]; !ok {
+	if !engine.HasEntry("cn=test,dc=example,dc=com") {
 		t.Error("Entry should exist after Put")
 	}
 }
@@ -263,7 +263,7 @@ func TestClusterBackendDelete(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 
 	// Verify deleted
-	if _, ok := engine.entries["cn=todelete,dc=example,dc=com"]; ok {
+	if engine.HasEntry("cn=todelete,dc=example,dc=com") {
 		t.Error("Entry should be deleted")
 	}
 }

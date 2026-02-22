@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	"sync"
 )
 
 // Log entry types.
@@ -550,6 +551,7 @@ func readBytes(r io.Reader) ([]byte, error) {
 
 // RaftLog manages the Raft log entries.
 type RaftLog struct {
+	mu      sync.RWMutex
 	entries []*LogEntry
 }
 
@@ -564,11 +566,15 @@ func NewRaftLog() *RaftLog {
 
 // Append adds a new entry to the log.
 func (l *RaftLog) Append(entry *LogEntry) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.entries = append(l.entries, entry)
 }
 
 // Get returns the entry at the given index.
 func (l *RaftLog) Get(index uint64) (*LogEntry, error) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
 	if index >= uint64(len(l.entries)) {
 		return nil, ErrLogIndexOutOfRange
 	}
@@ -577,11 +583,15 @@ func (l *RaftLog) Get(index uint64) (*LogEntry, error) {
 
 // LastIndex returns the index of the last entry.
 func (l *RaftLog) LastIndex() uint64 {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
 	return uint64(len(l.entries) - 1)
 }
 
 // LastTerm returns the term of the last entry.
 func (l *RaftLog) LastTerm() uint64 {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
 	if len(l.entries) == 0 {
 		return 0
 	}
@@ -590,6 +600,8 @@ func (l *RaftLog) LastTerm() uint64 {
 
 // GetFrom returns all entries from the given index.
 func (l *RaftLog) GetFrom(index uint64) []*LogEntry {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
 	if index >= uint64(len(l.entries)) {
 		return nil
 	}
@@ -598,6 +610,8 @@ func (l *RaftLog) GetFrom(index uint64) []*LogEntry {
 
 // TruncateFrom removes all entries from the given index onwards.
 func (l *RaftLog) TruncateFrom(index uint64) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	if index < uint64(len(l.entries)) {
 		l.entries = l.entries[:index]
 	}
@@ -605,11 +619,15 @@ func (l *RaftLog) TruncateFrom(index uint64) {
 
 // Len returns the number of entries in the log.
 func (l *RaftLog) Len() int {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
 	return len(l.entries)
 }
 
 // TermAt returns the term of the entry at the given index.
 func (l *RaftLog) TermAt(index uint64) uint64 {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
 	if index >= uint64(len(l.entries)) {
 		return 0
 	}
