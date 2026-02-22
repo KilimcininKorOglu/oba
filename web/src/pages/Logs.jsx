@@ -134,6 +134,18 @@ export default function Logs() {
       )
     },
     {
+      header: 'Node',
+      render: (row) => {
+        const nodeId = row.fields?.nodeId;
+        if (!nodeId) return <span className="text-xs text-zinc-500">-</span>;
+        return (
+          <span className="text-xs px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400">
+            {nodeId}
+          </span>
+        );
+      }
+    },
+    {
       header: 'User',
       render: (row) => (
         <span className="text-xs text-zinc-300 font-mono">{row.user || '-'}</span>
