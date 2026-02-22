@@ -41,10 +41,19 @@ class ObaAPI {
   }
 
   async login(dn, password) {
-    const data = await this.request('POST', '/auth/bind', { dn, password });
-    if (data.success && data.token) {
+    const headers = { 'Content-Type': 'application/json' };
+    const response = await fetch(`${this.baseURL}/auth/bind`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ dn, password })
+    });
+
+    const data = await response.json();
+    
+    if (response.ok && data.success && data.token) {
       this.setToken(data.token);
     }
+    
     return data;
   }
 

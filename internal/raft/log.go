@@ -605,7 +605,10 @@ func (l *RaftLog) GetFrom(index uint64) []*LogEntry {
 	if index >= uint64(len(l.entries)) {
 		return nil
 	}
-	return l.entries[index:]
+	// Return a copy to avoid race conditions
+	result := make([]*LogEntry, len(l.entries)-int(index))
+	copy(result, l.entries[index:])
+	return result
 }
 
 // TruncateFrom removes all entries from the given index onwards.
