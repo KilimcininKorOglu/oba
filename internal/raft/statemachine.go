@@ -3,12 +3,18 @@ package raft
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"sync"
 
 	"github.com/KilimcininKorOglu/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage/engine"
+	"github.com/KilimcininKorOglu/oba/internal/storage/mvcc"
+	"github.com/KilimcininKorOglu/oba/internal/storage/radix"
+	"github.com/KilimcininKorOglu/oba/internal/storage/tx"
 )
 
 // ConfigApplier is the interface for applying config changes from Raft.
@@ -47,8 +53,71 @@ func NewObaDBStateMachine(engine storage.StorageEngine) *ObaDBStateMachine {
 // ClearMainEngine clears all entries from the main engine.
 // This is called on startup before replaying the Raft log.
 func (sm *ObaDBStateMachine) ClearMainEngine() error {
-	// Skip clearing - let log replay handle everything
-	// ClearIndexes was causing "index already exists" error on restart
+	if sm.mainEngine == nil {
+		return nil
+	}
+
+	// Prefer native engine reset when available.
+	type allCleaner interface {
+		ClearAll() error
+	}
+	if cleaner, ok := sm.mainEngine.(allCleaner); ok {
+		return cleaner.ClearAll()
+	}
+
+	// Collect all existing DNs first.
+	tx, err := sm.mainEngine.Begin()
+	if err != nil {
+		return err
+	}
+	iter := sm.mainEngine.SearchByDN(tx, "", storage.ScopeSubtree)
+	dns := make([]string, 0)
+	for iter.Next() {
+		e := iter.Entry()
+		if e != nil && e.DN != "" {
+			dns = append(dns, e.DN)
+		}
+	}
+	iterErr := iter.Error()
+	iter.Close()
+	sm.mainEngine.Rollback(tx)
+	if iterErr != nil {
+		return iterErr
+	}
+
+	// Delete leaves first (longer DN first) to avoid non-leaf delete errors.
+	sort.Slice(dns, func(i, j int) bool {
+		if len(dns[i]) == len(dns[j]) {
+			return dns[i] > dns[j]
+		}
+		return len(dns[i]) > len(dns[j])
+	})
+
+	for _, dn := range dns {
+		delTx, err := sm.mainEngine.Begin()
+		if err != nil {
+			return err
+		}
+		err = sm.mainEngine.Delete(delTx, dn)
+		if err != nil {
+			sm.mainEngine.Rollback(delTx)
+			continue
+		}
+		if err := sm.mainEngine.Commit(delTx); err != nil {
+			return err
+		}
+	}
+
+	// Best-effort index cleanup for engines supporting it.
+	type indexCleaner interface {
+		ClearIndexes() error
+	}
+	if cleaner, ok := sm.mainEngine.(indexCleaner); ok {
+		if err := cleaner.ClearIndexes(); err != nil {
+			// Ignore cleanup errors; replay path will rebuild state.
+		}
+	}
+
 	return nil
 }
 
@@ -129,41 +198,34 @@ func (sm *ObaDBStateMachine) applyLDAPCommand(cmd *Command) error {
 		if cmd.DatabaseID == DBLog {
 			if _, err := engine.Get(tx, entry.DN); err == nil {
 				engine.Rollback(tx)
-				return nil
+				return NewApplyResultError(ApplyResultIdempotent, nil)
 			}
 		}
 		// Replay-safe idempotency: if the exact entry already exists, skip re-applying.
 		if existing, err := engine.Get(tx, entry.DN); err == nil && entriesEqual(existing, entry) {
 			engine.Rollback(tx)
-			return nil
+			return NewApplyResultError(ApplyResultIdempotent, nil)
 		}
-		applyErr = engine.Put(tx, entry)
-		if shouldIgnoreReplayPutError(applyErr) {
-			applyErr = nil
-		}
+		applyErr = classifyPutApplyError(engine.Put(tx, entry))
 
 	case CmdDelete:
-		applyErr = engine.Delete(tx, cmd.DN)
-		// Ignore "entry not found" error during log replay
-		// Entry may have been deleted by ClearMainEngine
-		if applyErr != nil && applyErr.Error() == "entry not found" {
-			applyErr = nil
-		}
+		applyErr = classifyDeleteApplyError(engine.Delete(tx, cmd.DN))
 
 	case CmdModifyDN:
 		// ModifyDN = Delete old + Put new
 		// Normalize oldDN to match storage format (lowercase)
 		oldDN := strings.ToLower(strings.TrimSpace(cmd.OldDN))
-		engine.Delete(tx, oldDN) // Ignore error - old entry may not exist
+		deleteErr := classifyDeleteApplyError(engine.Delete(tx, oldDN))
+		if ApplyResultFromError(deleteErr) == ApplyResultFatal {
+			applyErr = deleteErr
+			break
+		}
 		entry, err := deserializeEntry(cmd.EntryData)
 		if err != nil {
 			engine.Rollback(tx)
 			return err
 		}
-		applyErr = engine.Put(tx, entry)
-		if shouldIgnoreReplayPutError(applyErr) {
-			applyErr = nil
-		}
+		applyErr = classifyPutApplyError(engine.Put(tx, entry))
 	}
 
 	if applyErr != nil {
@@ -174,14 +236,38 @@ func (sm *ObaDBStateMachine) applyLDAPCommand(cmd *Command) error {
 	return engine.Commit(tx)
 }
 
-func shouldIgnoreReplayPutError(err error) bool {
+func classifyPutApplyError(err error) error {
 	if err == nil {
-		return false
+		return nil
 	}
-	msg := strings.ToLower(err.Error())
-	return (strings.Contains(msg, "uid attribute") && strings.Contains(msg, "unique")) ||
-		strings.Contains(msg, "entry already exists") ||
-		strings.Contains(msg, "version has been deleted")
+	switch {
+	case errors.Is(err, engine.ErrUIDNotUnique):
+		return NewApplyResultError(ApplyResultRejectConflict, err)
+	case errors.Is(err, engine.ErrEntryExists):
+		return NewApplyResultError(ApplyResultRejectConflict, err)
+	case errors.Is(err, tx.ErrWriteConflict):
+		return NewApplyResultError(ApplyResultRejectConflict, err)
+	case errors.Is(err, radix.ErrTooManyNodes):
+		return NewApplyResultError(ApplyResultRejectConflict, err)
+	default:
+		return err
+	}
+}
+
+func classifyDeleteApplyError(err error) error {
+	if err == nil {
+		return nil
+	}
+	switch {
+	case errors.Is(err, engine.ErrEntryNotFound):
+		return NewApplyResultError(ApplyResultIdempotent, err)
+	case errors.Is(err, mvcc.ErrVersionDeleted):
+		return NewApplyResultError(ApplyResultIdempotent, err)
+	case errors.Is(err, tx.ErrWriteConflict):
+		return NewApplyResultError(ApplyResultRejectConflict, err)
+	default:
+		return err
+	}
 }
 
 func entriesEqual(a, b *storage.Entry) bool {

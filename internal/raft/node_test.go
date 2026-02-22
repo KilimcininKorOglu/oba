@@ -306,18 +306,18 @@ func TestProposeReturnsApplyError(t *testing.T) {
 	}
 }
 
-func TestIsSkippableApplyErrorUIDVariant(t *testing.T) {
-	if !isSkippableApplyError(errors.New("uid attribute must be unique")) {
-		t.Fatal("expected uid uniqueness error variant to be skippable")
+func TestApplyResultFromError(t *testing.T) {
+	if got := ApplyResultFromError(nil); got != ApplyResultApplied {
+		t.Fatalf("nil error should be applied, got %v", got)
 	}
-	if !isSkippableApplyError(errors.New("uid attribute value must be unique")) {
-		t.Fatal("expected uid uniqueness error to be skippable")
+	if got := ApplyResultFromError(NewApplyResultError(ApplyResultIdempotent, nil)); got != ApplyResultIdempotent {
+		t.Fatalf("typed idempotent error should be idempotent, got %v", got)
 	}
-	if !isSkippableApplyError(errors.New("version has been deleted")) {
-		t.Fatal("expected deleted-version error to be skippable")
+	if got := ApplyResultFromError(NewApplyResultError(ApplyResultRejectConflict, errors.New("conflict"))); got != ApplyResultRejectConflict {
+		t.Fatalf("typed reject error should be reject_conflict, got %v", got)
 	}
-	if isSkippableApplyError(errors.New("some other hard error")) {
-		t.Fatal("did not expect unrelated error to be skippable")
+	if got := ApplyResultFromError(errors.New("unknown")); got != ApplyResultFatal {
+		t.Fatalf("unknown error should be fatal, got %v", got)
 	}
 }
 

@@ -8,23 +8,52 @@ import (
 	"testing"
 
 	"github.com/KilimcininKorOglu/oba/internal/storage"
+	"github.com/KilimcininKorOglu/oba/internal/storage/engine"
+	"github.com/KilimcininKorOglu/oba/internal/storage/mvcc"
+	"github.com/KilimcininKorOglu/oba/internal/storage/radix"
+	"github.com/KilimcininKorOglu/oba/internal/storage/tx"
 )
 
-func TestShouldIgnoreReplayPutError(t *testing.T) {
-	if !shouldIgnoreReplayPutError(errors.New("uid attribute value must be unique")) {
-		t.Fatal("expected uid uniqueness error to be ignored in replay")
+func TestClassifyPutApplyError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want ApplyResult
+	}{
+		{name: "uid conflict", err: engine.ErrUIDNotUnique, want: ApplyResultRejectConflict},
+		{name: "entry exists", err: engine.ErrEntryExists, want: ApplyResultRejectConflict},
+		{name: "write conflict", err: tx.ErrWriteConflict, want: ApplyResultRejectConflict},
+		{name: "radix full", err: radix.ErrTooManyNodes, want: ApplyResultRejectConflict},
+		{name: "fatal unknown", err: errors.New("boom"), want: ApplyResultFatal},
 	}
-	if !shouldIgnoreReplayPutError(errors.New("uid attribute must be unique")) {
-		t.Fatal("expected uid uniqueness error variant to be ignored in replay")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ApplyResultFromError(classifyPutApplyError(tt.err))
+			if got != tt.want {
+				t.Fatalf("got %v want %v", got, tt.want)
+			}
+		})
 	}
-	if !shouldIgnoreReplayPutError(errors.New("entry already exists")) {
-		t.Fatal("expected entry exists error to be ignored in replay")
+}
+
+func TestClassifyDeleteApplyError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want ApplyResult
+	}{
+		{name: "entry not found", err: engine.ErrEntryNotFound, want: ApplyResultIdempotent},
+		{name: "version deleted", err: mvcc.ErrVersionDeleted, want: ApplyResultIdempotent},
+		{name: "write conflict", err: tx.ErrWriteConflict, want: ApplyResultRejectConflict},
+		{name: "fatal unknown", err: errors.New("boom"), want: ApplyResultFatal},
 	}
-	if !shouldIgnoreReplayPutError(errors.New("version has been deleted")) {
-		t.Fatal("expected deleted-version replay error to be ignored")
-	}
-	if shouldIgnoreReplayPutError(errors.New("entry not found")) {
-		t.Fatal("did not expect unrelated errors to be ignored")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ApplyResultFromError(classifyDeleteApplyError(tt.err))
+			if got != tt.want {
+				t.Fatalf("got %v want %v", got, tt.want)
+			}
+		})
 	}
 }
 

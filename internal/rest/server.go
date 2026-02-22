@@ -151,6 +151,7 @@ func (s *Server) setupRoutes() {
 	s.router.GET("/api/v1/cluster/status", s.handlers.HandleClusterStatus)
 	s.router.GET("/api/v1/cluster/health", s.handlers.HandleClusterHealth)
 	s.router.GET("/api/v1/cluster/leader", s.handlers.HandleClusterLeader)
+	s.router.POST("/api/v1/cluster/repair/uid", s.handlers.HandleRepairUIDUniqueness)
 }
 
 func (s *Server) setupMiddleware() {
@@ -181,6 +182,7 @@ func (s *Server) setupMiddleware() {
 		s.router.Use(AdminOnlyMiddleware(s.config.AdminDNs, []string{
 			"/api/v1/acl",
 			"/api/v1/config",
+			"/api/v1/cluster/repair",
 		}, []string{
 			"/api/v1/config/public",
 		}))

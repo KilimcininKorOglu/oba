@@ -869,6 +869,36 @@ func (db *ObaDB) DropIndex(attribute string) error {
 	return db.indexManager.DropIndex(attribute)
 }
 
+// ClearAll removes all in-memory entry state (versions, radix and indexes).
+// This is used by cluster replay startup to rebuild deterministic state from Raft log.
+func (db *ObaDB) ClearAll() error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if db.closed {
+		return ErrDatabaseClosed
+	}
+	if db.readOnly {
+		return ErrDatabaseReadOnly
+	}
+
+	if db.versionStore != nil {
+		db.versionStore.Clear()
+	}
+	if db.radixTree != nil {
+		if err := db.radixTree.Clear(); err != nil {
+			return err
+		}
+	}
+	if db.indexManager != nil {
+		if err := db.indexManager.ClearAll(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // ClearIndexes clears all index data.
 // This is called when the main engine is cleared to ensure index consistency.
 func (db *ObaDB) ClearIndexes() error {
