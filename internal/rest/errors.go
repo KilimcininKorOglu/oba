@@ -8,6 +8,8 @@ import (
 
 	"github.com/KilimcininKorOglu/oba/internal/backend"
 	"github.com/KilimcininKorOglu/oba/internal/ldap"
+	"github.com/KilimcininKorOglu/oba/internal/raft"
+	"github.com/KilimcininKorOglu/oba/internal/storage/engine"
 )
 
 // LDAP result code to HTTP status code mapping.
@@ -46,6 +48,12 @@ var ldapToHTTPStatus = map[ldap.ResultCode]int{
 
 // mapBackendError maps a backend error to HTTP status and error code.
 func mapBackendError(err error) (int, string, string) {
+	if errors.Is(err, raft.ErrNotLeader) {
+		return http.StatusServiceUnavailable, "not_leader", "write operations must be sent to the leader"
+	}
+	if errors.Is(err, raft.ErrUIDNotUnique) || errors.Is(err, engine.ErrUIDNotUnique) {
+		return http.StatusConflict, "uid_not_unique", "uid attribute value must be unique"
+	}
 	if errors.Is(err, backend.ErrInvalidPlacement) {
 		return http.StatusBadRequest, "invalid_placement", "entry must be under the correct OU"
 	}

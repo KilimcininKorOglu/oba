@@ -31,13 +31,13 @@ export default function Users() {
 
       const [usersData, groupsData, ousData] = await Promise.all([
         api.searchEntries({
-          baseDN: base,
+          baseDN: `ou=users,${base}`,
           scope: 'sub',
           filter: '(|(objectClass=person)(objectClass=inetOrgPerson)(objectClass=organizationalPerson)(objectClass=user))',
           limit: 1000
         }),
         api.searchEntries({
-          baseDN: base,
+          baseDN: `ou=groups,${base}`,
           scope: 'sub',
           filter: '(|(objectClass=groupOfNames)(objectClass=groupOfUniqueNames)(objectClass=posixGroup)(objectClass=group))',
           limit: 1000

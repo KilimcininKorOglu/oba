@@ -1,4 +1,7 @@
-.PHONY: build clean test test-race test-cover bench run help docker docker-run docker-stop up down restart logs
+.PHONY: build clean test test-race test-cover test-verbose bench run fmt vet lint help \
+	docker docker-run docker-stop docker-logs \
+	up down restart logs \
+	up-cluster down-cluster restart-cluster logs-cluster clean-cluster-data verify-cluster
 
 BINARY_NAME=oba
 BUILD_DIR=bin
@@ -76,6 +79,25 @@ restart:
 logs:
 	docker compose logs -f oba
 
+up-cluster:
+	VERSION=$(VERSION) COMMIT=$(COMMIT) BUILD_DATE=$(BUILD_DATE) docker compose -f docker-compose.cluster.yml up -d --build
+
+down-cluster:
+	docker compose -f docker-compose.cluster.yml down
+
+restart-cluster:
+	docker compose -f docker-compose.cluster.yml restart
+
+logs-cluster:
+	docker compose -f docker-compose.cluster.yml logs -f
+
+clean-cluster-data:
+	find docker-cluster/node1 docker-cluster/node2 docker-cluster/node3 -type f \( -name '*.oba' -o -name '*.dat' -o -name 'raft.log' -o -name 'oba.pid' \) -delete
+	find docker-cluster/node1 docker-cluster/node2 docker-cluster/node3 -mindepth 1 -type d -empty -delete
+
+verify-cluster:
+	scripts/verify_cluster.sh
+
 help:
 	@echo "Available targets:"
 	@echo "  build        - Build the binary to bin/"
@@ -97,3 +119,9 @@ help:
 	@echo "  down         - Stop all services (docker compose)"
 	@echo "  restart      - Restart all services (docker compose)"
 	@echo "  logs         - View server logs (docker compose)"
+	@echo "  up-cluster   - Build and start cluster services"
+	@echo "  down-cluster - Stop cluster services"
+	@echo "  restart-cluster - Restart cluster services"
+	@echo "  logs-cluster - View cluster service logs"
+	@echo "  clean-cluster-data - Remove cluster DB/log/raft data files"
+	@echo "  verify-cluster - Run cluster LDAP/log sync verification"

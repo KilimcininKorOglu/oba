@@ -56,8 +56,7 @@ func LoggingMiddleware(logger logging.Logger) Middleware {
 				if wrapped.user != "" {
 					reqLogger = reqLogger.WithUser(wrapped.user)
 				}
-				// Error logging should not block response completion.
-				go reqLogger.Warn(fmt.Sprintf("request failed: %s %s (status=%d)", r.Method, r.URL.Path, wrapped.statusCode),
+				reqLogger.Warn(fmt.Sprintf("request failed: %s %s (status=%d)", r.Method, r.URL.Path, wrapped.statusCode),
 					"method", r.Method,
 					"path", r.URL.Path,
 					"status", wrapped.statusCode,

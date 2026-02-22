@@ -157,6 +157,9 @@ func (cb *ClusterBackend) Start() error {
 	if err := cb.stateMachine.ClearMainEngine(); err != nil {
 		return fmt.Errorf("failed to clear main engine: %w", err)
 	}
+	// Force full replay after clearing state. Persisted lastApplied may be ahead
+	// of zero and would otherwise skip older committed log entries.
+	cb.node.state.SetLastApplied(0)
 	return cb.node.Start()
 }
 
@@ -442,19 +445,12 @@ func (cb *ClusterBackend) checkUIDUnique(entry *storage.Entry) error {
 		return nil
 	}
 
-	// Find uid attribute (case-insensitive)
-	var uidValue string
-	for name, values := range entry.Attributes {
-		if strings.ToLower(name) == "uid" {
-			if len(values) > 0 && len(values[0]) > 0 {
-				uidValue = string(values[0])
-				break
-			}
-		}
-	}
-
+	uidValue := extractCanonicalUID(entry.Attributes)
 	if uidValue == "" {
 		return nil // No uid attribute, nothing to check
+	}
+	if !isUsersSubtreeDN(entry.DN) {
+		return nil // UID uniqueness is enforced for user entries under ou=users
 	}
 
 	cb.logger.Info("checkUIDUnique: checking", "uid", uidValue, "dn", entry.DN)
@@ -463,11 +459,11 @@ func (cb *ClusterBackend) checkUIDUnique(entry *storage.Entry) error {
 	tx, err := cb.engine.Begin()
 	if err != nil {
 		cb.logger.Error("checkUIDUnique: failed to begin tx", "error", err)
-		return nil // Skip check on error
+		return err
 	}
 	defer cb.engine.Rollback(tx)
 
-	// Scan full subtree to reliably include all entries.
+	// Scan full subtree to include all users.
 	iter := cb.engine.SearchByDN(tx, "", storage.ScopeSubtree)
 	defer iter.Close()
 
@@ -477,25 +473,52 @@ func (cb *ClusterBackend) checkUIDUnique(entry *storage.Entry) error {
 		if existing == nil {
 			continue
 		}
-		for name, values := range existing.Attributes {
-			if strings.ToLower(name) != "uid" {
-				continue
-			}
-			for _, v := range values {
-				if string(v) == uidValue {
-					count++
-					cb.logger.Info("checkUIDUnique: found entry", "existingDN", existing.DN, "entryDN", entry.DN)
-					if existing.DN != entry.DN {
-						cb.logger.Info("checkUIDUnique: duplicate found", "existingDN", existing.DN)
-						return ErrUIDNotUnique
-					}
-				}
-			}
+		if existing.DN == entry.DN || !isUsersSubtreeDN(existing.DN) {
+			continue
+		}
+		if extractCanonicalUID(existing.Attributes) == uidValue {
+			count++
+			cb.logger.Info("checkUIDUnique: found entry", "existingDN", existing.DN, "entryDN", entry.DN)
+			cb.logger.Info("checkUIDUnique: duplicate found", "existingDN", existing.DN)
+			return ErrUIDNotUnique
 		}
 	}
+
+	if err := iter.Error(); err != nil {
+		cb.logger.Error("checkUIDUnique: scan failed", "error", err)
+		return err
+	}
+
 	cb.logger.Info("checkUIDUnique: scan complete", "count", count)
 
 	return nil
+}
+
+func extractCanonicalUID(attrs map[string][][]byte) string {
+	for name, values := range attrs {
+		if strings.ToLower(name) != "uid" {
+			continue
+		}
+		for _, raw := range values {
+			if len(raw) == 0 {
+				continue
+			}
+			uid := strings.ToLower(strings.TrimSpace(string(raw)))
+			if uid != "" {
+				return uid
+			}
+		}
+	}
+	return ""
+}
+
+func isUsersSubtreeDN(dn string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(dn))
+	if normalized == "" {
+		return false
+	}
+	// Prefix with comma so both "uid=x,ou=users,..." and "ou=users,..." match.
+	return strings.Contains(","+normalized, ",ou=users,")
 }
 
 // ErrUIDNotUnique is returned when trying to add an entry with a duplicate uid.

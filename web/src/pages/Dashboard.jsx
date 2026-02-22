@@ -112,24 +112,42 @@ export default function Dashboard() {
   const fetchData = async (showRefresh = false) => {
     try {
       if (showRefresh) setRefreshing(true);
-      
-      const [statsData, activitiesData, clusterData] = await Promise.all([
+      const [statsResult, activitiesResult, clusterResult] = await Promise.allSettled([
         api.getStats(),
         api.getActivities(10),
-        api.getClusterStatus().catch(() => null)
+        api.getClusterStatus()
       ]);
-      
-      // Set server timezone for date formatting
-      if (statsData.timezone) {
-        setServerTimezone(statsData.timezone);
+
+      const unavailable = [];
+
+      if (statsResult.status === 'fulfilled') {
+        if (statsResult.value.timezone) {
+          setServerTimezone(statsResult.value.timezone);
+        }
+        setStats(statsResult.value);
+      } else {
+        unavailable.push('stats');
       }
-      
-      setStats(statsData);
-      setActivities(activitiesData.activities || []);
-      setClusterStatus(clusterData);
-      setError(null);
-    } catch (err) {
-      setError(err.message);
+
+      if (activitiesResult.status === 'fulfilled') {
+        setActivities(activitiesResult.value.activities || []);
+      } else {
+        unavailable.push('activities');
+      }
+
+      if (clusterResult.status === 'fulfilled') {
+        setClusterStatus(clusterResult.value);
+      } else {
+        unavailable.push('cluster');
+      }
+
+      if (unavailable.length === 0) {
+        setError(null);
+      } else {
+        setError(`Some dashboard data is temporarily unavailable: ${unavailable.join(', ')}`);
+      }
+    } catch {
+      setError('Failed to refresh dashboard data');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -150,14 +168,6 @@ export default function Dashboard() {
     );
   }
 
-  if (error) {
-    return (
-      <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 text-red-500">
-        Failed to load dashboard data: {error}
-      </div>
-    );
-  }
-
   return (
     <div>
       <Header 
@@ -173,6 +183,12 @@ export default function Dashboard() {
           </button>
         }
       />
+
+      {error && (
+        <div className="mb-4 bg-amber-500/10 border border-amber-500/50 rounded-lg p-3 text-amber-300 text-sm">
+          {error}
+        </div>
+      )}
 
       {/* Server Status */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

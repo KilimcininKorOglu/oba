@@ -5,6 +5,7 @@ package backend
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -803,7 +804,7 @@ func wrapStorageError(err error) error {
 	if err == nil {
 		return nil
 	}
-	return errors.New("backend: " + err.Error())
+	return fmt.Errorf("backend: %w", err)
 }
 
 // Watch creates a new change stream subscription with the given filter.

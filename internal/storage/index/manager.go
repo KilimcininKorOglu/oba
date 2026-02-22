@@ -68,6 +68,9 @@ func NewIndexManager(pm *storage.PageManager) (*IndexManager, error) {
 
 	// Try to load existing metadata
 	if err := im.loadMetadata(); err != nil {
+		// Drop any partially loaded state before rebuilding metadata.
+		im.indexes = make(map[string]*Index)
+
 		// No existing metadata, create new
 		if err := im.initializeMetadata(); err != nil {
 			return nil, err
@@ -228,7 +231,7 @@ func (im *IndexManager) saveMetadata() error {
 // createDefaultIndexes creates indexes for commonly searched attributes.
 func (im *IndexManager) createDefaultIndexes() error {
 	for _, attr := range DefaultIndexedAttributes() {
-		if err := im.createIndexInternal(attr, IndexEquality); err != nil {
+		if err := im.createIndexInternal(attr, IndexEquality); err != nil && !errors.Is(err, ErrIndexExists) {
 			return err
 		}
 	}

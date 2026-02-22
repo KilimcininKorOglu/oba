@@ -1069,20 +1069,15 @@ func (db *ObaDB) updateIndexesWithLocation(oldEntry, newEntry *storage.Entry, pa
 // checkUIDUnique checks if the uid attribute value is unique across all entries.
 // Returns ErrUIDNotUnique if another entry with the same uid exists.
 func (db *ObaDB) checkUIDUnique(txn *tx.Transaction, dn string, attrs map[string][][]byte) error {
-	// Find uid attribute (case-insensitive)
-	var uidValue []byte
-	for name, values := range attrs {
-		if strings.ToLower(name) == "uid" && len(values) > 0 && len(values[0]) > 0 {
-			uidValue = values[0]
-			break
-		}
-	}
-
-	if uidValue == nil {
+	uidValue := extractCanonicalUID(attrs)
+	if uidValue == "" {
 		return nil // No uid attribute, nothing to check
 	}
+	if !isUsersSubtreeDN(dn) {
+		return nil // UID uniqueness is enforced for user entries under ou=users
+	}
 
-	// Full scan over subtree to reliably include all entries.
+	// Full scan over subtree to include all users.
 	iter := db.SearchByDN(txn, "", storage.ScopeSubtree)
 	defer iter.Close()
 
@@ -1091,24 +1086,46 @@ func (db *ObaDB) checkUIDUnique(txn *tx.Transaction, dn string, attrs map[string
 		if existing == nil || existing.DN == "" || existing.DN == dn {
 			continue
 		}
-		for name, values := range existing.Attributes {
-			if strings.ToLower(name) != "uid" {
-				continue
-			}
-			for _, v := range values {
-				if string(v) == string(uidValue) {
-					return ErrUIDNotUnique
-				}
-			}
+		if !isUsersSubtreeDN(existing.DN) {
+			continue
+		}
+		if extractCanonicalUID(existing.Attributes) == uidValue {
+			return ErrUIDNotUnique
 		}
 	}
 
-	// If scan fails, skip uniqueness check instead of blocking write path.
 	if err := iter.Error(); err != nil {
-		return nil
+		return err
 	}
 
 	return nil
+}
+
+func extractCanonicalUID(attrs map[string][][]byte) string {
+	for name, values := range attrs {
+		if strings.ToLower(name) != "uid" {
+			continue
+		}
+		for _, raw := range values {
+			if len(raw) == 0 {
+				continue
+			}
+			uid := strings.ToLower(strings.TrimSpace(string(raw)))
+			if uid != "" {
+				return uid
+			}
+		}
+	}
+	return ""
+}
+
+func isUsersSubtreeDN(dn string) bool {
+	normalized := normalizeDN(dn)
+	if normalized == "" {
+		return false
+	}
+	// Prefix with comma so both "uid=x,ou=users,..." and "ou=users,..." match.
+	return strings.Contains(","+normalized, ",ou=users,")
 }
 
 // normalizeDN normalizes a DN for consistent storage and lookup.

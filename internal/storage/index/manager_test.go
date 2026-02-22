@@ -1,6 +1,7 @@
 package index
 
 import (
+	"encoding/binary"
 	"os"
 	"path/filepath"
 	"testing"
@@ -153,6 +154,40 @@ func TestNewIndexManagerNilPageManager(t *testing.T) {
 	_, err := NewIndexManager(nil)
 	if err != ErrInvalidPageManager {
 		t.Errorf("expected ErrInvalidPageManager, got %v", err)
+	}
+}
+
+func TestNewIndexManagerRecoversFromCorruptedMetadata(t *testing.T) {
+	pm, cleanup := createTestPageManager(t)
+	defer cleanup()
+
+	im, err := NewIndexManager(pm)
+	if err != nil {
+		t.Fatalf("failed to create index manager: %v", err)
+	}
+	metaPageID := im.metadataPageID
+	im.Close()
+
+	// Corrupt metadata count so parser reads some entries then fails.
+	page, err := pm.ReadPage(metaPageID)
+	if err != nil {
+		t.Fatalf("failed to read metadata page: %v", err)
+	}
+	binary.LittleEndian.PutUint16(page.Data[1:], uint16(len(DefaultIndexedAttributes())+100))
+	if err := pm.WritePage(page); err != nil {
+		t.Fatalf("failed to write corrupted metadata page: %v", err)
+	}
+
+	imRecovered, err := NewIndexManager(pm)
+	if err != nil {
+		t.Fatalf("expected recovery from corrupted metadata, got error: %v", err)
+	}
+	defer imRecovered.Close()
+
+	for _, attr := range DefaultIndexedAttributes() {
+		if _, exists := imRecovered.GetIndex(attr); !exists {
+			t.Fatalf("default index missing after recovery: %s", attr)
+		}
 	}
 }
 
