@@ -314,6 +314,16 @@ func (s *LogStore) Write(level, msg, source, user, requestID string, fields map[
 		return s.forwardToLeader(entry, leaderAddr)
 	}
 
+	// Cluster mode is enabled but cluster writer is not ready yet.
+	// Buffer startup logs so they can be flushed via Raft after writer is set.
+	if s.clusterMode {
+		if len(s.pendingEntries) < 1000 {
+			s.pendingEntries = append(s.pendingEntries, entry)
+		}
+		s.mu.Unlock()
+		return nil
+	}
+
 	// Standalone mode or cluster mode without cluster writer: direct write
 	err := s.writeLocal(entry)
 	s.mu.Unlock()
@@ -864,9 +874,16 @@ func (s *LogStore) GetStats() LogStoreStats {
 	defer s.mu.RUnlock()
 
 	stats := LogStoreStats{
-		MaxEntries: s.maxEntries,
-		ByLevel:    make(map[string]int),
+		MaxEntries:   s.maxEntries,
+		ByLevel:      make(map[string]int),
+		PendingCount: len(s.pendingEntries),
+		ClusterMode:  s.clusterMode,
+		WriterReady:  s.clusterWriter != nil,
 	}
+	s.retryMu.Lock()
+	stats.RetryCount = len(s.retryBuffer)
+	stats.RetryRunning = s.retryRunning
+	s.retryMu.Unlock()
 
 	if s.db == nil {
 		return stats
@@ -919,6 +936,11 @@ type LogStoreStats struct {
 	ByLevel      map[string]int
 	OldestEntry  time.Time
 	NewestEntry  time.Time
+	PendingCount int
+	RetryCount   int
+	RetryRunning bool
+	ClusterMode  bool
+	WriterReady  bool
 }
 
 // Clear removes all log entries.

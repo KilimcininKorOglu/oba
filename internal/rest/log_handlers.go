@@ -36,6 +36,11 @@ type LogStatsResponse struct {
 	ByLevel      map[string]int `json:"by_level"`
 	OldestEntry  string         `json:"oldest_entry,omitempty"`
 	NewestEntry  string         `json:"newest_entry,omitempty"`
+	PendingCount int            `json:"pending_entries"`
+	RetryCount   int            `json:"retry_buffer_size"`
+	RetryRunning bool           `json:"retry_running"`
+	ClusterMode  bool           `json:"cluster_mode"`
+	WriterReady  bool           `json:"writer_ready"`
 }
 
 // HandleGetLogs handles GET /api/v1/logs
@@ -116,6 +121,11 @@ func (h *Handlers) HandleGetLogStats(w http.ResponseWriter, r *http.Request) {
 		TotalEntries: stats.TotalEntries,
 		MaxEntries:   stats.MaxEntries,
 		ByLevel:      stats.ByLevel,
+		PendingCount: stats.PendingCount,
+		RetryCount:   stats.RetryCount,
+		RetryRunning: stats.RetryRunning,
+		ClusterMode:  stats.ClusterMode,
+		WriterReady:  stats.WriterReady,
 	}
 
 	if !stats.OldestEntry.IsZero() {
