@@ -332,6 +332,13 @@ func (n *Node) resetElectionTimer() {
 	if n.electionTimer == nil {
 		n.electionTimer = time.NewTimer(timeout)
 	} else {
+		// Stop the timer and drain the channel if needed
+		if !n.electionTimer.Stop() {
+			select {
+			case <-n.electionTimer.C:
+			default:
+			}
+		}
 		n.electionTimer.Reset(timeout)
 	}
 }
@@ -340,6 +347,13 @@ func (n *Node) resetHeartbeatTimer() {
 	if n.heartbeatTimer == nil {
 		n.heartbeatTimer = time.NewTimer(n.config.HeartbeatTimeout)
 	} else {
+		// Stop the timer and drain the channel if needed
+		if !n.heartbeatTimer.Stop() {
+			select {
+			case <-n.heartbeatTimer.C:
+			default:
+			}
+		}
 		n.heartbeatTimer.Reset(n.config.HeartbeatTimeout)
 	}
 }
