@@ -840,6 +840,7 @@ func (n *Node) applyLoop() {
 			n.logger.Info("applyLoop: replaying", "commitIndex", commitIndex, "lastApplied", lastApplied)
 		}
 
+	applyCommitted:
 		for lastApplied < commitIndex {
 			lastApplied++
 			entry, err := n.state.Log().Get(lastApplied)
@@ -886,7 +887,7 @@ func (n *Node) applyLoop() {
 				}
 				n.notifyProposalApplied(lastApplied, applyErr)
 				lastApplied--
-				break
+				break applyCommitted
 			}
 		}
 

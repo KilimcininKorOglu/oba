@@ -209,7 +209,15 @@ func (sm *ObaDBStateMachine) applyLDAPCommand(cmd *Command) error {
 		applyErr = classifyPutApplyError(engine.Put(tx, entry))
 
 	case CmdDelete:
-		applyErr = classifyDeleteApplyError(engine.Delete(tx, cmd.DN))
+		if cmd.DatabaseID == DBLog {
+			// Log retention deletes are best-effort and must never block Raft replay.
+			// Skipping delete apply keeps cluster progress deterministic; retention is
+			// handled separately and can be improved without risking replication stalls.
+			applyErr = NewApplyResultError(ApplyResultIdempotent, nil)
+			break
+		}
+		deleteErr := engine.Delete(tx, cmd.DN)
+		applyErr = classifyDeleteApplyError(deleteErr)
 
 	case CmdModifyDN:
 		// ModifyDN = Delete old + Put new

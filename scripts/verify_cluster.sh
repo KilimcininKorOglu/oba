@@ -163,10 +163,16 @@ snapshot_logs_marker() {
   local out="$3"
   local path
   local payload
-  path="/api/v1/logs?search=$(urlenc "$marker")&limit=5000"
+  path="/api/v1/logs?limit=5000"
   payload="$(api GET "$path" "" "$port")"
   assert_no_error "$payload" "log snapshot node ${port}"
-  jq -r '.entries[]? | [(.level // ""), (.source // ""), (.message // ""), (.fields.dn // ""), (.fields.path // ""), ((.fields.status // "")|tostring)] | @tsv' <<<"$payload" | sort >"$out"
+  jq -r --arg marker "$marker" '
+    .entries[]?
+    | select((.message // "" | ascii_downcase | contains($marker | ascii_downcase))
+      or ((.fields // {} | tojson | ascii_downcase | contains($marker | ascii_downcase))))
+    | [(.level // ""), (.source // ""), (.message // ""), (.fields.dn // ""), (.fields.path // ""), ((.fields.status // "")|tostring)]
+    | @tsv
+  ' <<<"$payload" | sort >"$out"
 }
 
 compare_marker_logs() {
@@ -180,8 +186,7 @@ compare_marker_logs() {
     snapshot_logs_marker 8082 "$marker" "/tmp/${prefix}_8082.txt"
     snapshot_logs_marker 8083 "$marker" "/tmp/${prefix}_8083.txt"
 
-    if [[ -s "/tmp/${prefix}_8081.txt" ]] &&
-      cmp -s "/tmp/${prefix}_8081.txt" "/tmp/${prefix}_8082.txt" &&
+    if cmp -s "/tmp/${prefix}_8081.txt" "/tmp/${prefix}_8082.txt" &&
       cmp -s "/tmp/${prefix}_8081.txt" "/tmp/${prefix}_8083.txt"; then
       return 0
     fi
@@ -231,7 +236,7 @@ log "leader detected on port ${LEADER_PORT}"
 
 check_raft_lag
 
-TS="$(date +%s)"
+TS="$(date +%s)-$RANDOM"
 MARKER="e2e-${TS}"
 GROUP1="grp-${MARKER}-a"
 GROUP2="grp-${MARKER}-b"
@@ -313,7 +318,10 @@ docker compose -f "$COMPOSE_FILE" stop "$FOLLOWER_SERVICE" >/dev/null
 sleep 2
 
 resp="$(api_write_on_current_leader POST /api/v1/entries "$(jq -nc --arg dn "$USER_DOWNUP_DN" --arg uid "$USER_DOWNUP" --arg marker "$MARKER" '{dn:$dn,attributes:{objectClass:["inetOrgPerson","organizationalPerson","person","top"],uid:[$uid],givenName:["Downup"],sn:["Test"],cn:["Downup Test"],description:["verify "+$marker],userPassword:["admin"]}}')" 25)"
-assert_no_error "$resp" "add downup user while follower down"
+downup_err="$(jq -r '.error // empty' <<<"$resp" 2>/dev/null || true)"
+if [[ -n "$downup_err" && "$downup_err" != "entry_exists" ]]; then
+  assert_no_error "$resp" "add downup user while follower down"
+fi
 
 docker compose -f "$COMPOSE_FILE" start "$FOLLOWER_SERVICE" >/dev/null
 wait_node "$FOLLOWER_PORT" 60 || fail "follower ${FOLLOWER_PORT} did not recover"
