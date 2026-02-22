@@ -16,9 +16,9 @@ export default function Logs() {
   const [filters, setFilters] = useState({
     level: '',
     source: '',
-    search: '',
-    limit: '100'
+    search: ''
   });
+  const pageSize = 50;
   const [pagination, setPagination] = useState({ offset: 0, total: 0, hasMore: false });
 
   const fetchLogs = async (offset = 0) => {
@@ -28,7 +28,7 @@ export default function Logs() {
       if (filters.level) params.level = filters.level;
       if (filters.source) params.source = filters.source;
       if (filters.search) params.search = filters.search;
-      params.limit = filters.limit;
+      params.limit = pageSize.toString();
       params.offset = offset.toString();
 
       const data = await api.getLogs(params);
@@ -295,7 +295,7 @@ export default function Logs() {
           emptyDescription="Log storage may be disabled or no logs match your filters."
           pagination={{
             offset: pagination.offset,
-            limit: parseInt(filters.limit),
+            limit: pageSize,
             total: pagination.total,
             hasMore: pagination.hasMore
           }}
