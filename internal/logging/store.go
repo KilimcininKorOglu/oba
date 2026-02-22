@@ -42,6 +42,12 @@ type LogStore struct {
 	// Buffer for entries written before cluster writer is set
 	pendingEntries []*storage.Entry
 	clusterMode    bool // Flag to indicate cluster mode is enabled
+
+	// Retry buffer for failed forwards
+	retryBuffer   []*storage.Entry
+	retryMu       sync.Mutex
+	retryRunning  bool
+	retryStopChan chan struct{}
 }
 
 // ClusterWriter interface for cluster-aware write operations.
@@ -362,11 +368,9 @@ func (s *LogStore) forwardToLeader(entry *storage.Entry, leaderAddr string) erro
 	url := fmt.Sprintf("http://%s/api/v1/internal/log", httpAddr)
 	
 	// Retry up to 3 times with backoff
-	var lastErr error
 	for i := 0; i < 3; i++ {
 		resp, err := http.Post(url, "application/json", bytes.NewReader(data))
 		if err != nil {
-			lastErr = err
 			time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
 			continue
 		}
@@ -378,7 +382,6 @@ func (s *LogStore) forwardToLeader(entry *storage.Entry, leaderAddr string) erro
 		
 		// 503 means leader not ready yet, retry
 		if resp.StatusCode == http.StatusServiceUnavailable {
-			lastErr = fmt.Errorf("leader not ready")
 			time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
 			continue
 		}
@@ -387,8 +390,147 @@ func (s *LogStore) forwardToLeader(entry *storage.Entry, leaderAddr string) erro
 		return fmt.Errorf("forward failed: status %d", resp.StatusCode)
 	}
 
-	// All retries failed - silently drop the log (better than inconsistency)
-	return lastErr
+	// All retries failed - add to retry buffer for background processing
+	s.addToRetryBuffer(entry)
+	return nil
+}
+
+// addToRetryBuffer adds an entry to the retry buffer and starts the retry worker if needed.
+func (s *LogStore) addToRetryBuffer(entry *storage.Entry) {
+	s.retryMu.Lock()
+	defer s.retryMu.Unlock()
+
+	// Limit buffer size
+	if len(s.retryBuffer) >= 10000 {
+		// Drop oldest entry to make room
+		s.retryBuffer = s.retryBuffer[1:]
+	}
+	s.retryBuffer = append(s.retryBuffer, entry)
+
+	// Start retry worker if not running
+	if !s.retryRunning {
+		s.retryRunning = true
+		s.retryStopChan = make(chan struct{})
+		go s.retryWorker()
+	}
+}
+
+// retryWorker periodically retries forwarding buffered entries to the leader.
+func (s *LogStore) retryWorker() {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-s.retryStopChan:
+			return
+		case <-ticker.C:
+			s.processRetryBuffer()
+		}
+	}
+}
+
+// processRetryBuffer attempts to forward all buffered entries to the leader.
+func (s *LogStore) processRetryBuffer() {
+	s.retryMu.Lock()
+	if len(s.retryBuffer) == 0 {
+		s.retryRunning = false
+		if s.retryStopChan != nil {
+			close(s.retryStopChan)
+			s.retryStopChan = nil
+		}
+		s.retryMu.Unlock()
+		return
+	}
+
+	// Get cluster writer
+	s.mu.RLock()
+	cw := s.clusterWriter
+	s.mu.RUnlock()
+
+	if cw == nil {
+		s.retryMu.Unlock()
+		return
+	}
+
+	// Check if we're leader now (can write directly)
+	if cw.IsLeader() {
+		entries := s.retryBuffer
+		s.retryBuffer = nil
+		s.retryMu.Unlock()
+
+		for _, entry := range entries {
+			s.writeViaRaft(entry)
+		}
+		return
+	}
+
+	// Check if leader is available
+	leaderAddr := cw.LeaderAddr()
+	if leaderAddr == "" {
+		s.retryMu.Unlock()
+		return
+	}
+
+	// Try to forward entries
+	entries := s.retryBuffer
+	s.retryBuffer = nil
+	s.retryMu.Unlock()
+
+	httpAddr := strings.Replace(leaderAddr, ":4445", ":8080", 1)
+	var failed []*storage.Entry
+
+	for _, entry := range entries {
+		if err := s.tryForwardEntry(entry, httpAddr); err != nil {
+			failed = append(failed, entry)
+		}
+	}
+
+	// Re-add failed entries
+	if len(failed) > 0 {
+		s.retryMu.Lock()
+		s.retryBuffer = append(failed, s.retryBuffer...)
+		s.retryMu.Unlock()
+	}
+}
+
+// tryForwardEntry attempts to forward a single entry to the leader.
+func (s *LogStore) tryForwardEntry(entry *storage.Entry, httpAddr string) error {
+	logEntry := &LogEntry{
+		Timestamp: time.Now().UTC(),
+		Level:     string(entry.GetAttribute("level")[0]),
+		Message:   string(entry.GetAttribute("message")[0]),
+	}
+
+	if src := entry.GetAttribute("source"); len(src) > 0 {
+		logEntry.Source = string(src[0])
+	}
+	if usr := entry.GetAttribute("user"); len(usr) > 0 {
+		logEntry.User = string(usr[0])
+	}
+	if rid := entry.GetAttribute("requestid"); len(rid) > 0 {
+		logEntry.RequestID = string(rid[0])
+	}
+	if fld := entry.GetAttribute("fields"); len(fld) > 0 {
+		json.Unmarshal(fld[0], &logEntry.Fields)
+	}
+
+	data, err := json.Marshal(logEntry)
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("http://%s/api/v1/internal/log", httpAddr)
+	resp, err := http.Post(url, "application/json", bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("forward failed: status %d", resp.StatusCode)
+	}
+	return nil
 }
 
 // writeLocal writes an entry directly to local database (no Raft).
