@@ -16,7 +16,7 @@ export default function Users() {
   const [showModal, setShowModal] = useState(false);
   const [editUser, setEditUser] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
-  const [form, setForm] = useState({ uid: '', cn: '', sn: '', mail: '', password: '', groups: [] });
+  const [form, setForm] = useState({ uid: '', givenName: '', sn: '', mail: '', password: '', groups: [] });
 
   const fetchData = async () => {
     setLoading(true);
@@ -135,7 +135,7 @@ export default function Users() {
 
   const openAddModal = () => {
     setEditUser(null);
-    setForm({ uid: '', cn: '', sn: '', mail: '', password: '', groups: [] });
+    setForm({ uid: '', givenName: '', sn: '', mail: '', password: '', groups: [] });
     setShowModal(true);
   };
 
@@ -148,7 +148,7 @@ export default function Users() {
     setEditUser(user);
     setForm({
       uid: getAttrVal('uid') || extractCN(user.dn),
-      cn: getAttrVal('cn'),
+      givenName: getAttrVal('givenName'),
       sn: getAttrVal('sn'),
       mail: getAttrVal('mail'),
       password: '',
@@ -159,11 +159,12 @@ export default function Users() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.cn || !form.sn) {
-      showToast('CN and SN are required', 'error');
+    if (!form.givenName || !form.sn) {
+      showToast('First Name and Surname are required', 'error');
       return;
     }
 
+    const fullName = `${form.givenName} ${form.sn}`;
     setFormLoading(true);
     try {
       let userDN;
@@ -171,8 +172,9 @@ export default function Users() {
       if (editUser) {
         userDN = editUser.dn;
         const modifications = [];
-        if (form.cn) modifications.push({ operation: 'replace', attribute: 'cn', values: [form.cn] });
-        if (form.sn) modifications.push({ operation: 'replace', attribute: 'sn', values: [form.sn] });
+        modifications.push({ operation: 'replace', attribute: 'givenName', values: [form.givenName] });
+        modifications.push({ operation: 'replace', attribute: 'sn', values: [form.sn] });
+        modifications.push({ operation: 'replace', attribute: 'cn', values: [fullName] });
         if (form.mail) modifications.push({ operation: 'replace', attribute: 'mail', values: [form.mail] });
         else modifications.push({ operation: 'delete', attribute: 'mail' });
         if (form.password) modifications.push({ operation: 'replace', attribute: 'userPassword', values: [form.password] });
@@ -188,8 +190,9 @@ export default function Users() {
         await api.addEntry(userDN, {
           objectClass: ['inetOrgPerson', 'organizationalPerson', 'person', 'top'],
           uid: [form.uid],
-          cn: [form.cn],
+          givenName: [form.givenName],
           sn: [form.sn],
+          cn: [fullName],
           ...(form.mail && { mail: [form.mail] }),
           ...(form.password && { userPassword: [form.password] })
         });
@@ -222,7 +225,7 @@ export default function Users() {
 
       showToast(editUser ? 'User updated' : 'User created', 'success');
       setShowModal(false);
-      setForm({ uid: '', cn: '', sn: '', mail: '', password: '', groups: [] });
+      setForm({ uid: '', givenName: '', sn: '', mail: '', password: '', groups: [] });
       setEditUser(null);
       fetchData();
     } catch (err) {
@@ -367,13 +370,13 @@ export default function Users() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-zinc-300 mb-1">Full Name (cn) *</label>
+            <label className="block text-sm font-medium text-zinc-300 mb-1">First Name (givenName) *</label>
             <input
               type="text"
-              value={form.cn}
-              onChange={(e) => setForm({ ...form, cn: e.target.value })}
+              value={form.givenName}
+              onChange={(e) => setForm({ ...form, givenName: e.target.value })}
               className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-md text-zinc-100 focus:outline-none focus:border-blue-500"
-              placeholder="John Doe"
+              placeholder="John"
             />
           </div>
           <div>
