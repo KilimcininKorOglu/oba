@@ -144,6 +144,9 @@ func (s *Server) setupRoutes() {
 	s.router.POST("/api/v1/logs/archive", s.handlers.HandleArchiveLogsNow)
 	s.router.POST("/api/v1/logs/archives/cleanup", s.handlers.HandleCleanupArchives)
 
+	// Internal endpoints (cluster node-to-node communication)
+	s.router.POST("/api/v1/internal/log", s.handlers.HandleInternalLog)
+
 	// Cluster management endpoints
 	s.router.GET("/api/v1/cluster/status", s.handlers.HandleClusterStatus)
 	s.router.GET("/api/v1/cluster/health", s.handlers.HandleClusterHealth)
@@ -170,6 +173,7 @@ func (s *Server) setupMiddleware() {
 		"/api/v1/auth/bind",
 		"/api/v1/config/public",
 		"/api/v1/cluster/health",
+		"/api/v1/internal/", // Internal cluster communication
 	}))
 
 	// Admin-only endpoints

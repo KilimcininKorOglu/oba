@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -314,4 +315,73 @@ func (h *Handlers) HandleCleanupArchives(w http.ResponseWriter, r *http.Request)
 // SetLogger sets the logger for log-related endpoints.
 func (h *Handlers) SetLogger(logger logging.Logger) {
 	h.logger = logger
+}
+
+// InternalLogRequest represents a log entry forwarded from another node.
+type InternalLogRequest struct {
+	Timestamp time.Time              `json:"timestamp"`
+	Level     string                 `json:"level"`
+	Message   string                 `json:"message"`
+	Source    string                 `json:"source,omitempty"`
+	User      string                 `json:"user,omitempty"`
+	RequestID string                 `json:"request_id,omitempty"`
+	Fields    map[string]interface{} `json:"fields,omitempty"`
+}
+
+// HandleInternalLog handles POST /api/v1/internal/log
+// This endpoint receives log entries forwarded from follower nodes.
+func (h *Handlers) HandleInternalLog(w http.ResponseWriter, r *http.Request) {
+	// Only accept from cluster nodes (no auth required for internal traffic)
+	if h.clusterBackend == nil {
+		writeError(w, http.StatusBadRequest, "not_cluster_mode", "server is not in cluster mode")
+		return
+	}
+
+	// Only leader should accept forwarded logs
+	if !h.clusterBackend.IsLeader() {
+		writeError(w, http.StatusServiceUnavailable, "not_leader", "only leader accepts forwarded logs")
+		return
+	}
+
+	var req InternalLogRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+
+	// Write log via logger (which will go through Raft)
+	if h.logger != nil {
+		logger := h.logger
+		if req.Source != "" {
+			logger = logger.WithSource(req.Source)
+		}
+		if req.User != "" {
+			logger = logger.WithUser(req.User)
+		}
+		if req.RequestID != "" {
+			logger = logger.WithRequestID(req.RequestID)
+		}
+
+		// Convert fields to key-value pairs
+		var keyvals []interface{}
+		for k, v := range req.Fields {
+			keyvals = append(keyvals, k, v)
+		}
+
+		// Log based on level
+		switch req.Level {
+		case "debug":
+			logger.Debug(req.Message, keyvals...)
+		case "warn", "warning":
+			logger.Warn(req.Message, keyvals...)
+		case "error":
+			logger.Error(req.Message, keyvals...)
+		default:
+			logger.Info(req.Message, keyvals...)
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+	})
 }

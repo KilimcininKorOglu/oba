@@ -1,8 +1,10 @@
 package logging
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -47,6 +49,7 @@ type ClusterWriter interface {
 	PutLog(entry *storage.Entry) error
 	DeleteLog(dn string) error
 	IsLeader() bool
+	LeaderAddr() string
 }
 
 // LogStoreConfig holds configuration for the log store.
@@ -259,42 +262,23 @@ func (s *LogStore) Write(level, msg, source, user, requestID string, fields map[
 
 	// If cluster writer is set, route through Raft consensus
 	if s.clusterWriter != nil {
-		// Only leader can write to Raft
-		if !s.clusterWriter.IsLeader() {
-			// Follower: write to local database only (not replicated)
-			// This ensures follower logs are preserved locally
-			return s.writeLocal(entry)
+		// Leader writes directly to Raft
+		if s.clusterWriter.IsLeader() {
+			return s.writeViaRaft(entry)
 		}
 
-		// Ensure parent exists first (local check)
-		tx, err := s.db.Begin()
-		if err != nil {
-			return err
-		}
-		parentDN := "ou=logs"
-		if _, err := s.db.Get(tx, parentDN); err != nil {
-			parent := &storage.Entry{
-				DN:         parentDN,
-				Attributes: make(map[string][][]byte),
+		// Follower: forward to leader via HTTP
+		leaderAddr := s.clusterWriter.LeaderAddr()
+		if leaderAddr == "" {
+			// No leader yet, buffer the entry
+			if len(s.pendingEntries) < 1000 {
+				s.pendingEntries = append(s.pendingEntries, entry)
 			}
-			parent.SetStringAttribute("objectclass", "organizationalUnit")
-			parent.SetStringAttribute("ou", "logs")
-			// Create parent through cluster
-			if err := s.clusterWriter.PutLog(parent); err != nil {
-				s.db.Rollback(tx)
-				return err
-			}
-		}
-		s.db.Rollback(tx)
-
-		// Write log entry through cluster
-		if err := s.clusterWriter.PutLog(entry); err != nil {
-			return err
+			return nil
 		}
 
-		// Trim old entries if needed (async)
-		go s.trimOldEntries()
-		return nil
+		// Forward to leader
+		return s.forwardToLeader(entry, leaderAddr)
 	}
 
 	// Check if we're in cluster mode but cluster writer not yet set
@@ -309,6 +293,102 @@ func (s *LogStore) Write(level, msg, source, user, requestID string, fields map[
 
 	// Standalone mode: direct write
 	return s.writeLocal(entry)
+}
+
+// writeViaRaft writes an entry through Raft consensus (leader only).
+func (s *LogStore) writeViaRaft(entry *storage.Entry) error {
+	// Ensure parent exists first (local check)
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	parentDN := "ou=logs"
+	if _, err := s.db.Get(tx, parentDN); err != nil {
+		parent := &storage.Entry{
+			DN:         parentDN,
+			Attributes: make(map[string][][]byte),
+		}
+		parent.SetStringAttribute("objectclass", "organizationalUnit")
+		parent.SetStringAttribute("ou", "logs")
+		if err := s.clusterWriter.PutLog(parent); err != nil {
+			s.db.Rollback(tx)
+			return err
+		}
+	}
+	s.db.Rollback(tx)
+
+	// Write log entry through cluster
+	if err := s.clusterWriter.PutLog(entry); err != nil {
+		return err
+	}
+
+	// Trim old entries if needed (async)
+	go s.trimOldEntries()
+	return nil
+}
+
+// forwardToLeader forwards a log entry to the leader node via HTTP.
+func (s *LogStore) forwardToLeader(entry *storage.Entry, leaderAddr string) error {
+	// Extract log data from entry
+	logEntry := &LogEntry{
+		Timestamp: time.Now().UTC(),
+		Level:     string(entry.GetAttribute("level")[0]),
+		Message:   string(entry.GetAttribute("message")[0]),
+	}
+
+	if src := entry.GetAttribute("source"); len(src) > 0 {
+		logEntry.Source = string(src[0])
+	}
+	if usr := entry.GetAttribute("user"); len(usr) > 0 {
+		logEntry.User = string(usr[0])
+	}
+	if rid := entry.GetAttribute("requestid"); len(rid) > 0 {
+		logEntry.RequestID = string(rid[0])
+	}
+	if fld := entry.GetAttribute("fields"); len(fld) > 0 {
+		json.Unmarshal(fld[0], &logEntry.Fields)
+	}
+
+	// Convert leader Raft address to HTTP address
+	// Raft addr format: "oba-node1:4445" -> HTTP: "oba-node1:8080"
+	httpAddr := strings.Replace(leaderAddr, ":4445", ":8080", 1)
+
+	// Send to leader's internal log endpoint
+	data, err := json.Marshal(logEntry)
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("http://%s/api/v1/internal/log", httpAddr)
+	
+	// Retry up to 3 times with backoff
+	var lastErr error
+	for i := 0; i < 3; i++ {
+		resp, err := http.Post(url, "application/json", bytes.NewReader(data))
+		if err != nil {
+			lastErr = err
+			time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
+			continue
+		}
+		resp.Body.Close()
+
+		if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusCreated {
+			return nil
+		}
+		
+		// 503 means leader not ready yet, retry
+		if resp.StatusCode == http.StatusServiceUnavailable {
+			lastErr = fmt.Errorf("leader not ready")
+			time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
+			continue
+		}
+		
+		// Other errors, don't retry
+		return fmt.Errorf("forward failed: status %d", resp.StatusCode)
+	}
+
+	// All retries failed - silently drop the log (better than inconsistency)
+	return lastErr
 }
 
 // writeLocal writes an entry directly to local database (no Raft).
