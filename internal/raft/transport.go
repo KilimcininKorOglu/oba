@@ -186,6 +186,11 @@ func (t *TCPTransport) handleConn(conn net.Conn) {
 		msgType := header[0]
 		dataLen := binary.LittleEndian.Uint32(header[1:5])
 
+		// Sanity check: prevent allocation of unreasonably large buffers
+		if dataLen > 64*1024*1024 { // 64MB max
+			return
+		}
+
 		// Read message data
 		data := make([]byte, dataLen)
 		if dataLen > 0 {

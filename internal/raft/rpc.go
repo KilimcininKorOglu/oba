@@ -123,6 +123,12 @@ func DeserializeAppendEntriesArgs(data []byte) (*AppendEntriesArgs, error) {
 	}
 
 	numEntries := binary.LittleEndian.Uint64(data[32:40])
+	
+	// Sanity check: prevent allocation of unreasonably large slices
+	if numEntries > 10000 {
+		return nil, ErrLogCorrupted
+	}
+	
 	args.Entries = make([]*LogEntry, 0, numEntries)
 
 	reader := bytes.NewReader(data[48:])
