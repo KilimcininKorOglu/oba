@@ -317,6 +317,32 @@ In cluster mode, configuration and ACL changes are automatically synchronized ac
 | ACL rules     | Yes          | Raft ACL commands         |
 | Local files   | No           | Manual sync required      |
 
+### Log Replication
+
+All logs from any node are replicated to all nodes in the cluster:
+
+- Follower nodes forward logs to leader via internal HTTP endpoint (`/api/v1/internal/log`)
+- Leader writes logs through Raft consensus for cluster-wide replication
+- Each log entry includes `nodeId` in fields to identify which node generated the log
+- Failed forwards are buffered and retried automatically (no log loss)
+- Web UI shows "Node" column to identify log source
+
+Example log entry with nodeId:
+```json
+{
+  "id": 42,
+  "timestamp": "2024-01-15T10:30:00Z",
+  "level": "info",
+  "message": "login successful",
+  "source": "rest",
+  "user": "admin",
+  "fields": {
+    "nodeId": 2,
+    "remoteAddr": "192.168.1.100:54321"
+  }
+}
+```
+
 ### Configuration Sync
 
 When you update configuration via REST API on the leader, changes are automatically replicated to all followers:

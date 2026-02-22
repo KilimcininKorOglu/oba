@@ -10,7 +10,7 @@ Current Version: 1.0.2
 - Custom embedded database engine (ObaDB) optimized for LDAP workloads
 - Full LDAP v3 protocol support
 - High availability clustering with Raft consensus
-- Automatic config and ACL synchronization across cluster nodes
+- Automatic config, ACL, and log synchronization across cluster nodes
 - TLS/LDAPS and StartTLS support
 - REST API with JWT authentication
 - Access Control Lists (ACL) with hot reload

@@ -2051,9 +2051,11 @@ curl "http://localhost:8080/api/v1/logs/export?format=ndjson&level=error" \
 | `timestamp` | string | Log timestamp (RFC3339)               |
 | `level`     | string | Log level: debug, info, warn, error   |
 | `message`   | string | Log message                           |
-| `source`    | string | Log source: ldap, rest                |
+| `source`    | string | Log source: ldap, rest, system        |
 | `user`      | string | Username (if authenticated operation) |
 | `fields`    | object | Additional structured fields          |
+
+In cluster mode, `fields.nodeId` indicates which node generated the log entry.
 
 #### Log Archives
 

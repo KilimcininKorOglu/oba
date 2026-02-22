@@ -1,16 +1,54 @@
-# React + Vite
+# Oba Web Admin Panel
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Web-based administration panel for Oba LDAP Server built with React, Vite, and Tailwind CSS.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Real-time dashboard with server statistics (auto-refresh every 5 seconds)
+- LDAP entry browser and search
+- User and group management with lock/unlock support
+- ACL rule editor
+- Configuration management
+- Log viewer with filtering, export, and Node ID display (cluster mode)
+- Password change functionality
 
-## React Compiler
+## Development
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+# Install dependencies
+npm install
 
-## Expanding the ESLint configuration
+# Start development server
+npm run dev
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+# Build for production
+npm run build
+
+# Run linter
+npm run lint
+```
+
+## Docker
+
+When running via Docker Compose, the web panel is available at `http://localhost:3000`.
+
+```bash
+# Standalone mode
+docker compose up -d
+
+# Cluster mode
+docker compose -f docker-compose.cluster.yml up -d
+```
+
+## Configuration
+
+The web panel connects to the Oba REST API. In Docker, this is configured via nginx proxy.
+
+For local development, update `vite.config.js` proxy settings if needed.
+
+## Tech Stack
+
+- React 18
+- Vite
+- Tailwind CSS
+- Lucide React (icons)

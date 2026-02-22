@@ -561,6 +561,10 @@ Response includes replication status:
 
 Note: File-based operations (reload, save) only affect the local node. For cluster-wide changes, use the REST API on the leader node.
 
+### Cluster Mode Log Sync
+
+In cluster mode, all logs from any node are automatically replicated to all nodes. Each log entry includes `nodeId` in fields to identify which node generated the log.
+
 See [Cluster Documentation](cluster.md#configuration-and-acl-synchronization) for details.
 
 ## Validating Configuration
