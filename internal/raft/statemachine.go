@@ -183,6 +183,10 @@ func (sm *ObaDBStateMachine) Snapshot() ([]byte, error) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
+	if sm.mainEngine == nil {
+		return nil, fmt.Errorf("main engine is nil")
+	}
+
 	var buf bytes.Buffer
 
 	// Snapshot version (for backward compatibility)
@@ -366,7 +370,34 @@ func (sm *ObaDBStateMachine) restoreEngine(engine storage.StorageEngine, data []
 		return err
 	}
 
-	// Read and apply each entry
+	// First, delete all existing entries
+	tx, err := engine.Begin()
+	if err != nil {
+		return err
+	}
+
+	// Get all existing DNs
+	iter := engine.SearchByDN(tx, "", storage.ScopeSubtree)
+	var existingDNs []string
+	for iter.Next() {
+		if entry := iter.Entry(); entry != nil {
+			existingDNs = append(existingDNs, entry.DN)
+		}
+	}
+	iter.Close()
+	engine.Rollback(tx)
+
+	// Delete existing entries (in reverse order to handle children first)
+	for i := len(existingDNs) - 1; i >= 0; i-- {
+		tx, err := engine.Begin()
+		if err != nil {
+			continue
+		}
+		engine.Delete(tx, existingDNs[i])
+		engine.Commit(tx)
+	}
+
+	// Read and apply each entry from snapshot
 	for i := uint32(0); i < count; i++ {
 		var entryLen uint32
 		if err := binary.Read(reader, binary.LittleEndian, &entryLen); err != nil {

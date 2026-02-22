@@ -577,6 +577,15 @@ func (n *Node) sendAppendEntries(peerID uint64, args *AppendEntriesArgs) (*Appen
 	return DeserializeAppendEntriesReply(resp)
 }
 
+func (n *Node) sendInstallSnapshot(peerID uint64, args *InstallSnapshotArgs) (*InstallSnapshotReply, error) {
+	data := args.Serialize()
+	resp, err := n.transport.Send(peerID, RPCInstallSnapshot, data)
+	if err != nil {
+		return nil, err
+	}
+	return DeserializeInstallSnapshotReply(resp)
+}
+
 // broadcastAppendEntries sends AppendEntries to all peers.
 func (n *Node) broadcastAppendEntries() {
 	for peerID := range n.peers {
@@ -590,6 +599,15 @@ func (n *Node) replicateTo(peerID uint64) {
 	}
 
 	nextIndex := n.state.GetNextIndex(peerID)
+	matchIndex := n.state.GetMatchIndex(peerID)
+	
+	// If follower hasn't received any data yet (matchIndex == 0) and log is nearly empty,
+	// send snapshot to sync initial state
+	if matchIndex == 0 && nextIndex <= 1 && n.stateMachine != nil {
+		n.sendSnapshotTo(peerID)
+		return
+	}
+
 	prevLogIndex := nextIndex - 1
 	prevLogTerm := n.state.Log().TermAt(prevLogIndex)
 
@@ -668,6 +686,53 @@ func (n *Node) updateCommitIndex() {
 			break
 		}
 	}
+}
+
+// sendSnapshotTo sends a snapshot to a follower that is too far behind.
+func (n *Node) sendSnapshotTo(peerID uint64) {
+	if n.stateMachine == nil {
+		n.logger.Error("cannot send snapshot: state machine is nil")
+		return
+	}
+
+	// Create snapshot
+	snapshotData, err := n.stateMachine.Snapshot()
+	if err != nil {
+		n.logger.Error("failed to create snapshot", "errorMsg", err.Error())
+		return
+	}
+
+	if len(snapshotData) == 0 {
+		n.logger.Error("snapshot data is empty")
+		return
+	}
+
+	log := n.state.Log()
+	args := &InstallSnapshotArgs{
+		Term:              n.Term(),
+		LeaderID:          n.id,
+		LastIncludedIndex: log.LastIndex(),
+		LastIncludedTerm:  log.TermAt(log.LastIndex()),
+		Data:              snapshotData,
+	}
+
+	n.logger.Info("sending snapshot to follower", "peer", peerID, "size", len(snapshotData))
+
+	reply, err := n.sendInstallSnapshot(peerID, args)
+	if err != nil {
+		n.logger.Error("failed to send snapshot", "peer", peerID, "error", err)
+		return
+	}
+
+	if reply.Term > n.Term() {
+		n.state.BecomeFollower(reply.Term)
+		return
+	}
+
+	// Update nextIndex and matchIndex after successful snapshot
+	n.state.SetNextIndex(peerID, args.LastIncludedIndex+1)
+	n.state.SetMatchIndex(peerID, args.LastIncludedIndex)
+	n.logger.Info("snapshot sent successfully", "peer", peerID)
 }
 
 // appendCommand appends a new command to the log.

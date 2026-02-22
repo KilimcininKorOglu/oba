@@ -756,6 +756,11 @@ func (db *ObaDB) SearchByDN(txnIface interface{}, baseDN string, scope storage.S
 		snapshot = db.snapshotManager.CurrentTimestamp()
 	}
 
+	// Handle empty base DN (iterate all entries)
+	if baseDN == "" && scope == storage.ScopeSubtree {
+		return db.createAllEntriesIterator(snapshot, activeTxID)
+	}
+
 	// Convert storage.Scope to radix.Scope
 	radixScope := radix.Scope(scope)
 
@@ -1307,3 +1312,71 @@ func (db *ObaDB) decryptData(data []byte) ([]byte, error) {
 	}
 	return db.encryptionKey.Decrypt(data)
 }
+
+// createAllEntriesIterator creates an iterator that iterates over all entries in the database.
+func (db *ObaDB) createAllEntriesIterator(snapshot uint64, activeTxID uint64) storage.Iterator {
+	// Collect all entries using IterateSubtree
+	var entries []iteratorEntry
+	db.radixTree.IterateSubtree("", func(dn string, pageID storage.PageID, slotID uint16) bool {
+		entries = append(entries, iteratorEntry{dn: dn, pageID: pageID, slotID: slotID})
+		return true
+	})
+
+	return &allEntriesIterator{
+		db:         db,
+		entries:    entries,
+		index:      0,
+		snapshot:   snapshot,
+		activeTxID: activeTxID,
+	}
+}
+
+type iteratorEntry struct {
+	dn     string
+	pageID storage.PageID
+	slotID uint16
+}
+
+// allEntriesIterator iterates over all entries in the database.
+type allEntriesIterator struct {
+	db         *ObaDB
+	entries    []iteratorEntry
+	index      int
+	snapshot   uint64
+	activeTxID uint64
+	current    *storage.Entry
+	err        error
+}
+
+func (it *allEntriesIterator) Next() bool {
+	for it.index < len(it.entries) {
+		entry := it.entries[it.index]
+		it.index++
+
+		version, err := it.db.versionStore.GetVisibleForTx(entry.dn, it.snapshot, it.activeTxID)
+		if err != nil {
+			continue
+		}
+
+		data := version.GetData()
+		data, err = it.db.decryptData(data)
+		if err != nil {
+			it.err = err
+			return false
+		}
+
+		storageEntry, err := deserializeEntry(entry.dn, data)
+		if err != nil {
+			it.err = err
+			return false
+		}
+
+		it.current = storageEntry
+		return true
+	}
+	return false
+}
+
+func (it *allEntriesIterator) Entry() *storage.Entry { return it.current }
+func (it *allEntriesIterator) Error() error          { return it.err }
+func (it *allEntriesIterator) Close()                {}
